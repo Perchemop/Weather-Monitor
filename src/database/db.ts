@@ -13,9 +13,13 @@ import {
   MonitorRun,
   OwnerSettings,
   RiskThresholds,
-  ProviderComparison
+  ProviderComparison,
+  SchemaMigration,
+  DataFreshnessStatus,
+  RiskLevel
 } from '../types.js';
 import { DEFAULT_THRESHOLDS } from '../services/riskEngine.js';
+import { generateSecureBootstrapPassword } from '../utils/security.js';
 
 let dbInstance: Database | null = null;
 const DB_DIR = path.join(process.cwd(), 'data');
@@ -52,124 +56,225 @@ export function persistDb() {
   }
 }
 
+export interface Migration {
+  version: number;
+  name: string;
+  up: (db: Database) => void;
+}
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    name: '001_initial_core_schema',
+    up: (db: Database) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS locations (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          latitude REAL NOT NULL,
+          longitude REAL NOT NULL,
+          timezone TEXT NOT NULL,
+          is_default INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS weather_observations (
+          id TEXT PRIMARY KEY,
+          location_id TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          temperature REAL NOT NULL,
+          feels_like REAL NOT NULL,
+          humidity REAL NOT NULL,
+          wind_speed REAL NOT NULL,
+          wind_gusts REAL NOT NULL,
+          rain_amount REAL NOT NULL,
+          rain_prob REAL NOT NULL,
+          uv_index REAL NOT NULL,
+          weather_code INTEGER NOT NULL,
+          weather_desc TEXT NOT NULL,
+          pressure REAL NOT NULL,
+          visibility REAL NOT NULL,
+          raw_json TEXT,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS forecast_snapshots (
+          id TEXT PRIMARY KEY,
+          location_id TEXT NOT NULL,
+          fetched_at TEXT NOT NULL,
+          hourly_json TEXT NOT NULL,
+          daily_json TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS risk_assessments (
+          id TEXT PRIMARY KEY,
+          location_id TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          level TEXT NOT NULL,
+          score REAL NOT NULL,
+          summary TEXT NOT NULL,
+          factors_json TEXT NOT NULL,
+          activities_json TEXT NOT NULL,
+          peak_start TEXT,
+          peak_end TEXT,
+          peak_metric TEXT,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS alerts (
+          id TEXT PRIMARY KEY,
+          location_id TEXT NOT NULL,
+          location_name TEXT NOT NULL,
+          alert_type TEXT NOT NULL,
+          severity TEXT NOT NULL,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          trigger_condition TEXT NOT NULL,
+          observed_value TEXT NOT NULL,
+          threshold_value TEXT NOT NULL,
+          start_time TEXT NOT NULL,
+          expected_duration TEXT NOT NULL,
+          status TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          cleared_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS alert_deliveries (
+          id TEXT PRIMARY KEY,
+          alert_id TEXT NOT NULL,
+          alert_type TEXT NOT NULL,
+          recipient_email TEXT NOT NULL,
+          sent_at TEXT NOT NULL,
+          status TEXT NOT NULL,
+          error_message TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS monitor_runs (
+          id TEXT PRIMARY KEY,
+          started_at TEXT NOT NULL,
+          completed_at TEXT,
+          status TEXT NOT NULL,
+          items_processed INTEGER NOT NULL DEFAULT 0,
+          error_message TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id TEXT PRIMARY KEY,
+          timestamp TEXT NOT NULL,
+          event_type TEXT NOT NULL,
+          details TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS auth_owner (
+          id TEXT PRIMARY KEY,
+          email TEXT NOT NULL,
+          password_hash TEXT NOT NULL,
+          salt TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_weather_obs_loc_time ON weather_observations (location_id, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts (status);
+        CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts (alert_type);
+        CREATE INDEX IF NOT EXISTS idx_deliveries_alert ON alert_deliveries (alert_id);
+      `);
+    }
+  },
+  {
+    version: 2,
+    name: '002_alert_deliveries_retry_queue',
+    up: (db: Database) => {
+      const info = db.exec('PRAGMA table_info(alert_deliveries)');
+      const columns = info[0]?.values?.map((v) => v[1] as string) || [];
+      if (!columns.includes('retry_count')) {
+        db.run('ALTER TABLE alert_deliveries ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0');
+      }
+      if (!columns.includes('max_retries')) {
+        db.run('ALTER TABLE alert_deliveries ADD COLUMN max_retries INTEGER NOT NULL DEFAULT 3');
+      }
+      if (!columns.includes('next_retry_at')) {
+        db.run('ALTER TABLE alert_deliveries ADD COLUMN next_retry_at TEXT');
+      }
+      if (!columns.includes('last_attempt_at')) {
+        db.run('ALTER TABLE alert_deliveries ADD COLUMN last_attempt_at TEXT');
+      }
+    }
+  },
+  {
+    version: 3,
+    name: '003_locations_monitoring_status',
+    up: (db: Database) => {
+      const info = db.exec('PRAGMA table_info(locations)');
+      const columns = info[0]?.values?.map((v) => v[1] as string) || [];
+      if (!columns.includes('last_checked_at')) {
+        db.run('ALTER TABLE locations ADD COLUMN last_checked_at TEXT');
+      }
+      if (!columns.includes('status')) {
+        db.run('ALTER TABLE locations ADD COLUMN status TEXT');
+      }
+      if (!columns.includes('current_risk_level')) {
+        db.run('ALTER TABLE locations ADD COLUMN current_risk_level TEXT');
+      }
+      if (!columns.includes('last_error')) {
+        db.run('ALTER TABLE locations ADD COLUMN last_error TEXT');
+      }
+    }
+  },
+  {
+    version: 4,
+    name: '004_data_retention_log',
+    up: (db: Database) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS data_retention_log (
+          id TEXT PRIMARY KEY,
+          timestamp TEXT NOT NULL,
+          retention_days INTEGER NOT NULL,
+          observations_deleted INTEGER NOT NULL,
+          snapshots_deleted INTEGER NOT NULL,
+          comparisons_deleted INTEGER NOT NULL,
+          alerts_pruned INTEGER NOT NULL
+        );
+      `);
+    }
+  }
+];
+
 function initializeSchema(db: Database) {
+  // Ensure schema_migrations table exists
   db.run(`
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS locations (
-      id TEXT PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
-      latitude REAL NOT NULL,
-      longitude REAL NOT NULL,
-      timezone TEXT NOT NULL,
-      is_default INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL
+      applied_at TEXT NOT NULL
     );
-
-    CREATE TABLE IF NOT EXISTS weather_observations (
-      id TEXT PRIMARY KEY,
-      location_id TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      temperature REAL NOT NULL,
-      feels_like REAL NOT NULL,
-      humidity REAL NOT NULL,
-      wind_speed REAL NOT NULL,
-      wind_gusts REAL NOT NULL,
-      rain_amount REAL NOT NULL,
-      rain_prob REAL NOT NULL,
-      uv_index REAL NOT NULL,
-      weather_code INTEGER NOT NULL,
-      weather_desc TEXT NOT NULL,
-      pressure REAL NOT NULL,
-      visibility REAL NOT NULL,
-      raw_json TEXT,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS forecast_snapshots (
-      id TEXT PRIMARY KEY,
-      location_id TEXT NOT NULL,
-      fetched_at TEXT NOT NULL,
-      hourly_json TEXT NOT NULL,
-      daily_json TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS risk_assessments (
-      id TEXT PRIMARY KEY,
-      location_id TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      level TEXT NOT NULL,
-      score REAL NOT NULL,
-      summary TEXT NOT NULL,
-      factors_json TEXT NOT NULL,
-      activities_json TEXT NOT NULL,
-      peak_start TEXT,
-      peak_end TEXT,
-      peak_metric TEXT,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS alerts (
-      id TEXT PRIMARY KEY,
-      location_id TEXT NOT NULL,
-      location_name TEXT NOT NULL,
-      alert_type TEXT NOT NULL,
-      severity TEXT NOT NULL,
-      title TEXT NOT NULL,
-      message TEXT NOT NULL,
-      trigger_condition TEXT NOT NULL,
-      observed_value TEXT NOT NULL,
-      threshold_value TEXT NOT NULL,
-      start_time TEXT NOT NULL,
-      expected_duration TEXT NOT NULL,
-      status TEXT NOT NULL, -- ACTIVE, CLEARED, DISMISSED
-      created_at TEXT NOT NULL,
-      cleared_at TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS alert_deliveries (
-      id TEXT PRIMARY KEY,
-      alert_id TEXT NOT NULL,
-      alert_type TEXT NOT NULL,
-      recipient_email TEXT NOT NULL,
-      sent_at TEXT NOT NULL,
-      status TEXT NOT NULL, -- SUCCESS, FAILED
-      error_message TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS monitor_runs (
-      id TEXT PRIMARY KEY,
-      started_at TEXT NOT NULL,
-      completed_at TEXT,
-      status TEXT NOT NULL,
-      items_processed INTEGER NOT NULL DEFAULT 0,
-      error_message TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS audit_log (
-      id TEXT PRIMARY KEY,
-      timestamp TEXT NOT NULL,
-      event_type TEXT NOT NULL,
-      details TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS auth_owner (
-      id TEXT PRIMARY KEY,
-      email TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
-      salt TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_weather_obs_loc_time ON weather_observations (location_id, timestamp);
-    CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts (status);
-    CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts (alert_type);
-    CREATE INDEX IF NOT EXISTS idx_deliveries_alert ON alert_deliveries (alert_id);
   `);
+
+  // Query already applied versions
+  const appliedRes = db.exec('SELECT version FROM schema_migrations ORDER BY version ASC');
+  const appliedVersions = new Set<number>();
+  if (appliedRes[0]) {
+    for (const v of appliedRes[0].values) {
+      appliedVersions.add(v[0] as number);
+    }
+  }
+
+  // Execute pending migrations in sequential order
+  for (const migration of MIGRATIONS) {
+    if (!appliedVersions.has(migration.version)) {
+      migration.up(db);
+      db.run('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)', [
+        migration.version,
+        migration.name,
+        new Date().toISOString()
+      ]);
+    }
+  }
 
   // Seed default location if empty
   const locCount = db.exec('SELECT COUNT(*) as count FROM locations');
@@ -183,19 +288,41 @@ function initializeSchema(db: Database) {
     );
   }
 
-  // Seed default owner account if not yet created
+  // Seed default owner account if not yet created (strictly without hardcoded static passwords)
   const authCount = db.exec('SELECT COUNT(*) as count FROM auth_owner');
   const hasAuth = authCount[0]?.values[0]?.[0] as number;
   if (!hasAuth || hasAuth === 0) {
-    // Default initial owner: Leonardo.L.Scinto@gmail.com / admin123
-    const defaultEmail = process.env.OWNER_EMAIL || 'Leonardo.L.Scinto@gmail.com';
+    const defaultEmail = process.env.OWNER_EMAIL || 'owner@local';
+    const envPassword = process.env.INITIAL_OWNER_PASSWORD || process.env.ADMIN_PASSWORD;
+    const initialPass = envPassword || generateSecureBootstrapPassword(16);
+
+    if (!envPassword) {
+      console.log('\n============================================================');
+      console.log(' [SECURITY NOTICE] Initial Site Owner Account Provisioned:');
+      console.log(` Email:    ${defaultEmail}`);
+      console.log(` Password: ${initialPass}`);
+      console.log(' Please change this password in Settings.');
+      console.log('============================================================\n');
+    }
+
     const salt = crypto.randomBytes(16).toString('hex');
-    const hash = hashPasswordWithSalt('admin123', salt);
+    const hash = hashPasswordWithSalt(initialPass, salt);
     db.run(
       `INSERT INTO auth_owner (id, email, password_hash, salt, updated_at) VALUES (?, ?, ?, ?, ?)`,
       ['owner-1', defaultEmail, hash, salt, new Date().toISOString()]
     );
   }
+}
+
+export async function getAppliedMigrations(): Promise<SchemaMigration[]> {
+  const db = await getDb();
+  const res = db.exec('SELECT version, name, applied_at FROM schema_migrations ORDER BY version ASC');
+  if (!res[0]) return [];
+  return res[0].values.map((v) => ({
+    version: v[0] as number,
+    name: v[1] as string,
+    appliedAt: v[2] as string
+  }));
 }
 
 // Password hashing using Scrypt (RFC 7914 memory-hard KDF)
@@ -251,7 +378,7 @@ export async function getOwnerInfo(): Promise<{ email: string } | null> {
 // Locations
 export async function getAllLocations(): Promise<LocationItem[]> {
   const db = await getDb();
-  const res = db.exec('SELECT id, name, latitude, longitude, timezone, is_default, created_at FROM locations ORDER BY is_default DESC, name ASC');
+  const res = db.exec('SELECT id, name, latitude, longitude, timezone, is_default, created_at, last_checked_at, status, current_risk_level FROM locations ORDER BY is_default DESC, name ASC');
   if (!res[0]) return [];
 
   return res[0].values.map((v) => ({
@@ -261,13 +388,16 @@ export async function getAllLocations(): Promise<LocationItem[]> {
     longitude: v[3] as number,
     timezone: v[4] as string,
     isDefault: (v[5] as number) === 1,
-    createdAt: v[6] as string
+    createdAt: v[6] as string,
+    lastCheckedAt: (v[7] as string) || undefined,
+    status: (v[8] as DataFreshnessStatus) || undefined,
+    currentRiskLevel: (v[9] as RiskLevel) || undefined
   }));
 }
 
 export async function getDefaultLocation(): Promise<LocationItem | null> {
   const db = await getDb();
-  const res = db.exec('SELECT id, name, latitude, longitude, timezone, is_default, created_at FROM locations WHERE is_default = 1 LIMIT 1');
+  const res = db.exec('SELECT id, name, latitude, longitude, timezone, is_default, created_at, last_checked_at, status, current_risk_level FROM locations WHERE is_default = 1 LIMIT 1');
   if (!res[0] || !res[0].values[0]) {
     const anyLoc = await getAllLocations();
     return anyLoc[0] || null;
@@ -280,8 +410,28 @@ export async function getDefaultLocation(): Promise<LocationItem | null> {
     longitude: v[3] as number,
     timezone: v[4] as string,
     isDefault: true,
-    createdAt: v[6] as string
+    createdAt: v[6] as string,
+    lastCheckedAt: (v[7] as string) || undefined,
+    status: (v[8] as DataFreshnessStatus) || undefined,
+    currentRiskLevel: (v[9] as RiskLevel) || undefined
   };
+}
+
+export async function updateLocationStatus(
+  locationId: string,
+  status: DataFreshnessStatus,
+  lastCheckedAt: string,
+  currentRiskLevel?: RiskLevel,
+  lastError?: string
+): Promise<void> {
+  const db = await getDb();
+  db.run(
+    `UPDATE locations
+     SET status = ?, last_checked_at = ?, current_risk_level = ?, last_error = ?
+     WHERE id = ?`,
+    [status, lastCheckedAt, currentRiskLevel || null, lastError || null, locationId]
+  );
+  persistDb();
 }
 
 export async function saveLocation(loc: Omit<LocationItem, 'id' | 'createdAt'>): Promise<LocationItem> {
@@ -668,13 +818,26 @@ export async function updateAlertStatus(alertId: string, status: 'CLEARED' | 'DI
   persistDb();
 }
 
-export async function recordAlertDelivery(delivery: Omit<AlertDelivery, 'id'>): Promise<void> {
+export async function recordAlertDelivery(delivery: {
+  alertId: string;
+  alertType: string;
+  recipientEmail: string;
+  sentAt: string;
+  status: 'SUCCESS' | 'PENDING_RETRY' | 'FAILED';
+  errorMessage?: string;
+  retryCount?: number;
+  maxRetries?: number;
+  nextRetryAt?: string;
+  lastAttemptAt?: string;
+}): Promise<string> {
   const db = await getDb();
   const id = 'del-' + crypto.randomUUID();
 
   db.run(
-    `INSERT INTO alert_deliveries (id, alert_id, alert_type, recipient_email, sent_at, status, error_message)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO alert_deliveries (
+      id, alert_id, alert_type, recipient_email, sent_at, status, error_message,
+      retry_count, max_retries, next_retry_at, last_attempt_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       delivery.alertId,
@@ -682,16 +845,22 @@ export async function recordAlertDelivery(delivery: Omit<AlertDelivery, 'id'>): 
       delivery.recipientEmail,
       delivery.sentAt,
       delivery.status,
-      delivery.errorMessage || null
+      delivery.errorMessage || null,
+      delivery.retryCount || 0,
+      delivery.maxRetries || 3,
+      delivery.nextRetryAt || null,
+      delivery.lastAttemptAt || delivery.sentAt
     ]
   );
   persistDb();
+  return id;
 }
 
 export async function getAlertDeliveries(limit = 50): Promise<AlertDelivery[]> {
   const db = await getDb();
   const res = db.exec(
-    `SELECT id, alert_id, alert_type, recipient_email, sent_at, status, error_message
+    `SELECT id, alert_id, alert_type, recipient_email, sent_at, status, error_message,
+            retry_count, max_retries, next_retry_at, last_attempt_at
      FROM alert_deliveries ORDER BY sent_at DESC LIMIT ?`,
     [limit]
   );
@@ -704,8 +873,58 @@ export async function getAlertDeliveries(limit = 50): Promise<AlertDelivery[]> {
     recipientEmail: v[3] as string,
     sentAt: v[4] as string,
     status: v[5] as any,
-    errorMessage: (v[6] as string) || undefined
+    errorMessage: (v[6] as string) || undefined,
+    retryCount: (v[7] as number) || 0,
+    maxRetries: (v[8] as number) || 3,
+    nextRetryAt: (v[9] as string) || undefined,
+    lastAttemptAt: (v[10] as string) || undefined
   }));
+}
+
+export async function getPendingAlertDeliveries(): Promise<AlertDelivery[]> {
+  const db = await getDb();
+  const nowIso = new Date().toISOString();
+  const res = db.exec(
+    `SELECT id, alert_id, alert_type, recipient_email, sent_at, status, error_message,
+            retry_count, max_retries, next_retry_at, last_attempt_at
+     FROM alert_deliveries
+     WHERE status = 'PENDING_RETRY' AND retry_count < max_retries AND (next_retry_at IS NULL OR next_retry_at <= ?)
+     ORDER BY next_retry_at ASC LIMIT 10`,
+    [nowIso]
+  );
+  if (!res[0]) return [];
+
+  return res[0].values.map((v) => ({
+    id: v[0] as string,
+    alertId: v[1] as string,
+    alertType: v[2] as string,
+    recipientEmail: v[3] as string,
+    sentAt: v[4] as string,
+    status: v[5] as any,
+    errorMessage: (v[6] as string) || undefined,
+    retryCount: (v[7] as number) || 0,
+    maxRetries: (v[8] as number) || 3,
+    nextRetryAt: (v[9] as string) || undefined,
+    lastAttemptAt: (v[10] as string) || undefined
+  }));
+}
+
+export async function updateAlertDeliveryAttempt(
+  deliveryId: string,
+  status: 'SUCCESS' | 'PENDING_RETRY' | 'FAILED',
+  retryCount: number,
+  nextRetryAt?: string,
+  errorMessage?: string
+): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  db.run(
+    `UPDATE alert_deliveries
+     SET status = ?, retry_count = ?, next_retry_at = ?, last_attempt_at = ?, error_message = ?
+     WHERE id = ?`,
+    [status, retryCount, nextRetryAt || null, now, errorMessage || null, deliveryId]
+  );
+  persistDb();
 }
 
 // Monitor Runs
@@ -770,7 +989,7 @@ export async function getOwnerSettings(): Promise<OwnerSettings> {
   }
 
   return {
-    ownerEmail: map['owner_email'] || ownerInfo?.email || process.env.OWNER_EMAIL || 'Leonardo.L.Scinto@gmail.com',
+    ownerEmail: map['owner_email'] || ownerInfo?.email || process.env.OWNER_EMAIL || 'owner@local',
     ownerName: map['owner_name'] || 'Site Manager',
     defaultLocationId: map['default_location_id'] || defaultLoc?.id || '',
     temperatureUnit: (map['temperature_unit'] as any) || 'C',
@@ -838,6 +1057,93 @@ export async function getAuditLogs(limit = 40): Promise<Array<{ id: string; time
     timestamp: v[1] as string,
     eventType: v[2] as string,
     details: v[3] as string
+  }));
+}
+
+// Data Retention
+export async function enforceDataRetention(retentionDays = 30): Promise<{
+  observationsDeleted: number;
+  snapshotsDeleted: number;
+  comparisonsDeleted: number;
+  alertsPruned: number;
+}> {
+  const db = await getDb();
+  const now = new Date();
+  const obsCutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const snapCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const alertsCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  const monitorCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  // 1. Observations
+  const obsCountRes = db.exec('SELECT COUNT(*) FROM weather_observations WHERE created_at < ?', [obsCutoff]);
+  const obsToDelete = (obsCountRes[0]?.values[0]?.[0] as number) || 0;
+  if (obsToDelete > 0) {
+    db.run('DELETE FROM weather_observations WHERE created_at < ?', [obsCutoff]);
+  }
+
+  // 2. Snapshots
+  const snapCountRes = db.exec('SELECT COUNT(*) FROM forecast_snapshots WHERE fetched_at < ?', [snapCutoff]);
+  const snapsToDelete = (snapCountRes[0]?.values[0]?.[0] as number) || 0;
+  if (snapsToDelete > 0) {
+    db.run('DELETE FROM forecast_snapshots WHERE fetched_at < ?', [snapCutoff]);
+  }
+
+  // 3. Monitor runs
+  db.run('DELETE FROM monitor_runs WHERE started_at < ?', [monitorCutoff]);
+
+  // 4. Old cleared alerts
+  const alertCountRes = db.exec("SELECT COUNT(*) FROM alerts WHERE status IN ('CLEARED', 'DISMISSED') AND created_at < ?", [alertsCutoff]);
+  const alertsToPrune = (alertCountRes[0]?.values[0]?.[0] as number) || 0;
+  if (alertsToPrune > 0) {
+    db.run("DELETE FROM alerts WHERE status IN ('CLEARED', 'DISMISSED') AND created_at < ?", [alertsCutoff]);
+  }
+
+  // Log in data_retention_log
+  const logId = 'ret-' + crypto.randomUUID();
+  db.run(
+    `INSERT INTO data_retention_log (id, timestamp, retention_days, observations_deleted, snapshots_deleted, comparisons_deleted, alerts_pruned)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [logId, now.toISOString(), retentionDays, obsToDelete, snapsToDelete, 0, alertsToPrune]
+  );
+
+  persistDb();
+
+  await addAuditLog(
+    'DATA_RETENTION_CLEANUP',
+    `Retention run completed (${retentionDays}d window): pruned ${obsToDelete} observations, ${snapsToDelete} snapshots, ${alertsToPrune} resolved alerts.`
+  );
+
+  return {
+    observationsDeleted: obsToDelete,
+    snapshotsDeleted: snapsToDelete,
+    comparisonsDeleted: 0,
+    alertsPruned: alertsToPrune
+  };
+}
+
+export async function getDataRetentionLogs(limit = 10): Promise<Array<{
+  id: string;
+  timestamp: string;
+  retentionDays: number;
+  observationsDeleted: number;
+  snapshotsDeleted: number;
+  alertsPruned: number;
+}>> {
+  const db = await getDb();
+  const res = db.exec(
+    `SELECT id, timestamp, retention_days, observations_deleted, snapshots_deleted, alerts_pruned
+     FROM data_retention_log ORDER BY timestamp DESC LIMIT ?`,
+    [limit]
+  );
+  if (!res[0]) return [];
+
+  return res[0].values.map((v) => ({
+    id: v[0] as string,
+    timestamp: v[1] as string,
+    retentionDays: v[2] as number,
+    observationsDeleted: v[3] as number,
+    snapshotsDeleted: v[4] as number,
+    alertsPruned: v[5] as number
   }));
 }
 

@@ -10,9 +10,13 @@ import {
   Clock,
   Lock,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Database,
+  Key,
+  ShieldCheck,
+  Trash2
 } from 'lucide-react';
-import { OwnerSettings, RiskThresholds } from '../types';
+import { OwnerSettings, RiskThresholds, SecretsStatus } from '../types';
 
 interface SettingsViewProps {
   onSettingsSaved?: () => void;
@@ -21,6 +25,9 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) => {
   const [settings, setSettings] = useState<OwnerSettings | null>(null);
   const [smtpConfigured, setSmtpConfigured] = useState(false);
+  const [secretsStatus, setSecretsStatus] = useState<SecretsStatus | null>(null);
+  const [retentionRunning, setRetentionRunning] = useState(false);
+  const [retentionMessage, setRetentionMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isTestingEmail, setIsTestingEmail] = useState(false);
@@ -44,10 +51,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
         setSmtpConfigured(data.smtpConfigured);
         setNewEmail(data.settings.ownerEmail);
       }
+
+      const secRes = await fetch('/api/secrets/status');
+      if (secRes.ok) {
+        const secData = await secRes.json();
+        setSecretsStatus(secData);
+      }
     } catch {
       setMessage({ type: 'error', text: 'Failed to load settings.' });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRunRetention = async () => {
+    setRetentionRunning(true);
+    setRetentionMessage(null);
+    try {
+      const res = await fetch('/api/data/retention/run', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setRetentionMessage(`Retention complete. Deleted: ${data.result.deletedObservations} observations, ${data.result.deletedAlerts} alerts, ${data.result.deletedSnapshots} snapshots.`);
+      } else {
+        setRetentionMessage(`Retention error: ${data.error || 'Failed to run retention'}`);
+      }
+    } catch {
+      setRetentionMessage('Failed to execute retention cleanup.');
+    } finally {
+      setRetentionRunning(false);
     }
   };
 
@@ -483,6 +514,99 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
             >
               <Send className="w-3.5 h-3.5" />
               <span>{isTestingEmail ? 'Sending Test Notification...' : 'Send Test Notification Email'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Secrets & Credential Protection Status */}
+      <div id="secrets-protection-card" className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Key className="w-4 h-4 text-emerald-400" />
+            <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
+              CREDENTIALS & ENVIRONMENT SECRETS ENCLAVE
+            </h4>
+          </div>
+          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            Protected Server-Side
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
+          <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800/80 space-y-1">
+            <div className="text-slate-400 text-2xs">WEATHER API KEY</div>
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${secretsStatus?.weatherApiKeyConfigured ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+              <span className="text-slate-200 font-bold">
+                {secretsStatus?.weatherApiKeyConfigured ? secretsStatus.weatherApiKeyMasked : 'Not Configured'}
+              </span>
+            </div>
+            <div className="text-2xs text-slate-500">Auto-falls back to Open-Meteo</div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800/80 space-y-1">
+            <div className="text-slate-400 text-2xs">SMTP EMAIL GATEWAY</div>
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${secretsStatus?.smtpConfigured ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+              <span className="text-slate-200 font-bold truncate">
+                {secretsStatus?.smtpConfigured ? secretsStatus.smtpHost : 'Not Configured'}
+              </span>
+            </div>
+            <div className="text-2xs text-slate-500">Pass: [PROTECTED SECRETS ENCLAVE]</div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800/80 space-y-1">
+            <div className="text-slate-400 text-2xs">GEMINI AI REASONING</div>
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${secretsStatus?.geminiKeyConfigured ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              <span className="text-slate-200 font-bold">
+                {secretsStatus?.geminiKeyConfigured ? 'gemini-3.8-flash' : 'Rule-Based Fallback'}
+              </span>
+            </div>
+            <div className="text-2xs text-slate-500">Deterministic risk limits preserved</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Data Retention & Database Hygiene */}
+      <div id="data-retention-card" className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4 text-cyan-400" />
+            <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
+              SQLITE DATA RETENTION & STORAGE HYGIENE
+            </h4>
+          </div>
+          <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            Automated Daily (24h)
+          </span>
+        </div>
+
+        <div className="space-y-3 text-xs font-mono">
+          <p className="text-slate-400 leading-relaxed">
+            Data retention policies automatically prune stale records to keep the local SQLite database compact and responsive.
+            Observations are stored for <strong>90 days</strong>, cleared alerts for <strong>180 days</strong>, and snapshots for <strong>30 days</strong>.
+          </p>
+
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800">
+            <div className="text-2xs text-slate-400">
+              {retentionMessage ? (
+                <span className="text-cyan-300 font-bold">{retentionMessage}</span>
+              ) : (
+                <span>Background cleanup triggers automatically every 24 hours.</span>
+              )}
+            </div>
+
+            <button
+              id="btn-run-retention-now"
+              type="button"
+              onClick={handleRunRetention}
+              disabled={retentionRunning}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold transition-colors disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{retentionRunning ? 'Pruning Database...' : 'Run Retention Cleanup Now'}</span>
             </button>
           </div>
         </div>

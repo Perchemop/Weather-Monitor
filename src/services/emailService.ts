@@ -1,6 +1,11 @@
 import nodemailer from 'nodemailer';
-import { AlertItem } from '../types.js';
-import { recordAlertDelivery } from '../database/db.js';
+import { AlertItem, AlertDelivery } from '../types.js';
+import {
+  recordAlertDelivery,
+  getPendingAlertDeliveries,
+  updateAlertDeliveryAttempt
+} from '../database/db.js';
+import { redactSecretsInError, maskSecret } from '../utils/security.js';
 
 export interface SmtpConfig {
   host: string;
@@ -31,6 +36,23 @@ export function getSmtpConfig(): SmtpConfig | null {
   };
 }
 
+export function getPublicSmtpStatus(): {
+  configured: boolean;
+  host?: string;
+  port?: number;
+  userMasked?: string;
+} {
+  const config = getSmtpConfig();
+  if (!config) return { configured: false };
+
+  return {
+    configured: true,
+    host: config.host,
+    port: config.port,
+    userMasked: maskSecret(config.user)
+  };
+}
+
 export async function isSmtpConfigured(): Promise<boolean> {
   return getSmtpConfig() !== null;
 }
@@ -50,7 +72,9 @@ export async function sendAlertEmail(
       recipientEmail,
       sentAt: new Date().toISOString(),
       status: 'FAILED',
-      errorMessage: errorMsg
+      errorMessage: errorMsg,
+      retryCount: 0,
+      maxRetries: 0
     });
     return { success: false, error: errorMsg };
   }
@@ -97,10 +121,10 @@ ${activitiesList}
 Review applicable project procedures, SWMS, equipment requirements and manufacturer limits.
 
 Weather data:
-Open-Meteo Operational Meteorological Service
+Operational Meteorological Monitoring Service
 
 Notification timestamp:
-${new Date().toLocaleString()}
+${new Date().toISOString()}
 `.trim();
 
   const htmlBody = `
@@ -149,9 +173,6 @@ ${new Date().toLocaleString()}
   <p style="font-size: 12px; color: #64748b; line-height: 1.5; border-top: 1px solid #e2e8f0; padding-top: 14px; margin-top: 20px;">
     Review applicable site procedures, SWMS, equipment requirements and manufacturer limits. The system is a weather-risk monitoring tool. It is not a replacement for professional safety judgement.
   </p>
-  <p style="font-size: 11px; color: #94a3b8; margin: 4px 0 0 0;">
-    Weather data: Open-Meteo · Notification sent ${new Date().toLocaleTimeString()}
-  </p>
 </div>
   `.trim();
 
@@ -169,22 +190,92 @@ ${new Date().toLocaleString()}
       alertType: alert.alertType,
       recipientEmail,
       sentAt: new Date().toISOString(),
-      status: 'SUCCESS'
+      status: 'SUCCESS',
+      retryCount: 0,
+      maxRetries: 3
     });
 
     return { success: true };
   } catch (err: any) {
-    const errorMsg = err?.message || 'SMTP delivery failed';
+    const rawError = err?.message || 'SMTP delivery failed';
+    const safeError = redactSecretsInError(rawError, [config.pass, config.user]);
+    const nextRetryAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+
     await recordAlertDelivery({
       alertId: alert.id,
       alertType: alert.alertType,
       recipientEmail,
       sentAt: new Date().toISOString(),
-      status: 'FAILED',
-      errorMessage: errorMsg
+      status: 'PENDING_RETRY',
+      errorMessage: safeError,
+      retryCount: 0,
+      maxRetries: 3,
+      nextRetryAt,
+      lastAttemptAt: new Date().toISOString()
     });
-    return { success: false, error: errorMsg };
+
+    return { success: false, error: safeError };
   }
+}
+
+export async function processAlertRetryQueue(): Promise<{
+  retried: number;
+  succeeded: number;
+  failed: number;
+}> {
+  const pendingDeliveries = await getPendingAlertDeliveries();
+  if (pendingDeliveries.length === 0) {
+    return { retried: 0, succeeded: 0, failed: 0 };
+  }
+
+  const config = getSmtpConfig();
+  if (!config) {
+    return { retried: 0, succeeded: 0, failed: 0 };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: { user: config.user, pass: config.pass },
+    tls: { rejectUnauthorized: false }
+  });
+
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const delivery of pendingDeliveries) {
+    const currentAttempt = (delivery.retryCount || 0) + 1;
+    const maxRetries = delivery.maxRetries || 3;
+
+    try {
+      await transporter.sendMail({
+        from: config.from,
+        to: delivery.recipientEmail,
+        subject: `[RETRY] ${delivery.alertType} — Construction Weather Monitor`,
+        text: `Construction Safety Alert Delivery (Retry Attempt ${currentAttempt}/${maxRetries}):\nAlert Type: ${delivery.alertType}\nOriginal Timestamp: ${delivery.sentAt}\nPlease review active site safety protocols.`
+      });
+
+      await updateAlertDeliveryAttempt(delivery.id, 'SUCCESS', currentAttempt, undefined, undefined);
+      succeeded++;
+    } catch (err: any) {
+      const rawError = err?.message || 'Retry delivery failed';
+      const safeError = redactSecretsInError(rawError, [config.pass, config.user]);
+
+      if (currentAttempt >= maxRetries) {
+        // Exceeded max retries -> permanent failure
+        await updateAlertDeliveryAttempt(delivery.id, 'FAILED', currentAttempt, undefined, safeError);
+        failed++;
+      } else {
+        // Schedule next retry with exponential backoff (2m, 4m, 8m)
+        const delayMinutes = Math.pow(2, currentAttempt) * 2;
+        const nextRetry = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
+        await updateAlertDeliveryAttempt(delivery.id, 'PENDING_RETRY', currentAttempt, nextRetry, safeError);
+      }
+    }
+  }
+
+  return { retried: pendingDeliveries.length, succeeded, failed };
 }
 
 export async function sendRecoveryEmail(
@@ -219,7 +310,7 @@ Configured threshold:
 ${alert.thresholdValue}
 
 Cleared time:
-${new Date().toLocaleTimeString()}
+${new Date().toISOString()}
 
 Review applicable site procedures and equipment operating requirements before resuming full operations.
 `.trim();
@@ -233,7 +324,8 @@ Review applicable site procedures and equipment operating requirements before re
     });
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'Failed to send recovery email' };
+    const rawError = err?.message || 'Failed to send recovery email';
+    return { success: false, error: redactSecretsInError(rawError, [config.pass, config.user]) };
   }
 }
 
@@ -256,11 +348,11 @@ export async function sendTestEmail(recipientEmail: string): Promise<{ success: 
 
   const subject = 'Test Notification — Construction Weather Monitor';
   const textBody = `
-This is a test notification from your local Construction Weather Monitor.
+This is a test notification from your Construction Weather Monitor.
 
-System: Private Local Construction Weather Monitor
+System: Construction Weather Monitor
 Destination: ${recipientEmail}
-Time: ${new Date().toLocaleString()}
+Time: ${new Date().toISOString()}
 SMTP Host: ${config.host}
 
 Your email notification service is properly configured and functional.
@@ -275,6 +367,7 @@ Your email notification service is properly configured and functional.
     });
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err?.message || 'SMTP delivery failed' };
+    const rawError = err?.message || 'SMTP delivery failed';
+    return { success: false, error: redactSecretsInError(rawError, [config.pass, config.user]) };
   }
 }

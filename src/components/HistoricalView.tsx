@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Calendar, Wind, CloudRain, Thermometer, Database } from 'lucide-react';
+import { Clock, Calendar, Wind, CloudRain, Thermometer, Database, Sparkles, RefreshCw } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { CurrentWeather, LocationItem } from '../types';
+import { CurrentWeather, LocationItem, AiHistoricalSummaryResponse } from '../types';
 
 interface HistoricalViewProps {
   location: LocationItem | null;
@@ -11,6 +11,8 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
   const [range, setRange] = useState<'today' | 'yesterday' | '7days' | '30days'>('today');
   const [observations, setObservations] = useState<CurrentWeather[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [aiSummary, setAiSummary] = useState<AiHistoricalSummaryResponse | null>(null);
+  const [loadingAi, setLoadingAi] = useState(false);
 
   useEffect(() => {
     if (!location) return;
@@ -25,11 +27,27 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
       if (res.ok) {
         const data = await res.json();
         setObservations(data.observations || []);
+        fetchAiSummary(location.id, selectedRange);
       }
     } catch (err) {
       console.error('Failed to fetch historical observations:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchAiSummary = async (locationId: string, selectedRange: string) => {
+    setLoadingAi(true);
+    try {
+      const res = await fetch(`/api/ai/history-summary?locationId=${locationId}&range=${selectedRange}`);
+      if (res.ok) {
+        const data: AiHistoricalSummaryResponse = await res.json();
+        setAiSummary(data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch AI history summary:', err);
+    } finally {
+      setLoadingAi(false);
     }
   };
 
@@ -84,6 +102,57 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
           </span>
         </div>
       </div>
+
+      {/* AI Historical Summary Card */}
+      {observations.length > 0 && (
+        <div id="ai-history-summary-card" className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-400" />
+              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
+                AI Weather Trend Summary ({range.toUpperCase()})
+              </h4>
+            </div>
+            <div className="flex items-center gap-2">
+              {aiSummary && (
+                <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-indigo-300">
+                  {aiSummary.source === 'GEMINI_AI' ? 'Gemini 3.8 Flash' : 'Deterministic Rules'}
+                </span>
+              )}
+              {location && (
+                <button
+                  onClick={() => fetchAiSummary(location.id, range)}
+                  disabled={loadingAi}
+                  className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  title="Refresh AI Trend Summary"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingAi ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {loadingAi && !aiSummary ? (
+            <div className="flex items-center gap-2 py-3 text-xs text-slate-400 font-mono">
+              <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <span>Analyzing historical microclimate records...</span>
+            </div>
+          ) : aiSummary ? (
+            <div className="space-y-3">
+              <p className="text-xs leading-relaxed text-slate-300">
+                {aiSummary.summary}
+              </p>
+              <div className="flex flex-wrap items-center gap-4 text-2xs font-mono text-slate-400 pt-2 border-t border-slate-800/80">
+                <span>Peak Gust Observed: <strong className="text-orange-400">{aiSummary.peakGustObserved}</strong></span>
+                <span>•</span>
+                <span>Max Safety Tier: <strong className="text-amber-400">{aiSummary.highestRiskLevel}</strong></span>
+                <span>•</span>
+                <span>Generated: {new Date(aiSummary.generatedAt).toLocaleTimeString()}</span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-xl text-slate-400 font-mono text-sm">
