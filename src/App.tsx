@@ -26,6 +26,7 @@ import {
 import { fetchRealWeatherData } from './services/weatherService';
 import { calculateDeterministicRisk } from './services/riskEngine';
 import { CrossReferenceCard } from './components/CrossReferenceCard';
+import { AiBriefingCard } from './components/AiBriefingCard';
 import { ShieldCheck, Database, HardHat, CheckCircle2, ArrowRightLeft } from 'lucide-react';
 
 const FALLBACK_SITE: LocationItem = {
@@ -159,7 +160,7 @@ export default function App() {
           targetLoc.name,
           targetLoc.timezone
         );
-        const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly);
+        const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly, undefined, targetLoc.timezone);
         setCurrentWeather(livePayload.current);
         setRiskAssessment(risk);
         setHourlyForecast(livePayload.hourly);
@@ -206,7 +207,7 @@ export default function App() {
         loc.name,
         loc.timezone
       );
-      const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly);
+      const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly, undefined, loc.timezone);
       setCurrentWeather(livePayload.current);
       setRiskAssessment(risk);
       setHourlyForecast(livePayload.hourly);
@@ -267,7 +268,7 @@ export default function App() {
           loc.name,
           loc.timezone
         );
-        const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly);
+        const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly, undefined, loc.timezone);
         setCurrentWeather(livePayload.current);
         setRiskAssessment(risk);
         setHourlyForecast(livePayload.hourly);
@@ -301,6 +302,13 @@ export default function App() {
             <HeroRiskCard
               risk={riskAssessment}
               locationName={currentLocation ? currentLocation.name : 'Monitored Site'}
+            />
+
+            {/* AI Superintendent Weather Briefing */}
+            <AiBriefingCard
+              locationId={currentLocation?.id}
+              locationName={currentLocation ? currentLocation.name : 'Monitored Site'}
+              deterministicRiskLevel={riskAssessment?.level || 'LOW'}
             />
 
             {/* 2. Active Alerts Warning Box */}

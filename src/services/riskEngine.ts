@@ -7,6 +7,7 @@ import {
   RiskLevel,
   RiskThresholds
 } from '../types.js';
+import { formatLocationTime } from '../utils/time.js';
 
 export const DEFAULT_THRESHOLDS: RiskThresholds = {
   windWarning: 38,
@@ -31,7 +32,8 @@ export const SAFETY_DISCLAIMER =
 export function calculateDeterministicRisk(
   current: CurrentWeather,
   hourlyForecast: HourlyForecastItem[] = [],
-  thresholds: RiskThresholds = DEFAULT_THRESHOLDS
+  thresholds: RiskThresholds = DEFAULT_THRESHOLDS,
+  timezone = 'auto'
 ): RiskAssessment {
   const factors: RiskFactor[] = [];
   let highestScore = 10;
@@ -236,21 +238,78 @@ export function calculateDeterministicRisk(
     }
   }
 
+  // 8. Imminent Critical Forecast Conditions (Next 6 Hours)
+  // Check for imminent thunderstorm
+  const stormHour = next6Hours.find((h) => h.weatherCode >= 95);
+  if (stormHour) {
+    factors.push({
+      id: 'forecast-thunderstorm',
+      category: 'STORM',
+      label: 'Imminent Thunderstorm Forecast',
+      value: stormHour.weatherDescription || 'Thunderstorm',
+      threshold: 'WMO 95+ (within 6h)',
+      severity: 'CRITICAL'
+    });
+    highestScore = Math.max(highestScore, 96);
+    highestLevel = 'CRITICAL';
+  }
+
+  // Check for imminent extreme wind gusts
+  if (maxNextGust >= thresholds.gustCritical) {
+    factors.push({
+      id: 'forecast-gust-critical',
+      category: 'GUST',
+      label: 'Imminent Critical Wind Gusts Forecast',
+      value: `Up to ${Math.round(maxNextGust)} km/h`,
+      threshold: `>= ${thresholds.gustCritical} km/h (within 6h)`,
+      severity: 'CRITICAL'
+    });
+    highestScore = Math.max(highestScore, 92);
+    highestLevel = 'CRITICAL';
+  } else if (maxNextGust >= thresholds.gustHigh && highestLevel !== 'CRITICAL') {
+    factors.push({
+      id: 'forecast-gust-high',
+      category: 'GUST',
+      label: 'Imminent High Wind Gusts Forecast',
+      value: `Up to ${Math.round(maxNextGust)} km/h`,
+      threshold: `>= ${thresholds.gustHigh} km/h (within 6h)`,
+      severity: 'HIGH'
+    });
+    highestScore = Math.max(highestScore, 75);
+    highestLevel = 'HIGH';
+  }
+
+  // Check for imminent extreme heat in forecast
+  const heatHour = next6Hours.find((h) => h.temperature >= thresholds.heatCritical);
+  if (heatHour) {
+    factors.push({
+      id: 'forecast-heat-critical',
+      category: 'TEMPERATURE',
+      label: 'Imminent Extreme Heat Forecast',
+      value: `${Math.round(heatHour.temperature)}°C`,
+      threshold: `>= ${thresholds.heatCritical}°C (within 6h)`,
+      severity: 'CRITICAL'
+    });
+    highestScore = Math.max(highestScore, 90);
+    highestLevel = 'CRITICAL';
+  }
+
   if (worstHourIndex !== -1 && maxNextGust >= thresholds.gustWarning) {
     const startHour = new Date(next6Hours[worstHourIndex].time);
     const endHour = new Date(startHour.getTime() + 2 * 3600 * 1000);
-    const startStr = startHour.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    const endStr = endHour.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const startStr = formatLocationTime(startHour.toISOString(), timezone, {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+    const endStr = formatLocationTime(endHour.toISOString(), timezone, {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
     peakPeriod = {
       start: startStr,
       end: endStr,
       metric: `Gusts up to ${Math.round(maxNextGust)} km/h`
     };
-
-    if (maxNextGust >= thresholds.gustCritical && highestLevel !== 'CRITICAL') {
-      highestLevel = 'HIGH';
-      highestScore = Math.max(highestScore, 85);
-    }
   }
 
   // Determine Affected Activities strictly deterministically
@@ -574,5 +633,26 @@ function evaluateOutdoorWork(
     riskLevel: 'LOW',
     reason: 'Mild temperature, moderate breeze, safe outdoor conditions.',
     thresholdDetails: 'Comfortable envelope'
+  };
+}
+
+/**
+ * Invariant Enforcer: Strictly guarantees that no AI summary, narrative commentary,
+ * or prompt injection can mutate, downgrade, or override deterministic risk levels or scores.
+ */
+export function enforceDeterministicIntegrity(
+  deterministicAssessment: RiskAssessment,
+  aiCommentary?: { briefing?: string; explanation?: string }
+): RiskAssessment {
+  return {
+    ...deterministicAssessment,
+    level: deterministicAssessment.level, // IMMUTABLE
+    score: deterministicAssessment.score, // IMMUTABLE
+    factors: [...deterministicAssessment.factors], // IMMUTABLE
+    affectedActivities: [...deterministicAssessment.affectedActivities], // IMMUTABLE
+    calculatedAt: deterministicAssessment.calculatedAt,
+    aiBriefing: aiCommentary?.briefing,
+    aiExplanation: aiCommentary?.explanation,
+    aiGeneratedAt: aiCommentary ? new Date().toISOString() : undefined
   };
 }
