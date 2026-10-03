@@ -561,10 +561,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${secretsStatus?.geminiKeyConfigured ? 'bg-emerald-400' : 'bg-amber-400'}`} />
               <span className="text-slate-200 font-bold">
-                {secretsStatus?.geminiKeyConfigured ? 'gemini-3.8-flash' : 'Rule-Based Fallback'}
+                {secretsStatus?.geminiKeyConfigured ? 'gemini-3.8-flash (Auto-Failover)' : 'Rule-Based Fallback'}
               </span>
             </div>
-            <div className="text-2xs text-slate-500">Deterministic risk limits preserved</div>
+            <div className="text-2xs text-slate-500">Auto-fails over on demand spikes • Risk limits preserved</div>
           </div>
         </div>
       </div>
