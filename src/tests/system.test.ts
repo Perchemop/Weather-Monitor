@@ -8,6 +8,7 @@ import { calculateDeterministicRisk, SAFETY_DISCLAIMER } from '../services/riskE
 import { redactSecretsInError, maskSecret } from '../utils/security.js';
 import { evaluateDataFreshness } from '../utils/time.js';
 import { CurrentWeather, HourlyForecastItem, RiskThresholds } from '../types.js';
+import { generateAiWeatherBriefing } from '../services/aiWeatherService.js';
 
 const mockThresholds: RiskThresholds = {
   windWarning: 38,
@@ -144,11 +145,28 @@ async function runTests() {
     assert.equal(freshness.status, 'OFFLINE');
   });
 
-  // 4. AI Non-Authoritative Isolation
+  // 4. AI Non-Authoritative Isolation & Resilient Generation
   test('AI Safety Isolation: Safety disclaimer is present in deterministic engine', () => {
     assert.ok(SAFETY_DISCLAIMER.includes('SWMS'));
     assert.ok(SAFETY_DISCLAIMER.includes('safety judgement'));
   });
+
+  await (async () => {
+    try {
+      const current = createMockWeather({ windSpeed: 45, windGusts: 65 });
+      const hourly: HourlyForecastItem[] = [];
+      const risk = calculateDeterministicRisk(current, hourly, mockThresholds, 'UTC');
+      const briefing = await generateAiWeatherBriefing('Test Site North', current, risk, hourly);
+      assert.ok(briefing.briefing && briefing.briefing.length > 10, 'Briefing narrative must be non-empty');
+      assert.equal(briefing.authoritativeRiskLevel, risk.level, 'Authoritative risk level must match deterministic risk');
+      assert.ok(briefing.disclaimer?.includes('SWMS'), 'Safety disclaimer must be attached');
+      console.log(`  [PASS] AI Generation & Isolation: Model/Source=${briefing.source} (${briefing.modelUsed || 'Rule-Based'}), RiskLevel=${briefing.authoritativeRiskLevel}`);
+      passed++;
+    } catch (err: any) {
+      console.error(`  [FAIL] AI Generation & Isolation:`, err.message);
+      failed++;
+    }
+  })();
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {

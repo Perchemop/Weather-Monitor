@@ -281,6 +281,7 @@ export interface AiAlertExplanationResponse {
   authoritativeSeverity?: AlertSeverity;
   swmsReference?: string;
   source: 'GEMINI_AI' | 'DETERMINISTIC_RULES';
+  modelUsed?: string;
   generatedAt?: string;
 }
 
@@ -291,6 +292,7 @@ export interface AiHistoricalSummaryResponse {
   peakGustObserved: string;
   highestRiskLevel: RiskLevel;
   source: 'GEMINI_AI' | 'DETERMINISTIC_RULES';
+  modelUsed?: string;
   generatedAt: string;
 }
 

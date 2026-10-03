@@ -86,7 +86,9 @@ export function AiBriefingCard({
                   : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
               }`}
             >
-              {briefing.source === 'GEMINI_AI' ? 'Gemini 3.8 Flash' : 'Deterministic Rules'}
+              {briefing.source === 'GEMINI_AI'
+                ? briefing.modelUsed || 'Gemini AI'
+                : 'Deterministic Rules'}
             </span>
           )}
 
