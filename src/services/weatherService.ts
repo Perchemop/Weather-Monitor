@@ -5,6 +5,7 @@ import {
   RiskLevel,
   ProviderComparison
 } from '../types.js';
+import { redactSecretsInError } from '../utils/security.js';
 
 export interface WeatherDataPayload {
   locationId: string;
@@ -101,7 +102,8 @@ export async function fetchWeatherApiData(
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
-      throw new Error(`WeatherAPI error (${res.status}): ${errText || res.statusText}`);
+      const safeErrorMsg = redactSecretsInError(errText || res.statusText, [apiKey]);
+      throw new Error(`WeatherAPI error (${res.status}): ${safeErrorMsg}`);
     }
 
     const data = await res.json();
@@ -160,7 +162,14 @@ export function normalizeWeatherApiData(
       const rainProb = parseSafeNumber(dayData.daily_chance_of_rain, 0);
       const precipSum = parseSafeNumber(dayData.totalprecip_mm, 0);
       const maxWind = parseSafeNumber(dayData.maxwind_kph, 0);
-      const maxGust = Math.max(maxWind, parseSafeNumber(dayData.maxwind_kph, 0) * 1.25);
+      // Real-world maximum gust derived directly from meteorological hourly forecasts
+      let maxGust = maxWind;
+      if (Array.isArray(fDay.hour) && fDay.hour.length > 0) {
+        for (const h of fDay.hour) {
+          const hGust = parseSafeNumber(h.gust_kph, parseSafeNumber(h.wind_kph, 0));
+          if (hGust > maxGust) maxGust = hGust;
+        }
+      }
 
       let dayRisk: RiskLevel = 'LOW';
       if (maxGust >= 65 || precipSum >= 25 || maxTemp >= 40) {
