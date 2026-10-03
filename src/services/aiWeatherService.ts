@@ -18,8 +18,89 @@ function getGeminiClient(): GoogleGenAI | null {
   if (!apiKey || apiKey.trim().length === 0) {
     return null;
   }
-  genAIClient = new GoogleGenAI({ apiKey });
+  genAIClient = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build'
+      }
+    }
+  });
   return genAIClient;
+}
+
+/**
+ * Valid model cascade list for resilient text and reasoning tasks.
+ * In case of 503 high-demand spikes or transient rate limits on gemini-3.8-flash,
+ * the system immediately and transparently fails over to flash-lite / flash-latest.
+ */
+const CANDIDATE_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-latest'
+];
+
+interface GeminiCallOptions {
+  config?: {
+    responseMimeType?: string;
+    systemInstruction?: string;
+  };
+  maxRetriesPerModel?: number;
+}
+
+/**
+ * Resilient multi-model Gemini caller with automated retry and failover cascade.
+ * Protects against 503 UNAVAILABLE ("model is experiencing high demand") and 429 errors.
+ */
+async function callGeminiWithCascade(
+  prompt: string,
+  options?: GeminiCallOptions
+): Promise<{ text: string; modelUsed: string } | null> {
+  const client = getGeminiClient();
+  if (!client) return null;
+
+  let lastErrorSummary = '';
+
+  for (const model of CANDIDATE_MODELS) {
+    let attempts = 0;
+    const maxAttempts = options?.maxRetriesPerModel ?? 2;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        const response = await client.models.generateContent({
+          model,
+          contents: prompt,
+          ...(options?.config ? { config: options.config } : {})
+        });
+        const text = response.text?.trim() || '';
+        if (text) {
+          return { text, modelUsed: model };
+        }
+      } catch (err: any) {
+        const msg = err?.message || String(err);
+        lastErrorSummary = msg;
+        const isSpikeOrRateLimit =
+          msg.includes('503') ||
+          msg.includes('UNAVAILABLE') ||
+          msg.includes('high demand') ||
+          msg.includes('429') ||
+          msg.includes('RESOURCE_EXHAUSTED');
+
+        if (isSpikeOrRateLimit && attempts < maxAttempts) {
+          // Brief jittered pause before one retry on this model
+          await new Promise((r) => setTimeout(r, 500 + Math.random() * 400));
+          continue;
+        }
+
+        console.log(`[AI Weather Service] Model ${model} unavailable (transient load/status). Cascading to next fallback...`);
+        break; // Fail over to next candidate model
+      }
+    }
+  }
+
+  console.log(`[AI Weather Service] Note: Gemini models temporarily unavailable (${lastErrorSummary.slice(0, 80)}). Gracefully utilizing deterministic rule engine.`);
+  return null;
 }
 
 /**
@@ -30,42 +111,28 @@ export async function generateAiWeatherBriefing(
   locationName: string,
   current: CurrentWeather,
   deterministicRisk: RiskAssessment,
-  hourlyForecast: HourlyForecastItem[] = []
+  _hourlyForecast: HourlyForecastItem[] = []
 ): Promise<AiBriefingResponse> {
-  const client = getGeminiClient();
+  const activitiesAffected = deterministicRisk.affectedActivities
+    .filter((a) => a.riskLevel === 'HIGH' || a.riskLevel === 'CRITICAL')
+    .map((a) => a.activity);
 
-  // Deterministic rule-based fallback if Gemini API is not configured
-  if (!client) {
-    const activitiesAffected = deterministicRisk.affectedActivities
-      .filter((a) => a.riskLevel === 'HIGH' || a.riskLevel === 'CRITICAL')
-      .map((a) => a.activity);
+  const fallbackNarrative =
+    deterministicRisk.level === 'CRITICAL'
+      ? `CRITICAL ALERT for ${locationName}: Severe weather conditions (${deterministicRisk.factors
+          .map((f) => f.label)
+          .join(', ')}) exceed safety limits. Suspend hazardous operations including ${activitiesAffected.join(', ') || 'crane and elevated work'} immediately.`
+      : deterministicRisk.level === 'HIGH'
+      ? `HIGH RISK ADVISORY for ${locationName}: Elevated conditions (${deterministicRisk.factors
+          .map((f) => f.label)
+          .join(', ')}) require SWMS review and mitigation before proceeding with high-exposure tasks.`
+      : deterministicRisk.level === 'MODERATE'
+      ? `MODERATE VIGILANCE for ${locationName}: Conditions are marginal (${deterministicRisk.factors
+          .map((f) => f.label)
+          .join(', ')}). Monitor wind gusts and localized shower development.`
+      : `NORMAL OPERATIONAL STATUS for ${locationName}: Weather parameters are within standard envelopes. Proceed with standard site safety protocols.`;
 
-    const fallbackNarrative =
-      deterministicRisk.level === 'CRITICAL'
-        ? `CRITICAL ALERT for ${locationName}: Severe weather conditions (${deterministicRisk.factors
-            .map((f) => f.label)
-            .join(', ')}) exceed safety limits. Suspend hazardous operations including ${activitiesAffected.join(', ') || 'crane and elevated work'} immediately.`
-        : deterministicRisk.level === 'HIGH'
-        ? `HIGH RISK ADVISORY for ${locationName}: Elevated conditions (${deterministicRisk.factors
-            .map((f) => f.label)
-            .join(', ')}) require SWMS review and mitigation before proceeding with high-exposure tasks.`
-        : deterministicRisk.level === 'MODERATE'
-        ? `MODERATE VIGILANCE for ${locationName}: Conditions are marginal (${deterministicRisk.factors
-            .map((f) => f.label)
-            .join(', ')}). Monitor wind gusts and localized shower development.`
-        : `NORMAL OPERATIONAL STATUS for ${locationName}: Weather parameters are within standard envelopes. Proceed with standard site safety protocols.`;
-
-    return {
-      briefing: fallbackNarrative,
-      authoritativeRiskLevel: deterministicRisk.level,
-      source: 'DETERMINISTIC_RULES',
-      generatedAt: new Date().toISOString(),
-      disclaimer: SAFETY_DISCLAIMER
-    };
-  }
-
-  try {
-    const prompt = `You are a licensed construction site safety director preparing a brief daily weather risk briefing for site supervisors.
+  const prompt = `You are a licensed construction site safety director preparing a brief daily weather risk briefing for site supervisors.
 Location: ${locationName}
 Current Weather:
 - Temperature: ${current.temperature}°C (Feels like: ${current.feelsLike}°C)
@@ -79,37 +146,33 @@ Deterministic Safety Assessment (MANDATORY BENCHMARK):
 - Risk Score: ${deterministicRisk.score}/100
 - Active Trigger Factors: ${deterministicRisk.factors.map((f) => `${f.label} (${f.value})`).join(', ') || 'None'}
 - Affected Activities: ${deterministicRisk.affectedActivities
-      .map((a) => `${a.activity}: ${a.riskLevel} (${a.reason})`)
-      .join('; ')}
+    .map((a) => `${a.activity}: ${a.riskLevel} (${a.reason})`)
+    .join('; ')}
 
 CRITICAL INSTRUCTION:
 Provide a crisp, professional 2-3 sentence superintendent briefing.
 You MUST acknowledge the authoritative risk level "${deterministicRisk.level}" and MUST NOT contradict or downgrade it. Focus on practical site actions (e.g. crane tag lines, scaffold tie-offs, heat breaks).`;
 
-    const response = await client.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt
-    });
+  const result = await callGeminiWithCascade(prompt);
 
-    const narrative = response.text?.trim() || deterministicRisk.summary;
-
+  if (result) {
     return {
-      briefing: narrative,
+      briefing: result.text,
       authoritativeRiskLevel: deterministicRisk.level,
       source: 'GEMINI_AI',
-      generatedAt: new Date().toISOString(),
-      disclaimer: SAFETY_DISCLAIMER
-    };
-  } catch (err) {
-    console.warn('[AI Weather Briefing] Gemini generation failed, using deterministic summary:', err);
-    return {
-      briefing: deterministicRisk.summary,
-      authoritativeRiskLevel: deterministicRisk.level,
-      source: 'DETERMINISTIC_RULES',
+      modelUsed: result.modelUsed,
       generatedAt: new Date().toISOString(),
       disclaimer: SAFETY_DISCLAIMER
     };
   }
+
+  return {
+    briefing: fallbackNarrative,
+    authoritativeRiskLevel: deterministicRisk.level,
+    source: 'DETERMINISTIC_RULES',
+    generatedAt: new Date().toISOString(),
+    disclaimer: SAFETY_DISCLAIMER
+  };
 }
 
 /**
@@ -117,27 +180,15 @@ You MUST acknowledge the authoritative risk level "${deterministicRisk.level}" a
  */
 export async function generateAiAlertExplanation(
   alert: AlertItem,
-  deterministicRisk: RiskAssessment
+  _deterministicRisk: RiskAssessment
 ): Promise<AiAlertExplanationResponse> {
-  const client = getGeminiClient();
+  const fallbackActions = [
+    'Inspect site tie-downs and loose forms',
+    'Verify manufacturer crane anemometer limits',
+    'Notify superintendent and review SWMS'
+  ];
 
-  if (!client) {
-    return {
-      alertId: alert.id,
-      explanation: `Operational threshold exceeded: ${alert.alertType} reached ${alert.observedValue} against threshold of ${alert.thresholdValue}. Review manufacturer crane charts and local SWMS guidelines immediately.`,
-      recommendedActions: [
-        'Secure loose site materials and high-exposure forms.',
-        'Review SWMS and equipment anemometer guidelines.',
-        'Enforce spotters and establish exclusion zones if working elevated.'
-      ],
-      authoritativeSeverity: alert.severity,
-      source: 'DETERMINISTIC_RULES',
-      generatedAt: new Date().toISOString()
-    };
-  }
-
-  try {
-    const prompt = `You are a senior site safety engineer. A weather alert has been triggered:
+  const prompt = `You are a senior site safety engineer. A weather alert has been triggered:
 Alert Title: ${alert.title}
 Alert Type: ${alert.alertType}
 Location: ${alert.locationName}
@@ -150,37 +201,39 @@ Provide an operational safety explanation in JSON format with:
 - "explanation": 2 sentences explaining the mechanical/safety reason for the hazard (e.g., aerodynamic drag on crane boom, scaffold sail area, reduced tire friction).
 - "recommendedActions": an array of 3 specific site actions to execute.`;
 
-    const response = await client.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json'
-      }
-    });
+  const result = await callGeminiWithCascade(prompt, {
+    config: {
+      responseMimeType: 'application/json'
+    }
+  });
 
-    const parsed = JSON.parse(response.text || '{}');
-
-    return {
-      alertId: alert.id,
-      explanation: parsed.explanation || alert.message,
-      recommendedActions: Array.isArray(parsed.recommendedActions) && parsed.recommendedActions.length > 0
-        ? parsed.recommendedActions
-        : ['Verify anemometer readings on crane mast', 'Inspect scaffold sheeting and ties', 'Maintain radio contact with ground crews'],
-      authoritativeSeverity: alert.severity,
-      source: 'GEMINI_AI',
-      generatedAt: new Date().toISOString()
-    };
-  } catch (err) {
-    console.warn('[AI Alert Explanation] Gemini call failed:', err);
-    return {
-      alertId: alert.id,
-      explanation: `Operational safety notice: ${alert.message}. Review site SWMS and stop work if limits are breached.`,
-      recommendedActions: ['Inspect site tie-downs', 'Verify manufacturer wind limits', 'Alert supervisor'],
-      authoritativeSeverity: alert.severity,
-      source: 'DETERMINISTIC_RULES',
-      generatedAt: new Date().toISOString()
-    };
+  if (result) {
+    try {
+      const parsed = JSON.parse(result.text);
+      return {
+        alertId: alert.id,
+        explanation: parsed.explanation || alert.message,
+        recommendedActions: Array.isArray(parsed.recommendedActions) && parsed.recommendedActions.length > 0
+          ? parsed.recommendedActions
+          : fallbackActions,
+        authoritativeSeverity: alert.severity,
+        source: 'GEMINI_AI',
+        modelUsed: result.modelUsed,
+        generatedAt: new Date().toISOString()
+      };
+    } catch {
+      // Fall through to deterministic response if JSON parsing fails
+    }
   }
+
+  return {
+    alertId: alert.id,
+    explanation: `Operational safety notice: ${alert.message}. Review site SWMS and stop work if limits are breached.`,
+    recommendedActions: fallbackActions,
+    authoritativeSeverity: alert.severity,
+    source: 'DETERMINISTIC_RULES',
+    generatedAt: new Date().toISOString()
+  };
 }
 
 /**
@@ -190,8 +243,6 @@ export async function generateAiHistoricalSummary(
   locationName: string,
   observations: CurrentWeather[]
 ): Promise<AiHistoricalSummaryResponse> {
-  const client = getGeminiClient();
-
   if (!observations || observations.length === 0) {
     return {
       locationName,
@@ -209,20 +260,7 @@ export async function generateAiHistoricalSummary(
   const maxTemp = Math.max(...observations.map((o) => o.temperature || 0));
   const minTemp = Math.min(...observations.map((o) => o.temperature || 0));
 
-  if (!client) {
-    return {
-      locationName,
-      timeframe: `Past ${observations.length} observations`,
-      summary: `Across the past ${observations.length} recorded cycles at ${locationName}, maximum gusts reached ${Math.round(maxGust)} km/h with temperatures ranging from ${minTemp.toFixed(1)}°C to ${maxTemp.toFixed(1)}°C. Weather trends remained consistent with recorded seasonal benchmarks.`,
-      peakGustObserved: `${Math.round(maxGust)} km/h`,
-      highestRiskLevel: maxGust >= 68 ? 'CRITICAL' : maxGust >= 55 ? 'HIGH' : maxGust >= 45 ? 'MODERATE' : 'LOW',
-      source: 'DETERMINISTIC_RULES',
-      generatedAt: new Date().toISOString()
-    };
-  }
-
-  try {
-    const prompt = `Analyze this recent construction weather log for site "${locationName}":
+  const prompt = `Analyze this recent construction weather log for site "${locationName}":
 Total logged intervals: ${observations.length}
 Max sustained wind: ${Math.round(maxWind)} km/h
 Max wind gust: ${Math.round(maxGust)} km/h
@@ -230,29 +268,30 @@ Temperature span: ${minTemp.toFixed(1)}°C to ${maxTemp.toFixed(1)}°C
 
 Write a 2-3 sentence operational historical summary highlighting whether conditions showed rising volatility or stability, and noting impact on work schedules.`;
 
-    const response = await client.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt
-    });
+  const result = await callGeminiWithCascade(prompt);
 
+  const highestRisk = maxGust >= 68 ? 'CRITICAL' : maxGust >= 55 ? 'HIGH' : maxGust >= 45 ? 'MODERATE' : 'LOW';
+
+  if (result) {
     return {
       locationName,
       timeframe: `Past ${observations.length} observations`,
-      summary: response.text?.trim() || `Weather records show peak gusts of ${Math.round(maxGust)} km/h across ${observations.length} observations.`,
+      summary: result.text || `Weather records show peak gusts of ${Math.round(maxGust)} km/h across ${observations.length} observations.`,
       peakGustObserved: `${Math.round(maxGust)} km/h`,
-      highestRiskLevel: maxGust >= 68 ? 'CRITICAL' : maxGust >= 55 ? 'HIGH' : maxGust >= 45 ? 'MODERATE' : 'LOW',
+      highestRiskLevel: highestRisk,
       source: 'GEMINI_AI',
-      generatedAt: new Date().toISOString()
-    };
-  } catch (err) {
-    return {
-      locationName,
-      timeframe: `Past ${observations.length} observations`,
-      summary: `Historical data review indicates peak wind gusts reached ${Math.round(maxGust)} km/h.`,
-      peakGustObserved: `${Math.round(maxGust)} km/h`,
-      highestRiskLevel: maxGust >= 68 ? 'CRITICAL' : maxGust >= 55 ? 'HIGH' : 'LOW',
-      source: 'DETERMINISTIC_RULES',
+      modelUsed: result.modelUsed,
       generatedAt: new Date().toISOString()
     };
   }
+
+  return {
+    locationName,
+    timeframe: `Past ${observations.length} observations`,
+    summary: `Across the past ${observations.length} recorded cycles at ${locationName}, maximum gusts reached ${Math.round(maxGust)} km/h with temperatures ranging from ${minTemp.toFixed(1)}°C to ${maxTemp.toFixed(1)}°C. Weather trends remained consistent with recorded seasonal benchmarks.`,
+    peakGustObserved: `${Math.round(maxGust)} km/h`,
+    highestRiskLevel: highestRisk,
+    source: 'DETERMINISTIC_RULES',
+    generatedAt: new Date().toISOString()
+  };
 }
