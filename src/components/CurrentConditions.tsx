@@ -16,17 +16,27 @@ interface CurrentConditionsProps {
   weather: CurrentWeather | null;
   tempUnit?: 'C' | 'F';
   windUnit?: 'km/h' | 'mph' | 'm/s';
+  isLoading?: boolean;
 }
 
 export const CurrentConditions: React.FC<CurrentConditionsProps> = ({
   weather,
   tempUnit = 'C',
-  windUnit = 'km/h'
+  windUnit = 'km/h',
+  isLoading = false
 }) => {
-  if (!weather) {
+  if (isLoading || !weather) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 text-center text-slate-500 font-mono text-sm">
-        Weather data unavailable. Run check to fetch live conditions.
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm animate-pulse space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="h-4 w-44 bg-slate-800 rounded" />
+          <div className="h-3 w-28 bg-slate-800 rounded" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-24 rounded-lg bg-slate-950/70 border border-slate-800/90" />
+          ))}
+        </div>
       </div>
     );
   }

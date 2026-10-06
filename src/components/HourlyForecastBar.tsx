@@ -5,16 +5,30 @@ import { HourlyForecastItem, RiskLevel } from '../types';
 interface HourlyForecastBarProps {
   hourly: HourlyForecastItem[];
   windUnit?: 'km/h' | 'mph' | 'm/s';
+  isLoading?: boolean;
 }
 
 export const HourlyForecastBar: React.FC<HourlyForecastBarProps> = ({
   hourly,
-  windUnit = 'km/h'
+  windUnit = 'km/h',
+  isLoading = false
 }) => {
   const [viewCount, setViewCount] = useState<6 | 12 | 24>(6);
 
-  if (!hourly || hourly.length === 0) {
-    return null;
+  if (isLoading || !hourly || hourly.length === 0) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm animate-pulse space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="h-4 w-48 bg-slate-800 rounded" />
+          <div className="h-6 w-24 bg-slate-950 rounded-lg" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-28 rounded-xl bg-slate-950/60 border border-slate-800/80" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   const items = hourly.slice(0, viewCount);

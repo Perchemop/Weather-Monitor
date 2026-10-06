@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ShieldAlert,
   MapPin,
@@ -10,7 +10,10 @@ import {
   FileText,
   Settings,
   HardHat,
-  ChevronDown
+  ChevronDown,
+  LogOut,
+  Menu,
+  X
 } from 'lucide-react';
 import { LocationItem } from '../types';
 
@@ -20,6 +23,7 @@ interface NavbarProps {
   setActiveTab: (tab: string) => void;
   onOpenLocations: () => void;
   onRunCheck: () => void;
+  onLogout?: () => void;
   isChecking: boolean;
   monitorStatus: 'ACTIVE' | 'STOPPED' | 'ERROR';
   dataStatus: 'LIVE' | 'CACHED' | 'OFFLINE' | 'UNAVAILABLE';
@@ -32,11 +36,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   onOpenLocations,
   onRunCheck,
+  onLogout,
   isChecking,
   monitorStatus,
   dataStatus,
   lastCheckTime
 }) => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const getRelativeTime = (iso: string | null) => {
     if (!iso) return 'Pending check';
     const d = new Date(iso);
@@ -59,21 +66,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white select-none">
       {/* Top Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
         {/* Brand & Identity */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
             <HardHat className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-semibold uppercase tracking-widest text-amber-500">
-                Private Local Monitor
+              <span className="font-mono text-2xs font-semibold uppercase tracking-widest text-amber-500">
+                Safety Enclave
               </span>
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-600" />
-              <span className="text-xs text-slate-400 font-mono">Single-User</span>
+              <span className="text-2xs text-slate-400 font-mono">Autonomous</span>
             </div>
-            <h1 className="text-base sm:text-lg font-bold text-slate-100 tracking-tight leading-none mt-0.5">
+            <h1 className="text-sm sm:text-base font-bold text-slate-100 tracking-tight leading-none mt-0.5">
               CONSTRUCTION WEATHER MONITOR
             </h1>
           </div>
@@ -83,13 +90,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center flex-wrap gap-2 sm:gap-3">
           {/* Location Selector Button */}
           <button
+            type="button"
             id="location-selector-btn"
             onClick={onOpenLocations}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-xs sm:text-sm font-medium text-slate-200 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-xs sm:text-sm font-medium text-slate-200 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
             title="Change monitored site location"
           >
             <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="truncate max-w-[150px] sm:max-w-[200px]">
+            <span className="truncate max-w-[130px] sm:max-w-[200px]">
               {currentLocation ? currentLocation.name : 'Select Location'}
             </span>
             <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
@@ -99,7 +107,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="hidden sm:flex items-center gap-2">
             {/* Monitor Status */}
             <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-mono font-medium ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-mono font-medium ${
                 monitorStatus === 'ACTIVE'
                   ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
                   : monitorStatus === 'ERROR'
@@ -121,7 +129,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Live Data Badge */}
             <span
-              className={`px-2 py-1 rounded text-xs font-mono font-semibold uppercase tracking-wider ${
+              className={`px-2 py-1 rounded-md text-xs font-mono font-semibold uppercase tracking-wider ${
                 dataStatus === 'LIVE'
                   ? 'bg-blue-950/70 text-blue-300 border border-blue-800'
                   : 'bg-amber-950/70 text-amber-300 border border-amber-800'
@@ -133,31 +141,58 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Manual Run Check Button */}
           <button
+            type="button"
             id="manual-check-btn"
             onClick={onRunCheck}
             disabled={isChecking}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold text-xs sm:text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
             title="Execute immediate weather check cycle"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
             <span className="hidden md:inline">Check Now</span>
           </button>
+
+          {/* Lock / Logout Button */}
+          {onLogout && (
+            <button
+              type="button"
+              id="logout-btn"
+              onClick={onLogout}
+              className="flex items-center gap-1 p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-400 hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+              title="Lock safety enclave / log out"
+              aria-label="Lock safety enclave"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Mobile hamburger toggle */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="sm:hidden p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
+            aria-label="Toggle navigation menu"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Navigation Tabs (Desktop & Tablet) */}
       <div className="border-t border-slate-800/80 bg-slate-950/60 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto no-scrollbar">
-          <nav className="flex items-center gap-1 sm:gap-2 py-1.5">
+          <nav className="flex items-center gap-1 sm:gap-2 py-1.5" aria-label="Main navigation">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
                 <button
+                  type="button"
                   key={item.id}
                   id={`nav-tab-${item.id}`}
                   onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-colors ${
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer ${
                     isActive
                       ? 'bg-slate-800 text-amber-400 border border-slate-700 shadow-inner'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -175,6 +210,38 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Mobile Collapsible Navigation Menu */}
+      {mobileMenuOpen && (
+        <div className="sm:hidden border-t border-slate-800 bg-slate-950/95 p-3 space-y-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                type="button"
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setMobileMenuOpen(false);
+                }}
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-xs font-medium text-left transition-colors ${
+                  isActive
+                    ? 'bg-slate-800 text-amber-400 border border-slate-700'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+          <div className="pt-2 border-t border-slate-800 text-2xs font-mono text-slate-500 flex items-center justify-between px-2">
+            <span>Status: {monitorStatus}</span>
+            <span>{getRelativeTime(lastCheckTime)}</span>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

@@ -16,15 +16,30 @@ import { RiskAssessment, RiskLevel } from '../types';
 interface HeroRiskCardProps {
   risk: RiskAssessment | null;
   locationName: string;
+  isLoading?: boolean;
 }
 
-export const HeroRiskCard: React.FC<HeroRiskCardProps> = ({ risk, locationName }) => {
+export const HeroRiskCard: React.FC<HeroRiskCardProps> = ({ risk, locationName, isLoading = false }) => {
   const [showFactors, setShowFactors] = useState(false);
 
-  if (!risk) {
+  if (isLoading || !risk) {
     return (
-      <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-6 text-center text-slate-400">
-        <p className="font-mono text-sm">Calculating site weather risk...</p>
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 animate-pulse shadow-xl relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+          <div className="space-y-2">
+            <div className="h-4 w-32 bg-slate-800 rounded" />
+            <div className="h-8 w-64 bg-slate-800 rounded" />
+          </div>
+          <div className="h-10 w-28 bg-slate-800 rounded-lg" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+          <div className="h-20 bg-slate-950/60 rounded-xl border border-slate-800/60" />
+          <div className="h-20 bg-slate-950/60 rounded-xl border border-slate-800/60" />
+          <div className="h-20 bg-slate-950/60 rounded-xl border border-slate-800/60" />
+        </div>
+        <div className="mt-4 text-center text-xs font-mono text-slate-500">
+          Evaluating microclimate crane & site safety envelopes...
+        </div>
       </div>
     );
   }

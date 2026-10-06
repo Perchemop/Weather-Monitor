@@ -368,11 +368,29 @@ export async function updateOwnerPassword(newPassword: string, newEmail?: string
   return true;
 }
 
-export async function getOwnerInfo(): Promise<{ email: string } | null> {
+export async function isOwnerPasswordConfigured(): Promise<boolean> {
+  const db = await getDb();
+  const confRes = db.exec("SELECT value FROM settings WHERE key = 'owner_configured'");
+  return confRes[0]?.values[0]?.[0] === 'true';
+}
+
+export async function setupInitialPassword(password: string, email?: string): Promise<boolean> {
+  await updateOwnerPassword(password, email);
+  const db = await getDb();
+  db.run(
+    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('owner_configured', 'true', ?)",
+    [new Date().toISOString()]
+  );
+  persistDb();
+  return true;
+}
+
+export async function getOwnerInfo(): Promise<{ email: string; isConfigured: boolean } | null> {
   const db = await getDb();
   const res = db.exec('SELECT email FROM auth_owner LIMIT 1');
   if (!res[0] || !res[0].values[0]) return null;
-  return { email: res[0].values[0][0] as string };
+  const isConfigured = await isOwnerPasswordConfigured();
+  return { email: res[0].values[0][0] as string, isConfigured };
 }
 
 // Locations
@@ -1177,4 +1195,57 @@ export async function getDatabaseBinary(): Promise<Buffer> {
   await getDb();
   persistDb();
   return fs.readFileSync(DB_FILE);
+}
+
+const BACKUP_DIR = path.join(DB_DIR, 'backups');
+
+export async function createDatabaseBackup(): Promise<string> {
+  await getDb();
+  persistDb();
+  if (!fs.existsSync(BACKUP_DIR)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  }
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupFileName = `weather-monitor-${timestamp}.sqlite`;
+  const backupFilePath = path.join(BACKUP_DIR, backupFileName);
+  if (fs.existsSync(DB_FILE)) {
+    fs.copyFileSync(DB_FILE, backupFilePath);
+  }
+
+  // Keep last 10 backups
+  try {
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter((f) => f.startsWith('weather-monitor-') && f.endsWith('.sqlite'))
+      .sort();
+    if (files.length > 10) {
+      const toDelete = files.slice(0, files.length - 10);
+      for (const file of toDelete) {
+        fs.unlinkSync(path.join(BACKUP_DIR, file));
+      }
+    }
+  } catch (err) {
+    console.error('Backup rotation error:', err);
+  }
+
+  return backupFileName;
+}
+
+export function getDatabaseBackupsList(): { filename: string; size: number; createdAt: string }[] {
+  if (!fs.existsSync(BACKUP_DIR)) return [];
+  try {
+    return fs.readdirSync(BACKUP_DIR)
+      .filter((f) => f.startsWith('weather-monitor-') && f.endsWith('.sqlite'))
+      .map((f) => {
+        const fullPath = path.join(BACKUP_DIR, f);
+        const stat = fs.statSync(fullPath);
+        return {
+          filename: f,
+          size: stat.size,
+          createdAt: stat.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch {
+    return [];
+  }
 }
