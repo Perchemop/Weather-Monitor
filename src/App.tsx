@@ -12,6 +12,8 @@ import { ReportsView } from './components/ReportsView';
 import { SystemHealthView } from './components/SystemHealthView';
 import { SettingsView } from './components/SettingsView';
 import { LocationModal } from './components/LocationModal';
+import { LoginScreen } from './components/LoginScreen';
+import { useToast } from './components/ToastProvider';
 import {
   CurrentWeather,
   RiskAssessment,
@@ -21,7 +23,8 @@ import {
   DailyForecastItem,
   LocationItem,
   MonitorStatus,
-  ProviderComparison
+  ProviderComparison,
+  OwnerSettings
 } from './types';
 import { fetchRealWeatherData } from './services/weatherService';
 import { calculateDeterministicRisk } from './services/riskEngine';
@@ -40,6 +43,14 @@ const FALLBACK_SITE: LocationItem = {
 };
 
 export default function App() {
+  const toast = useToast();
+
+  // Authentication State
+  const [authChecking, setAuthChecking] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isFirstRun, setIsFirstRun] = useState(false);
+  const [ownerEmail, setOwnerEmail] = useState('owner@local');
+
   // App Navigation & Modals
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
@@ -54,6 +65,9 @@ export default function App() {
   const [alertDeliveries, setAlertDeliveries] = useState<AlertDelivery[]>([]);
   const [hourlyForecast, setHourlyForecast] = useState<HourlyForecastItem[]>([]);
   const [dailyForecast, setDailyForecast] = useState<DailyForecastItem[]>([]);
+  const [isDashboardLoading, setIsDashboardLoading] = useState<boolean>(true);
+  const [ownerSettings, setOwnerSettings] = useState<OwnerSettings | null>(null);
+
   const [monitorStatus, setMonitorStatus] = useState<MonitorStatus>({
     status: 'ACTIVE',
     isRunning: true,
@@ -69,14 +83,79 @@ export default function App() {
   const [hasWeatherApiKey, setHasWeatherApiKey] = useState<boolean>(true);
   const [activeProvider, setActiveProvider] = useState<string>('WeatherAPI (Main Reference)');
 
+  // Authorized API caller with session token & cookie backup
+  const apiFetch = useCallback(async (url: string, init?: RequestInit): Promise<Response> => {
+    const token = localStorage.getItem('cwm_session_token');
+    const headers = new Headers(init?.headers || {});
+    if (token) {
+      headers.set('x-session-token', token);
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(url, { ...init, headers });
+  }, []);
+
+  // Check authentication status on startup
+  useEffect(() => {
+    const verifyAuth = async () => {
+      try {
+        const res = await apiFetch('/api/auth/status');
+        if (res.ok) {
+          const data = await res.json();
+          setIsAuthenticated(Boolean(data.authenticated));
+          setIsFirstRun(Boolean(data.isFirstRun));
+          if (data.ownerEmail) setOwnerEmail(data.ownerEmail);
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch {
+        setIsAuthenticated(false);
+      } finally {
+        setAuthChecking(false);
+      }
+    };
+    verifyAuth();
+  }, [apiFetch]);
+
+  // Handle successful login or first-run setup
+  const handleAuthenticated = (token: string, email: string) => {
+    localStorage.setItem('cwm_session_token', token);
+    setIsAuthenticated(true);
+    setIsFirstRun(false);
+    setOwnerEmail(email);
+    toast.success('Site Safety Enclave unlocked.');
+    loadDashboardData();
+  };
+
+  // Handle logout / session lock
+  const handleLogout = async () => {
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch {}
+    localStorage.removeItem('cwm_session_token');
+    setIsAuthenticated(false);
+    toast.info('Safety Enclave session locked.');
+  };
+
   // Resiliently load weather data from backend or fallback to direct Open-Meteo client fetching
   const loadDashboardData = useCallback(async () => {
     let weatherLoaded = false;
     let targetLoc = currentLocation || FALLBACK_SITE;
+    setIsDashboardLoading(true);
+
+    // 0. Fetch Owner Settings for units and intervals
+    try {
+      const setRes = await apiFetch('/api/settings');
+      if (setRes.ok) {
+        const setData = await setRes.json();
+        if (setData.settings) {
+          setOwnerSettings(setData.settings);
+        }
+      }
+    } catch {}
 
     // 1. Try to fetch Current Weather & Risk from backend API
     try {
-      const currentRes = await fetch(`/api/weather/current${currentLocation ? `?locationId=${currentLocation.id}` : ''}`);
+      const currentRes = await apiFetch(`/api/weather/current${currentLocation ? `?locationId=${currentLocation.id}` : ''}`);
       if (currentRes.ok) {
         const data = await currentRes.json();
         if (data.location) {
@@ -101,7 +180,7 @@ export default function App() {
 
     // 2. Fetch Cross-Reference Comparison if not already in current
     try {
-      const crossRes = await fetch(`/api/weather/cross-reference${currentLocation ? `?locationId=${currentLocation.id}` : ''}`);
+      const crossRes = await apiFetch(`/api/weather/cross-reference${currentLocation ? `?locationId=${currentLocation.id}` : ''}`);
       if (crossRes.ok) {
         const cData = await crossRes.json();
         if (cData.comparison) setProviderComparison(cData.comparison);
@@ -112,7 +191,7 @@ export default function App() {
 
     // 3. Fetch Locations List from backend
     try {
-      const locsRes = await fetch('/api/locations');
+      const locsRes = await apiFetch('/api/locations');
       if (locsRes.ok) {
         const locsData = await locsRes.json();
         if (Array.isArray(locsData.locations) && locsData.locations.length > 0) {
@@ -123,7 +202,7 @@ export default function App() {
 
     // 4. Fetch Forecast Details from backend
     try {
-      const forecastRes = await fetch(`/api/weather/forecast${currentLocation ? `?locationId=${currentLocation.id}` : ''}`);
+      const forecastRes = await apiFetch(`/api/weather/forecast${currentLocation ? `?locationId=${currentLocation.id}` : ''}`);
       if (forecastRes.ok) {
         const fData = await forecastRes.json();
         if (Array.isArray(fData.hourly) && fData.hourly.length > 0) setHourlyForecast(fData.hourly);
@@ -133,7 +212,7 @@ export default function App() {
 
     // 5. Fetch Alerts & Deliveries from backend
     try {
-      const alertsRes = await fetch('/api/alerts');
+      const alertsRes = await apiFetch('/api/alerts');
       if (alertsRes.ok) {
         const aData = await alertsRes.json();
         if (Array.isArray(aData.alerts)) setAllAlerts(aData.alerts);
@@ -143,14 +222,14 @@ export default function App() {
 
     // 6. Fetch Health Diagnostics from backend
     try {
-      const healthRes = await fetch('/api/health');
+      const healthRes = await apiFetch('/api/health');
       if (healthRes.ok) {
         const hData = await healthRes.json();
         setSystemHealth(hData);
       }
     } catch {}
 
-    // 7. Direct Client Fallback: If backend weather was not fetched, query directly
+    // 7. Direct Client Fallback: If backend weather was not fetched, query directly from Open-Meteo
     if (!weatherLoaded) {
       try {
         const livePayload = await fetchRealWeatherData(
@@ -177,22 +256,28 @@ export default function App() {
         console.warn('Direct weather query failed:', err);
       }
     }
-  }, [currentLocation]);
+
+    setIsDashboardLoading(false);
+  }, [currentLocation, apiFetch]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     loadDashboardData();
     // Poll every 30s for fresh monitor status
     const interval = setInterval(loadDashboardData, 30000);
     return () => clearInterval(interval);
-  }, [loadDashboardData]);
+  }, [isAuthenticated, loadDashboardData]);
 
   // Execute manual weather check
   const handleRunCheckNow = async () => {
     setMonitorStatus((prev) => ({ ...prev, isChecking: true }));
+    toast.info('Executing immediate weather observation cycle...');
+
     try {
-      const res = await fetch('/api/monitor/check-now', { method: 'POST' });
+      const res = await apiFetch('/api/monitor/check-now', { method: 'POST' });
       if (res.ok) {
         await loadDashboardData();
+        toast.success('Site microclimate conditions updated.');
         return;
       }
     } catch {}
@@ -213,8 +298,10 @@ export default function App() {
       setHourlyForecast(livePayload.hourly);
       setDailyForecast(livePayload.daily);
       setDataStatus('LIVE');
-    } catch {}
-    finally {
+      toast.success('Direct observations refreshed.');
+    } catch {
+      toast.error('Unable to fetch live weather observations.');
+    } finally {
       setMonitorStatus((prev) => ({
         ...prev,
         isChecking: false,
@@ -226,8 +313,11 @@ export default function App() {
   // Dismiss / Acknowledge active alert
   const handleDismissAlert = async (id: string) => {
     try {
-      const res = await fetch(`/api/alerts/${id}/dismiss`, { method: 'POST' });
+      const res = await apiFetch(`/api/alerts/${id}/dismiss`, { method: 'POST' });
       if (res.ok) {
+        setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
+        toast.info('Alert acknowledged and dismissed.');
+      } else {
         setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
       }
     } catch {
@@ -238,8 +328,11 @@ export default function App() {
   // Switch location with fallback
   const handleSelectLocation = async (loc: LocationItem) => {
     setCurrentLocation(loc);
+    setIsDashboardLoading(true);
+    toast.info(`Switching location to ${loc.name}...`);
+
     try {
-      const res = await fetch(`/api/weather/current?locationId=${loc.id}`);
+      const res = await apiFetch(`/api/weather/current?locationId=${loc.id}`);
       if (res.ok) {
         const data = await res.json();
         setCurrentWeather(data.current);
@@ -247,17 +340,18 @@ export default function App() {
         setActiveAlerts(data.activeAlerts || []);
         if (data.comparison) setProviderComparison(data.comparison);
       }
-      const forecastRes = await fetch(`/api/weather/forecast?locationId=${loc.id}`);
+      const forecastRes = await apiFetch(`/api/weather/forecast?locationId=${loc.id}`);
       if (forecastRes.ok) {
         const fData = await forecastRes.json();
         setHourlyForecast(fData.hourly || []);
         setDailyForecast(fData.daily || []);
       }
-      const crossRes = await fetch(`/api/weather/cross-reference?locationId=${loc.id}`);
+      const crossRes = await apiFetch(`/api/weather/cross-reference?locationId=${loc.id}`);
       if (crossRes.ok) {
         const cData = await crossRes.json();
         if (cData.comparison) setProviderComparison(cData.comparison);
       }
+      toast.success(`Active monitoring shifted to ${loc.name}`);
     } catch {
       // Direct client fallback for selected location
       try {
@@ -275,9 +369,43 @@ export default function App() {
         setDailyForecast(livePayload.daily);
         if (livePayload.comparison) setProviderComparison(livePayload.comparison);
         setDataStatus('LIVE');
-      } catch {}
+        toast.success(`Active monitoring shifted to ${loc.name}`);
+      } catch {
+        toast.error(`Failed to load weather for ${loc.name}`);
+      }
+    } finally {
+      setIsDashboardLoading(false);
     }
   };
+
+  // Loading state while checking authentication
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 animate-pulse">
+            <HardHat className="w-6 h-6" />
+          </div>
+          <span className="text-xs font-mono text-slate-400">Initializing Safety Enclave...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Not authenticated: present master password / first run setup screen
+  if (!isAuthenticated) {
+    return (
+      <LoginScreen
+        isFirstRun={isFirstRun}
+        ownerEmail={ownerEmail}
+        onAuthenticated={handleAuthenticated}
+      />
+    );
+  }
+
+  const tempUnit = ownerSettings?.temperatureUnit || 'C';
+  const windUnit = ownerSettings?.windUnit || 'km/h';
+  const monitorInterval = ownerSettings?.monitorIntervalMinutes || 15;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
@@ -288,6 +416,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         onOpenLocations={() => setIsLocationModalOpen(true)}
         onRunCheck={handleRunCheckNow}
+        onLogout={handleLogout}
         isChecking={monitorStatus.isChecking}
         monitorStatus={monitorStatus.status}
         dataStatus={dataStatus}
@@ -302,6 +431,7 @@ export default function App() {
             <HeroRiskCard
               risk={riskAssessment}
               locationName={currentLocation ? currentLocation.name : 'Monitored Site'}
+              isLoading={isDashboardLoading}
             />
 
             {/* AI Superintendent Weather Briefing */}
@@ -327,17 +457,26 @@ export default function App() {
             />
 
             {/* 3. Next 6 Hours Outlook Bar */}
-            <HourlyForecastBar hourly={hourlyForecast} />
+            <HourlyForecastBar
+              hourly={hourlyForecast}
+              windUnit={windUnit}
+              isLoading={isDashboardLoading}
+            />
 
             {/* 4. Current Onsite Weather Conditions Grid */}
-            <CurrentConditions weather={currentWeather} />
+            <CurrentConditions
+              weather={currentWeather}
+              tempUnit={tempUnit}
+              windUnit={windUnit}
+              isLoading={isDashboardLoading}
+            />
 
             {/* 5. Construction Impact Activity Matrix */}
             {riskAssessment && (
               <ConstructionImpacts impacts={riskAssessment.affectedActivities} />
             )}
 
-            {/* 6. Compact System Health Strip */}
+            {/* 6. Dynamic System Health Strip */}
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-slate-400">
               <div className="flex items-center gap-4 flex-wrap">
                 <span className="flex items-center gap-1.5 text-slate-300">
@@ -357,13 +496,14 @@ export default function App() {
                 <span>•</span>
                 <span className="flex items-center gap-1.5 text-slate-300">
                   <HardHat className="w-4 h-4 text-amber-400" />
-                  Cycle: <strong className="text-slate-200">15m Auto</strong>
+                  Cycle: <strong className="text-slate-200">{monitorInterval}m Auto</strong>
                 </span>
               </div>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('system')}
-                className="text-amber-400 hover:text-amber-300 transition-colors"
+                className="text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
               >
                 View System Health Details →
               </button>
@@ -425,10 +565,10 @@ export default function App() {
             <span>PRIVATE LOCAL SYSTEM</span>
           </div>
           <p className="text-slate-500">
-            Weather data is retrieved from the configured weather provider (Open-Meteo).
+            Weather telemetry retrieved from WeatherAPI (primary reference) with Open-Meteo cross-reference and fallback.
           </p>
           <p className="text-slate-500">
-            Application data is stored locally in SQLite. No advertising, no analytics, no tracking.
+            Application data is stored locally in SQLite with automated backup rotation. No advertising, no analytics, no tracking.
           </p>
           <div className="pt-2 text-[11px] text-slate-600">
             Construction Weather Monitor · Single-User Secure Installation

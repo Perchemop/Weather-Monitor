@@ -9,6 +9,8 @@ import { redactSecretsInError, maskSecret } from '../utils/security.js';
 import { evaluateDataFreshness } from '../utils/time.js';
 import { CurrentWeather, HourlyForecastItem, RiskThresholds } from '../types.js';
 import { generateAiWeatherBriefing } from '../services/aiWeatherService.js';
+import { convertTemperature, convertWind, formatTemperature, formatWind } from '../utils/units.js';
+import { createDatabaseBackup, getDatabaseBackupsList, hashPasswordWithSalt } from '../database/db.js';
 
 const mockThresholds: RiskThresholds = {
   windWarning: 38,
@@ -164,6 +166,48 @@ async function runTests() {
       passed++;
     } catch (err: any) {
       console.error(`  [FAIL] AI Generation & Isolation:`, err.message);
+      failed++;
+    }
+  })();
+
+  // 5. Unit Conversion & Formatting Tests
+  test('Unit Conversion: Celsius to Fahrenheit converts accurately', () => {
+    assert.equal(convertTemperature(0, 'F'), 32);
+    assert.equal(convertTemperature(100, 'F'), 212);
+    assert.equal(convertTemperature(25, 'C'), 25);
+    assert.equal(formatTemperature(22.4, 'C'), '22°C');
+    assert.equal(formatTemperature(22.4, 'F'), '72°F');
+  });
+
+  test('Unit Conversion: Wind speed conversion handles km/h, mph, and m/s', () => {
+    assert.equal(Math.round(convertWind(36, 'm/s')), 10);
+    assert.equal(Math.round(convertWind(100, 'mph')), 62);
+    assert.equal(convertWind(50, 'km/h'), 50);
+    assert.equal(formatWind(45, 'km/h'), '45 km/h');
+  });
+
+  // 6. Security & Cryptographic Hashing Tests
+  test('Security: Scrypt password hashing produces deterministic memory-hard outputs', () => {
+    const salt = 'a1b2c3d4e5f60718';
+    const hash1 = hashPasswordWithSalt('SuperSecretPass123', salt);
+    const hash2 = hashPasswordWithSalt('SuperSecretPass123', salt);
+    const hash3 = hashPasswordWithSalt('DifferentPassword456', salt);
+    assert.equal(hash1, hash2, 'Identical password and salt must match');
+    assert.notEqual(hash1, hash3, 'Different password must produce different hash');
+    assert.equal(hash1.length, 128, 'Hash must be 64 bytes hex (128 chars)');
+  });
+
+  // 7. Database Snapshot Backup Tests
+  await (async () => {
+    try {
+      const backupName = await createDatabaseBackup();
+      assert.ok(backupName.startsWith('weather-monitor-') && backupName.endsWith('.sqlite'));
+      const list = getDatabaseBackupsList();
+      assert.ok(list.length > 0, 'Backups list must contain created snapshot');
+      console.log(`  [PASS] Database Snapshot & Rotation: Created ${backupName}, Total Backups=${list.length}`);
+      passed++;
+    } catch (err: any) {
+      console.error(`  [FAIL] Database Snapshot & Rotation:`, err.message);
       failed++;
     }
   })();
