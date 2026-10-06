@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Calendar, Wind, CloudRain, Thermometer, Database, Sparkles, RefreshCw } from 'lucide-react';
+import { Clock, Calendar, Wind, CloudRain, Thermometer, Database, Sparkles, RefreshCw, Download } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { CurrentWeather, LocationItem, AiHistoricalSummaryResponse } from '../types';
 
@@ -67,6 +67,44 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
     };
   });
 
+  const exportCsv = () => {
+    if (observations.length === 0) return;
+    const headers = [
+      'Timestamp',
+      'Temperature_C',
+      'FeelsLike_C',
+      'WindSpeed_kmh',
+      'WindGusts_kmh',
+      'RainAmount_mm',
+      'RainProbability_pct',
+      'Humidity_pct',
+      'Pressure_hPa',
+      'UV_Index',
+      'Description'
+    ];
+    const rows = observations.map((o) => [
+      o.timestamp,
+      o.temperature,
+      o.feelsLike,
+      o.windSpeed,
+      o.windGusts,
+      o.rainAmount,
+      o.rainProbability,
+      o.humidity,
+      o.pressure,
+      o.uvIndex,
+      `"${(o.weatherDescription || '').replace(/"/g, '""')}"`
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `weather-observations-${(location?.name || 'site').replace(/[^a-z0-9]/gi, '_')}-${range}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       {/* Controls Card */}
@@ -79,19 +117,34 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
             </h3>
           </div>
 
-          {/* Time range selector */}
-          <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-mono">
-            {(['today', 'yesterday', '7days', '30days'] as const).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                className={`px-3 py-1.5 rounded transition-colors capitalize ${
-                  range === r ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {r === '7days' ? '7 Days' : r === '30days' ? '30 Days' : r}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            {/* Time range selector */}
+            <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-mono">
+              {(['today', 'yesterday', '7days', '30days'] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRange(r)}
+                  className={`px-3 py-1.5 rounded transition-colors capitalize ${
+                    range === r ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {r === '7days' ? '7 Days' : r === '30days' ? '30 Days' : r}
+                </button>
+              ))}
+            </div>
+
+            {/* Export CSV button */}
+            <button
+              type="button"
+              id="export-observations-csv-btn"
+              onClick={exportCsv}
+              disabled={observations.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-xs font-mono font-semibold text-slate-200 transition-colors disabled:opacity-40 cursor-pointer"
+              title="Download observations as CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-amber-400" />
+              <span>Export CSV</span>
+            </button>
           </div>
         </div>
 

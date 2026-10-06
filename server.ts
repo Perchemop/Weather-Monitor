@@ -32,6 +32,9 @@ import {
   clearHistoricalObservations,
   clearAllApplicationData,
   getDatabaseBinary,
+  createDatabaseBackup,
+  getDatabaseBackupsList,
+  setupInitialPassword,
   addAuditLog,
   enforceDataRetention,
   getDataRetentionLogs
@@ -61,14 +64,30 @@ function generateSessionToken(): string {
   return token;
 }
 
+function extractSessionToken(req: Request): string | undefined {
+  const cookieToken = req.cookies?.cwm_session;
+  if (cookieToken) return cookieToken;
+  const headerToken = req.headers['x-session-token'];
+  if (typeof headerToken === 'string' && headerToken) return headerToken;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7);
+  }
+  return undefined;
+}
+
 function isValidSession(token?: string): boolean {
   if (!token) return false;
   return activeSessions.has(token);
 }
 
-// Authentication middleware - unrestricted local access (gatekeeper screen removed)
+// Authentication middleware - verifies signed session cookie, x-session-token, or Bearer auth
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  // Direct local access permitted
+  const token = extractSessionToken(req);
+  if (!isValidSession(token)) {
+    res.status(401).json({ error: 'Authentication required. Safety enclave locked.' });
+    return;
+  }
   return next();
 }
 
@@ -86,14 +105,40 @@ async function startServer() {
   await monitoringService.start();
   console.log('[Server] Background monitoring service started.');
 
+  // Background automated backup snapshot every 30 minutes
+  setInterval(() => {
+    createDatabaseBackup().catch((e) => console.error('[Server Backup] Automated snapshot error:', e));
+  }, 30 * 60 * 1000);
+
   // ----------------- AUTHENTICATION ROUTES -----------------
-  app.get('/api/auth/status', async (_req: Request, res: Response) => {
+  app.get('/api/auth/status', async (req: Request, res: Response) => {
+    const token = extractSessionToken(req);
+    const authenticated = isValidSession(token);
     const owner = await getOwnerInfo();
     res.json({
-      authenticated: true,
+      authenticated,
+      isFirstRun: !owner?.isConfigured,
       ownerEmail: owner?.email || process.env.OWNER_EMAIL || 'owner@local',
       ownerName: 'Site Owner'
     });
+  });
+
+  app.post('/api/auth/setup', async (req: Request, res: Response) => {
+    const { password, email } = req.body;
+    if (!password || password.length < 6) {
+      res.status(400).json({ error: 'Master password must be at least 6 characters.' });
+      return;
+    }
+    await setupInitialPassword(password, email);
+    const token = generateSessionToken();
+    res.cookie('cwm_session', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false, // Local environment
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+    await addAuditLog('AUTH_SETUP', `Initial master password set for ${email || 'owner'}`);
+    res.json({ success: true, token, email: email || 'owner@local' });
   });
 
   app.post('/api/auth/login', async (req: Request, res: Response) => {
@@ -127,7 +172,7 @@ async function startServer() {
   });
 
   app.post('/api/auth/logout', (req: Request, res: Response) => {
-    const token = req.cookies?.cwm_session || req.headers['x-session-token'];
+    const token = extractSessionToken(req);
     if (token) activeSessions.delete(token);
     res.clearCookie('cwm_session');
     res.json({ success: true });
@@ -630,6 +675,25 @@ async function startServer() {
     res.setHeader('Content-Type', 'application/x-sqlite3');
     res.setHeader('Content-Disposition', `attachment; filename="weather-monitor-backup-${new Date().toISOString().slice(0, 10)}.sqlite"`);
     res.send(buffer);
+  });
+
+  app.post('/api/data/backup/create', requireAuth, async (_req: Request, res: Response) => {
+    try {
+      const filename = await createDatabaseBackup();
+      await addAuditLog('BACKUP_CREATED', `Database snapshot created: ${filename}`);
+      res.json({ success: true, filename, message: 'Database backup snapshot created successfully.' });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to create database backup snapshot.' });
+    }
+  });
+
+  app.get('/api/data/backup/list', requireAuth, async (_req: Request, res: Response) => {
+    try {
+      const backups = getDatabaseBackupsList();
+      res.json({ backups });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to list backups.' });
+    }
   });
 
   // ----------------- VITE MIDDLEWARE (DEV) / STATIC (PROD) -----------------

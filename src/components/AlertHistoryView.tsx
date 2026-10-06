@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Mail, CheckCircle2, XCircle, Filter, Calendar } from 'lucide-react';
+import { ShieldAlert, Mail, CheckCircle2, XCircle, Filter, Calendar, Download } from 'lucide-react';
 import { AlertItem, AlertDelivery } from '../types';
 
 interface AlertHistoryViewProps {
@@ -20,6 +20,53 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
 
   const uniqueTypes = Array.from(new Set(alerts.map((a) => a.alertType)));
 
+  const exportCsv = () => {
+    if (activeTab === 'alerts') {
+      if (filteredAlerts.length === 0) return;
+      const headers = ['ID', 'Location', 'Severity', 'Type', 'Title', 'Message', 'ObservedValue', 'ThresholdValue', 'StartTime', 'Status'];
+      const rows = filteredAlerts.map((a) => [
+        a.id,
+        `"${a.locationName.replace(/"/g, '""')}"`,
+        a.severity,
+        a.alertType,
+        `"${a.title.replace(/"/g, '""')}"`,
+        `"${a.message.replace(/"/g, '""')}"`,
+        `"${a.observedValue}"`,
+        `"${a.thresholdValue}"`,
+        a.startTime,
+        a.status
+      ]);
+      const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `alerts-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } else {
+      if (deliveries.length === 0) return;
+      const headers = ['ID', 'AlertID', 'AlertType', 'Recipient', 'SentAt', 'Status', 'Error'];
+      const rows = deliveries.map((d) => [
+        d.id,
+        d.alertId,
+        d.alertType,
+        d.recipientEmail,
+        d.sentAt,
+        d.status,
+        `"${(d.errorMessage || '').replace(/"/g, '""')}"`
+      ]);
+      const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `email-deliveries-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header & Tab switcher */}
@@ -32,22 +79,37 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
             </h3>
           </div>
 
-          <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-mono">
+              <button
+                type="button"
+                onClick={() => setActiveTab('alerts')}
+                className={`px-3 py-1.5 rounded transition-colors ${
+                  activeTab === 'alerts' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Alert Events ({alerts.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('deliveries')}
+                className={`px-3 py-1.5 rounded transition-colors ${
+                  activeTab === 'deliveries' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Email Deliveries ({deliveries.length})
+              </button>
+            </div>
+
             <button
-              onClick={() => setActiveTab('alerts')}
-              className={`px-3 py-1.5 rounded transition-colors ${
-                activeTab === 'alerts' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-              }`}
+              type="button"
+              id="export-alerts-csv-btn"
+              onClick={exportCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-xs font-mono font-semibold text-slate-200 transition-colors cursor-pointer"
+              title="Download audit as CSV"
             >
-              Alert Events ({alerts.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('deliveries')}
-              className={`px-3 py-1.5 rounded transition-colors ${
-                activeTab === 'deliveries' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Email Deliveries ({deliveries.length})
+              <Download className="w-3.5 h-3.5 text-amber-400" />
+              <span>Export CSV</span>
             </button>
           </div>
         </div>

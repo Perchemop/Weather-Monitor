@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { MapPin, Plus, Check, Trash2, Search, X, Star } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { MapPin, Plus, Check, Trash2, Search, X, Star, AlertCircle } from 'lucide-react';
 import { LocationItem } from '../types';
+import { useToast } from './ToastProvider';
 
 interface LocationModalProps {
   isOpen: boolean;
@@ -19,10 +20,12 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   onSelectLocation,
   onLocationAdded
 }) => {
+  const toast = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isAddingCustom, setIsAddingCustom] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Custom coordinate input state
   const [customName, setCustomName] = useState('');
@@ -30,28 +33,50 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   const [customLon, setCustomLon] = useState('');
   const [customTimezone, setCustomTimezone] = useState('auto');
 
-  if (!isOpen) return null;
+  // Confirmation state for deleting
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-    setIsSearching(true);
-    try {
-      const res = await fetch(`/api/locations/search?query=${encodeURIComponent(searchQuery)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSearchResults(data.results || []);
-      }
-    } catch (err) {
-      console.error('Search failed:', err);
-    } finally {
-      setIsSearching(false);
+  // Authorized API helper
+  const apiFetch = (url: string, init?: RequestInit) => {
+    const token = localStorage.getItem('cwm_session_token');
+    const headers = new Headers(init?.headers || {});
+    if (token) {
+      headers.set('x-session-token', token);
+      headers.set('Authorization', `Bearer ${token}`);
     }
+    return fetch(url, { ...init, headers });
   };
 
+  // Debounced search
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await apiFetch(`/api/locations/search?query=${encodeURIComponent(searchQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.results || []);
+        }
+      } catch (err) {
+        console.error('Search failed:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  if (!isOpen) return null;
+
   const handleAddLocation = async (name: string, latitude: number, longitude: number, timezone?: string) => {
+    setFormError(null);
     try {
-      const res = await fetch('/api/locations', {
+      const res = await apiFetch('/api/locations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -62,70 +87,118 @@ export const LocationModal: React.FC<LocationModalProps> = ({
         })
       });
       if (res.ok) {
+        toast.success(`Monitored site added: ${name}`);
         onLocationAdded();
         setSearchQuery('');
         setSearchResults([]);
         setIsAddingCustom(false);
+        setCustomName('');
+        setCustomLat('');
+        setCustomLon('');
+      } else {
+        const err = await res.json();
+        setFormError(err.error || 'Failed to add location.');
       }
-    } catch (err) {
-      console.error('Failed to add location:', err);
+    } catch {
+      setFormError('Connection error while adding site location.');
     }
   };
 
   const handleDeleteLocation = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm('Remove this saved construction site location?')) return;
     try {
-      const res = await fetch(`/api/locations/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/locations/${id}`, { method: 'DELETE' });
       if (res.ok) {
+        toast.info('Location removed.');
+        setDeletingId(null);
         onLocationAdded();
+      } else {
+        toast.error('Cannot remove active or default location.');
       }
-    } catch (err) {
-      console.error('Failed to delete location:', err);
+    } catch {
+      toast.error('Failed to delete location.');
     }
   };
 
   const handleSetDefault = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/api/locations/${id}/default`, { method: 'POST' });
+      const res = await apiFetch(`/api/locations/${id}/default`, { method: 'POST' });
       if (res.ok) {
+        toast.success('Default monitored site updated.');
         onLocationAdded();
       }
-    } catch (err) {
-      console.error('Failed to set default location:', err);
+    } catch {
+      toast.error('Failed to update default location.');
     }
   };
 
+  const handleCustomSubmit = () => {
+    setFormError(null);
+    const lat = parseFloat(customLat);
+    const lon = parseFloat(customLon);
+
+    if (!customName.trim()) {
+      setFormError('Please enter a site name.');
+      return;
+    }
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      setFormError('Latitude must be between -90 and +90.');
+      return;
+    }
+    if (isNaN(lon) || lon < -180 || lon > 180) {
+      setFormError('Longitude must be between -180 and +180.');
+      return;
+    }
+
+    handleAddLocation(customName.trim(), lat, lon, customTimezone);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+      <div className="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in-50 zoom-in-95 duration-150">
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <MapPin className="w-5 h-5 text-amber-400" />
-            <h3 className="text-sm font-mono font-bold tracking-wider uppercase text-slate-200">
-              CONSTRUCTION SITES & LOCATIONS
-            </h3>
+            <div>
+              <h3 className="text-sm font-mono font-bold uppercase tracking-wider text-slate-100">
+                MONITORED CONSTRUCTION SITES
+              </h3>
+              <p className="text-2xs text-slate-400">
+                Switch or add microclimate telemetry coordinate locations
+              </p>
+            </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+            aria-label="Close location modal"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-4">
-          {/* Active Saved Locations List */}
+        {/* Modal Content */}
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+          {formError && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-mono">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+              <span>{formError}</span>
+            </div>
+          )}
+
+          {/* Saved Locations List */}
           <div>
-            <h4 className="text-xs font-mono font-bold uppercase text-slate-400 mb-2">
-              SAVED SITE LOCATIONS
-            </h4>
+            <div className="text-xs font-mono font-semibold uppercase text-slate-400 mb-2">
+              Saved Monitored Sites ({locations.length})
+            </div>
             <div className="space-y-2">
               {locations.map((loc) => {
                 const isSelected = currentLocation?.id === loc.id;
+                const isConfirmingDelete = deletingId === loc.id;
+
                 return (
                   <div
                     key={loc.id}
@@ -133,52 +206,73 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                       onSelectLocation(loc);
                       onClose();
                     }}
-                    className={`p-3 rounded-lg border cursor-pointer flex items-center justify-between gap-3 transition-colors ${
+                    className={`p-3 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-amber-950/20 border-amber-500/50'
+                        ? 'bg-amber-500/10 border-amber-500/50 shadow-sm'
                         : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
                     }`}
                   >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-slate-200 truncate">{loc.name}</span>
-                        {loc.isDefault && (
-                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                            DEFAULT
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs font-mono text-slate-500 mt-0.5">
-                        {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)} · {loc.timezone}
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'bg-amber-400 ring-2 ring-amber-400/20' : 'bg-slate-600'}`} />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold text-slate-200">{loc.name}</span>
+                          {loc.isDefault && (
+                            <span className="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-2xs font-mono text-slate-500 mt-0.5">
+                          {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)} · {loc.timezone}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                       {!loc.isDefault && (
                         <button
+                          type="button"
                           onClick={(e) => handleSetDefault(loc.id, e)}
-                          className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 transition-colors"
                           title="Set as Default Site"
+                          className="p-1.5 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition-colors"
                         >
-                          <Star className="w-3.5 h-3.5" />
+                          <Star className="w-4 h-4" />
                         </button>
                       )}
 
-                      {locations.length > 1 && (
-                        <button
-                          onClick={(e) => handleDeleteLocation(loc.id, e)}
-                          className="p-1.5 rounded bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 transition-colors"
-                          title="Delete Location"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      {locations.length > 1 && !loc.isDefault && (
+                        isConfirmingDelete ? (
+                          <div className="flex items-center gap-1 bg-red-950 border border-red-800 rounded px-1.5 py-0.5">
+                            <span className="text-2xs text-red-300 font-mono">Delete?</span>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteLocation(loc.id, e)}
+                              className="text-xs text-red-400 font-bold hover:underline"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingId(null)}
+                              className="text-xs text-slate-400 hover:underline"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDeletingId(loc.id)}
+                            title="Remove Site"
+                            className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-slate-800 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )
                       )}
 
-                      {isSelected && (
-                        <div className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center">
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        </div>
-                      )}
+                      {isSelected && <Check className="w-4 h-4 text-amber-400 ml-1 shrink-0" />}
                     </div>
                   </div>
                 );
@@ -187,63 +281,64 @@ export const LocationModal: React.FC<LocationModalProps> = ({
           </div>
 
           {/* Add Site Section */}
-          <div className="pt-3 border-t border-slate-800">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-mono font-bold uppercase text-slate-400">
-                ADD NEW CONSTRUCTION SITE
-              </h4>
+          <div className="border-t border-slate-800 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-semibold uppercase text-slate-400">
+                Add Construction Site
+              </span>
               <button
-                onClick={() => setIsAddingCustom(!isAddingCustom)}
-                className="text-xs font-mono text-amber-400 hover:text-amber-300"
+                type="button"
+                onClick={() => {
+                  setIsAddingCustom(!isAddingCustom);
+                  setFormError(null);
+                }}
+                className="text-2xs font-mono text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
               >
-                {isAddingCustom ? 'Search by City/Place' : '+ Add by Coordinates'}
+                {isAddingCustom ? 'Search by City Name' : 'Enter Lat/Long Coordinates'}
               </button>
             </div>
 
             {!isAddingCustom ? (
-              /* Search by city */
-              <div>
-                <form onSubmit={handleSearch} className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-                    <input
-                      type="text"
-                      placeholder="Search city, suburb or landmark..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isSearching}
-                    className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-xs font-mono transition-colors disabled:opacity-50"
-                  >
-                    {isSearching ? 'Searching...' : 'Search'}
-                  </button>
-                </form>
+              /* City Geocoding Search (Debounced 350ms) */
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search city, suburb, or site landmark (e.g. Brisbane, Sydney)..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  />
+                  {isSearching && (
+                    <div className="absolute right-3 top-2.5">
+                      <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
 
                 {searchResults.length > 0 && (
-                  <div className="mt-3 space-y-1.5 max-h-48 overflow-y-auto">
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto bg-slate-950/80 rounded-lg border border-slate-800 p-2">
                     {searchResults.map((r, i) => (
                       <div
                         key={i}
-                        className="p-2.5 rounded bg-slate-950 border border-slate-800 hover:border-amber-500/50 flex items-center justify-between text-xs font-mono transition-colors"
+                        className="p-2.5 rounded-md hover:bg-slate-900 border border-transparent hover:border-slate-800 flex items-center justify-between text-xs font-mono transition-colors"
                       >
                         <div>
                           <div className="font-bold text-slate-200">
                             {r.name}, {r.admin1 || ''} {r.country || ''}
                           </div>
-                          <div className="text-[11px] text-slate-500">
-                            {r.latitude.toFixed(3)}, {r.longitude.toFixed(3)}
+                          <div className="text-2xs text-slate-500">
+                            {r.latitude.toFixed(3)}, {r.longitude.toFixed(3)} · {r.timezone || 'auto'}
                           </div>
                         </div>
                         <button
+                          type="button"
                           onClick={() => {
                             const fullName = `${r.name}, ${r.admin1 || r.country || ''}`;
                             handleAddLocation(fullName, r.latitude, r.longitude, r.timezone);
                           }}
-                          className="px-2.5 py-1 rounded bg-slate-800 hover:bg-amber-600 hover:text-slate-950 text-slate-300 font-bold transition-colors"
+                          className="px-2.5 py-1 rounded bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-300 font-bold text-2xs transition-colors cursor-pointer"
                         >
                           Add Site
                         </button>
@@ -253,56 +348,48 @@ export const LocationModal: React.FC<LocationModalProps> = ({
                 )}
               </div>
             ) : (
-              /* Custom Coordinates Form */
-              <div className="space-y-3 text-xs font-mono">
+              /* Custom Coordinates Input */
+              <div className="space-y-3 text-xs font-mono bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
                 <div>
-                  <label className="text-slate-400 block mb-1">Site / Project Name:</label>
+                  <label className="text-slate-400 block mb-1">Site / Project Title:</label>
                   <input
                     type="text"
-                    placeholder="e.g. North Tower Construction Site"
+                    placeholder="e.g. Adelaide Pier 4 Crane Site"
                     value={customName}
                     onChange={(e) => setCustomName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-200"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-slate-400 block mb-1">Latitude:</label>
+                    <label className="text-slate-400 block mb-1">Latitude (-90 to +90):</label>
                     <input
                       type="number"
                       step="any"
                       placeholder="-34.9285"
                       value={customLat}
                       onChange={(e) => setCustomLat(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-200"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
                     />
                   </div>
                   <div>
-                    <label className="text-slate-400 block mb-1">Longitude:</label>
+                    <label className="text-slate-400 block mb-1">Longitude (-180 to +180):</label>
                     <input
                       type="number"
                       step="any"
                       placeholder="138.6007"
                       value={customLon}
                       onChange={(e) => setCustomLon(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-200"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
                     />
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    const lat = parseFloat(customLat);
-                    const lon = parseFloat(customLon);
-                    if (!customName || isNaN(lat) || isNaN(lon)) {
-                      alert('Please provide valid site name and coordinates.');
-                      return;
-                    }
-                    handleAddLocation(customName, lat, lon, customTimezone);
-                  }}
-                  className="w-full py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded text-xs font-mono transition-colors"
+                  onClick={handleCustomSubmit}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs font-mono transition-colors shadow-sm cursor-pointer"
                 >
-                  Save Coordinates Location
+                  Save Coordinates Monitored Site
                 </button>
               </div>
             )}
