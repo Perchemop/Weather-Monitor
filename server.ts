@@ -75,6 +75,7 @@ import { DEFAULT_THRESHOLDS } from './src/services/riskEngine.js';
 import { searchGeocodingLocations } from './src/services/weatherService.js';
 import { isSmtpConfigured, sendTestEmail, getPublicSmtpStatus } from './src/services/emailService.js';
 import { monitoringService } from './src/services/monitoringService.js';
+import { buildWeeklyPerformanceSummary } from './src/services/performanceSummary.js';
 import {
   initPush,
   getVapidPublicKey,
@@ -1095,6 +1096,43 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   app.post('/api/alerts/:id/dismiss', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     await updateAlertStatus(req.params.id, 'DISMISSED');
     res.json({ success: true });
+  });
+
+  // ----------------- PERFORMANCE REPORT -----------------
+  app.get('/api/reports/weekly', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const locId = req.query.locationId as string | undefined;
+      const targetLoc = locId
+        ? (await getAllLocations()).find((l) => l.id === locId)
+        : await getDefaultLocation();
+
+      if (!targetLoc) {
+        res.status(404).json({ error: 'Location not found' });
+        return;
+      }
+
+      const settings = await getOwnerSettings();
+      const [observations, alerts, runs] = await Promise.all([
+        getHistoricalObservations(targetLoc.id, '7days'),
+        getAlertHistory(200),
+        getRecentMonitorRuns(200)
+      ]);
+
+      const summary = buildWeeklyPerformanceSummary({
+        locationId: targetLoc.id,
+        locationName: targetLoc.name,
+        monitoringEnabled: settings.monitoringEnabled,
+        intervalMinutes: settings.monitorIntervalMinutes,
+        monitorStatus: monitoringService.getStatus(),
+        observations,
+        alerts,
+        runs
+      });
+
+      res.json(summary);
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to build the weekly performance summary' });
+    }
   });
 
   // ----------------- LOCATIONS -----------------

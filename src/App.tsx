@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroRiskCard } from './components/HeroRiskCard';
 import { CurrentConditions } from './components/CurrentConditions';
@@ -20,6 +20,7 @@ const SystemHealthView = lazyNamed(() => import('./components/SystemHealthView')
 const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
 const UsersView = lazyNamed(() => import('./components/UsersView'), 'UsersView');
 const ActivityRiskView = lazyNamed(() => import('./components/ActivityRiskView'), 'ActivityRiskView');
+const PerformanceView = lazyNamed(() => import('./components/PerformanceView'), 'PerformanceView');
 import {
   CurrentWeather,
   RiskAssessment,
@@ -104,6 +105,27 @@ export default function App() {
       window.removeEventListener('offline', goOffline);
     };
   }, []);
+
+  // Broadcast newly triggered alerts to the operator while the dashboard is open.
+  // The in-browser monitor also raises OS notifications; this keeps severe
+  // alerts visible in-app even when notifications are off or unsupported.
+  const seenAlertIds = useRef<Set<string>>(new Set());
+  const alertsInitialised = useRef(false);
+  useEffect(() => {
+    if (!alertsInitialised.current) {
+      activeAlerts.forEach((a) => seenAlertIds.current.add(a.id));
+      alertsInitialised.current = true;
+      return;
+    }
+    for (const alert of activeAlerts) {
+      if (seenAlertIds.current.has(alert.id)) continue;
+      seenAlertIds.current.add(alert.id);
+      const label = `${alert.severity} · ${alert.title} (${alert.locationName})`;
+      if (alert.severity === 'CRITICAL') toast.error(label);
+      else if (alert.severity === 'HIGH') toast.warning(label);
+      else toast.info(label);
+    }
+  }, [activeAlerts, toast]);
 
   // Authorized API caller. Authentication rides on the HttpOnly session cookie;
   // CSRF is handled automatically inside apiFetch.
@@ -588,6 +610,9 @@ export default function App() {
             alerts={activeAlerts}
           />
         )}
+
+        {/* Weekly Performance Summary */}
+        {activeTab === 'performance' && <PerformanceView location={currentLocation} />}
 
         {/* System Health Diagnostics */}
         {activeTab === 'system' && (

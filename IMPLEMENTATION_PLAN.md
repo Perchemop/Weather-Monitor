@@ -53,6 +53,7 @@ Default location shipped with the code: Unconfigured Site (−34.9285, 0, UTC).
 ### 2.4 User Interface Views
 - Dashboard (Hero Risk Card, Active Alerts, Cross-Reference Card, Hourly Bar, Current Conditions, condensed Activity Risk link, compact System Health strip)
 - Activity Risk Matrix (dedicated tab for the construction activity impact matrix)
+- Weekly Performance Summary (on-screen 7-day monitoring/conditions/alert digest)
 - Forecast View
 - Alert History + Delivery log
 - Historical Observations

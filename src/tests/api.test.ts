@@ -476,6 +476,29 @@ async function main(): Promise<void> {
     }
   });
 
+  await test('Reports: weekly performance summary shape and auth', async () => {
+    const anonClient = new Client(base);
+    assert.equal((await anonClient.get('/api/reports/weekly')).status, 401);
+
+    const owner = new Client(base);
+    assert.equal(
+      (await owner.post('/api/auth/login', { password: OWNER_PASSWORD, email: 'owner@site.local' })).status,
+      200
+    );
+
+    const res = await owner.get('/api/reports/weekly');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.windowDays, 7);
+    assert.equal(typeof res.body.generatedAt, 'string');
+    assert.ok(res.body.monitoring, 'monitoring block present');
+    assert.equal(typeof res.body.monitoring.coveragePct, 'number');
+    assert.ok(res.body.conditions, 'conditions block present');
+    assert.ok(res.body.alerts, 'alerts block present');
+    assert.equal(typeof res.body.alerts.bySeverity.CRITICAL, 'number');
+    assert.ok(Array.isArray(res.body.alerts.byType));
+    assert.ok(Array.isArray(res.body.highlights));
+  });
+
   await new Promise<void>((resolve) => server.close(() => resolve()));
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);

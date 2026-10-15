@@ -15,7 +15,8 @@ Autonomous, local-first microclimate risk evaluation and automated safety alerti
 - **Master Security & Scrypt Hashing**: Password-protected access with RFC 7914 Scrypt memory-hard key derivation.
 - **Automated Retention & Snapshot Rotation**: 30-minute automated database backups with 10-point rolling history, 24-hour retention pruning with a configurable observation window, and one-click restore-from-backup.
 - **Per-User Push Preferences**: Each operator controls their own Web Push delivery — a master switch, a minimum alert severity floor, and an opt-in for recovery (all-clear) notifications — without unsubscribing their devices.
-- **Serverless Static Build (GitHub Pages)**: The same UI can be built with `npm run build:static` to run entirely in the browser — no server, no database. Weather comes straight from Open-Meteo, risk/alerts use the shared deterministic engine, state persists in IndexedDB, and alerts use native browser notifications.
+- **Serverless Static Build (GitHub Pages)**: The same UI can be built with `npm run build:static` to run entirely in the browser — no server, no database. Weather comes straight from Open-Meteo, risk/alerts use the shared deterministic engine, state persists in IndexedDB, and alerts use native browser notifications. Monitoring keeps running while the page is open and catches up when the tab regains focus or the network returns.
+- **Activity Risk Matrix & Weekly Performance**: The construction activity risk matrix lives in its own tab (condensed to a summary link on the dashboard), and a rolling 7-day performance summary — monitoring coverage, monitor-run reliability, observed condition extremes and an alert breakdown — is available on-screen and exportable as text.
 - **Operational Delivery**: Structured JSON logging, an unauthenticated `/healthz` liveness probe, an auth-or-token-gated Prometheus `/metrics` endpoint, GitHub Actions CI, and a Dockerfile + Compose stack.
 
 ---
