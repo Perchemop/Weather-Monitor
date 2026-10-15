@@ -38,6 +38,7 @@ async function parseBody(init?: RequestInit): Promise<any> {
 
 export async function installStaticBackend(): Promise<void> {
   await staticMonitor.start();
+  staticMonitor.watchLifecycle();
 
   const originalFetch = globalThis.fetch.bind(globalThis);
 

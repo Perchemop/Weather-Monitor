@@ -20,6 +20,7 @@ import {
 } from '../types.js';
 import { searchGeocodingLocations } from '../services/weatherService.js';
 import { DEFAULT_THRESHOLDS } from '../services/riskEngine.js';
+import { buildWeeklyPerformanceSummary } from '../services/performanceSummary.js';
 import { store } from './store.js';
 import { staticMonitor } from './monitor.js';
 
@@ -369,6 +370,24 @@ export async function handleStaticApi(req: StaticApiRequest): Promise<StaticApiR
   if (dismissMatch) {
     store.updateAlertStatus(dismissMatch[1], 'DISMISSED');
     return { status: 200, body: { success: true } };
+  }
+
+  // ----------------------------- Performance report -----------------------------
+  if (pathname === '/api/reports/weekly') {
+    const targetLoc = resolveLocation(search.get('locationId'));
+    if (!targetLoc) return { status: 404, body: { error: 'Location not found.' } };
+
+    const summary = buildWeeklyPerformanceSummary({
+      locationId: targetLoc.id,
+      locationName: targetLoc.name,
+      monitoringEnabled: settings.monitoringEnabled,
+      intervalMinutes: settings.monitorIntervalMinutes,
+      monitorStatus: staticMonitor.getStatus(),
+      observations: store.getHistoricalObservations(targetLoc.id, '7days'),
+      alerts: store.getAlertHistory(200),
+      runs: store.getRecentMonitorRuns(200)
+    });
+    return { status: 200, body: summary };
   }
 
   // ----------------------------- Health -----------------------------

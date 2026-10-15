@@ -24,6 +24,7 @@ class StaticMonitoringService {
   private lastError: string | null = null;
   private consecutiveFailures = 0;
   private lastRetentionCheck = 0;
+  private lifecycleBound = false;
 
   async start(): Promise<void> {
     await store.whenReady();
@@ -59,6 +60,29 @@ class StaticMonitoringService {
 
   updateInterval(): void {
     if (this.isRunning) void this.start();
+  }
+
+  /**
+   * Keeps monitoring running "constantly" despite browser background-tab
+   * throttling. When the page becomes visible again, regains focus, or the
+   * network returns, a scheduled check that is already due is run immediately.
+   * Safe to call once per page load; repeat calls are ignored.
+   */
+  watchLifecycle(): void {
+    if (this.lifecycleBound || typeof window === 'undefined' || typeof document === 'undefined') return;
+    this.lifecycleBound = true;
+
+    const runIfDue = () => {
+      if (!this.isRunning || this.isChecking) return;
+      const due = !this.nextCheckTime || new Date(this.nextCheckTime).getTime() <= Date.now();
+      if (due) void this.executeCycle();
+    };
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') runIfDue();
+    });
+    window.addEventListener('online', runIfDue);
+    window.addEventListener('focus', runIfDue);
   }
 
   getStatus(): MonitorStatus {

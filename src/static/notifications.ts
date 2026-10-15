@@ -37,12 +37,14 @@ function show(title: string, options: NotificationOptions): void {
 }
 
 export async function notifyAlert(alert: AlertItem): Promise<void> {
-  const critical = alert.severity === 'CRITICAL';
-  show(alert.title, {
+  // Severe alerts (HIGH/CRITICAL) stay on screen until acknowledged; lower
+  // severities surface silently so they do not interrupt active work.
+  const severe = alert.severity === 'CRITICAL' || alert.severity === 'HIGH';
+  show(`${severe ? '⚠ ' : ''}${alert.title}`, {
     body: `${alert.locationName}: ${alert.message}`,
     tag: `cwm-alert-${alert.id}`,
-    requireInteraction: critical,
-    silent: !critical
+    requireInteraction: severe,
+    silent: !severe
   });
 }
 
