@@ -5,7 +5,7 @@ import {
   RiskLevel,
   ProviderComparison
 } from '../types.js';
-import { redactSecretsInError } from '../utils/security.js';
+import { redactSecretsInError } from '../utils/redact.js';
 
 export interface WeatherDataPayload {
   locationId: string;

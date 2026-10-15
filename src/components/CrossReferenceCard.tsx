@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Info
 } from 'lucide-react';
+import { STATIC_MODE } from '../static/mode';
 
 interface CrossReferenceCardProps {
   comparison: ProviderComparison | null;
@@ -35,9 +36,11 @@ export const CrossReferenceCard: React.FC<CrossReferenceCardProps> = ({
             <div>
               <h3 className="text-sm font-semibold text-slate-200">Dual-Provider Weather Cross-Reference</h3>
               <p className="text-xs text-slate-400">
-                {hasApiKey
-                  ? 'Initializing WeatherAPI main reference and Open-Meteo cross-reference...'
-                  : 'Open-Meteo active. Configure WEATHER_API_KEY in server environment for dual-model cross-referencing.'}
+                {STATIC_MODE
+                  ? 'Open-Meteo is the active data source. Dual-provider cross-referencing requires the server build.'
+                  : hasApiKey
+                    ? 'Initializing WeatherAPI main reference and Open-Meteo cross-reference...'
+                    : 'Open-Meteo active. Configure WEATHER_API_KEY in server environment for dual-model cross-referencing.'}
               </p>
             </div>
           </div>
