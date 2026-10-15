@@ -18,5 +18,18 @@ export default defineConfig(() => {
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
+    build: {
+      // Split large third-party libraries into their own cached chunks so the
+      // initial app shell stays small and recharts only loads with chart views.
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            charts: ['recharts'],
+            icons: ['lucide-react']
+          }
+        }
+      },
+      chunkSizeWarningLimit: 900
+    }
   };
 });

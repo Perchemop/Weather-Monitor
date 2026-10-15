@@ -114,5 +114,23 @@ Default location shipped with the code: Unconfigured Site (−34.9285, 0, UTC).
   - CSV export for historical observations & alert logs, print-ready CSS.
 
 ### Phase 3 & 4 — Hardening & Documentation
-- **Step 3.1: Security Headers & Rate Limiting**
-- **Step 3.2: Comprehensive README.md**
+- **Step 3.1: Security Headers & Rate Limiting** ✅ (strict CSP + hardening headers; auth endpoints 10/15min, API 300/min)
+- **Step 3.2: Comprehensive README.md** ✅
+
+### Phase 5 — Multi-User, Offline & Performance ✅
+- **Step 5.1: Role-Based Access Control**
+  - `users` table + migration (005) with per-account Scrypt credentials.
+  - Roles OWNER / MANAGER / VIEWER enforced by `requireRole` middleware.
+  - Users management API + Owner-only UI (`UsersView`).
+  - Last-owner protections (cannot demote/deactivate/delete the final Owner).
+  - Legacy single-owner installations auto-migrate to the first OWNER account.
+- **Step 5.2: PWA & Offline Mode**
+  - Installable manifest + themed SVG/maskable icons.
+  - Service worker: precached shell, cache-first assets, network-first read-only
+    API with cached fallback, and network-only auth/user/backup endpoints.
+  - Offline connectivity banner in the UI.
+- **Step 5.3: Frontend Performance**
+  - `React.lazy` + `Suspense` code-splitting for all non-dashboard views.
+  - Vendor chunking for recharts and icon libraries.
+  - Initial bundle reduced from ~820 kB to ~317 kB (~92 kB gzip).
+

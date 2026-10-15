@@ -16,7 +16,9 @@ import {
   ProviderComparison,
   SchemaMigration,
   DataFreshnessStatus,
-  RiskLevel
+  RiskLevel,
+  UserAccount,
+  UserRole
 } from '../types.js';
 import { DEFAULT_THRESHOLDS } from '../services/riskEngine.js';
 import { generateSecureBootstrapPassword } from '../utils/security.js';
@@ -242,6 +244,26 @@ const MIGRATIONS: Migration[] = [
         );
       `);
     }
+  },
+  {
+    version: 5,
+    name: '005_users_and_roles',
+    up: (db: Database) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          email TEXT NOT NULL UNIQUE,
+          display_name TEXT,
+          role TEXT NOT NULL,
+          password_hash TEXT NOT NULL,
+          salt TEXT NOT NULL,
+          active INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          last_login_at TEXT
+        );
+      `);
+    }
   }
 ];
 
@@ -312,6 +334,31 @@ function initializeSchema(db: Database) {
       ['owner-1', defaultEmail, hash, salt, new Date().toISOString()]
     );
   }
+
+  // Migrate the legacy single-owner record into the multi-user `users` table.
+  migrateOwnerIntoUsers(db);
+}
+
+/**
+ * Ensures the primary OWNER account exists in the `users` table, seeding it
+ * from the legacy `auth_owner` record when the users table is empty. This is
+ * the bridge that upgrades a single-user installation to multi-user access.
+ */
+function migrateOwnerIntoUsers(db: Database) {
+  const userCountRes = db.exec('SELECT COUNT(*) FROM users');
+  const userCount = userCountRes[0]?.values[0]?.[0] as number;
+  if (userCount && userCount > 0) return;
+
+  const ownerRes = db.exec('SELECT email, password_hash, salt FROM auth_owner LIMIT 1');
+  if (!ownerRes[0] || !ownerRes[0].values[0]) return;
+
+  const [email, hash, salt] = ownerRes[0].values[0] as [string, string, string];
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO users (id, email, display_name, role, password_hash, salt, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+    ['usr-owner-1', email, 'Site Owner', 'OWNER', hash, salt, now, now]
+  );
 }
 
 export async function getAppliedMigrations(): Promise<SchemaMigration[]> {
@@ -394,6 +441,237 @@ export async function getOwnerInfo(): Promise<{ email: string; isConfigured: boo
 }
 
 // Locations
+// ---------------------------------------------------------------------------
+// Multi-user account management
+// ---------------------------------------------------------------------------
+
+const USER_PUBLIC_COLS = 'id, email, display_name, role, active, created_at, updated_at, last_login_at';
+
+function mapUserRow(v: any[]): UserAccount {
+  return {
+    id: v[0] as string,
+    email: v[1] as string,
+    displayName: (v[2] as string) || undefined,
+    role: v[3] as UserRole,
+    active: (v[4] as number) === 1,
+    createdAt: v[5] as string,
+    updatedAt: v[6] as string,
+    lastLoginAt: (v[7] as string) ?? null
+  };
+}
+
+export async function getAllUsers(): Promise<UserAccount[]> {
+  const db = await getDb();
+  const res = db.exec(
+    `SELECT ${USER_PUBLIC_COLS} FROM users ORDER BY
+       CASE role WHEN 'OWNER' THEN 0 WHEN 'MANAGER' THEN 1 ELSE 2 END, email ASC`
+  );
+  if (!res[0]) return [];
+  return res[0].values.map(mapUserRow);
+}
+
+export async function getUserById(id: string): Promise<UserAccount | null> {
+  const db = await getDb();
+  const res = db.exec(`SELECT ${USER_PUBLIC_COLS} FROM users WHERE id = ? LIMIT 1`, [id]);
+  if (!res[0] || !res[0].values[0]) return null;
+  return mapUserRow(res[0].values[0]);
+}
+
+/** Internal: returns the credential record for a single user by email. */
+async function getUserCredentialByEmail(email: string) {
+  const db = await getDb();
+  const res = db.exec(
+    `SELECT id, email, display_name, role, password_hash, salt, active FROM users WHERE email = ? LIMIT 1`,
+    [email]
+  );
+  if (!res[0] || !res[0].values[0]) return null;
+  const v = res[0].values[0];
+  return {
+    id: v[0] as string,
+    email: v[1] as string,
+    displayName: (v[2] as string) || undefined,
+    role: v[3] as UserRole,
+    passwordHash: v[4] as string,
+    salt: v[5] as string,
+    active: (v[6] as number) === 1
+  };
+}
+
+async function getFirstActiveOwner() {
+  const db = await getDb();
+  const res = db.exec(
+    `SELECT id, email, display_name, role, password_hash, salt, active FROM users
+     WHERE role = 'OWNER' AND active = 1 ORDER BY created_at ASC LIMIT 1`
+  );
+  if (!res[0] || !res[0].values[0]) return null;
+  const v = res[0].values[0];
+  return {
+    id: v[0] as string,
+    email: v[1] as string,
+    displayName: (v[2] as string) || undefined,
+    role: v[3] as UserRole,
+    passwordHash: v[4] as string,
+    salt: v[5] as string,
+    active: (v[6] as number) === 1
+  };
+}
+
+function timingSafeHashEquals(expectedHash: string, candidateHash: string): boolean {
+  const a = Buffer.from(expectedHash, 'hex');
+  const b = Buffer.from(candidateHash, 'hex');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * Verifies a password against a user account. When `email` is omitted the
+ * primary OWNER account is used, preserving the original single-password login
+ * behaviour for backwards compatibility.
+ */
+export async function verifyUserCredentials(
+  password: string,
+  email?: string
+): Promise<{ valid: boolean; user?: UserAccount }> {
+  if (!password) return { valid: false };
+
+  const record = email ? await getUserCredentialByEmail(email.trim()) : await getFirstActiveOwner();
+  if (!record || !record.active) return { valid: false };
+
+  const candidate = hashPasswordWithSalt(password, record.salt);
+  if (!timingSafeHashEquals(record.passwordHash, candidate)) return { valid: false };
+
+  const user: UserAccount = {
+    id: record.id,
+    email: record.email,
+    displayName: record.displayName,
+    role: record.role,
+    active: record.active,
+    createdAt: '',
+    updatedAt: ''
+  };
+  return { valid: true, user };
+}
+
+export async function countUsers(): Promise<number> {
+  const db = await getDb();
+  const res = db.exec('SELECT COUNT(*) FROM users');
+  return (res[0]?.values[0]?.[0] as number) || 0;
+}
+
+export async function countActiveOwners(excludeUserId?: string): Promise<number> {
+  const db = await getDb();
+  const res = excludeUserId
+    ? db.exec("SELECT COUNT(*) FROM users WHERE role = 'OWNER' AND active = 1 AND id != ?", [excludeUserId])
+    : db.exec("SELECT COUNT(*) FROM users WHERE role = 'OWNER' AND active = 1");
+  return (res[0]?.values[0]?.[0] as number) || 0;
+}
+
+export async function createUserAccount(input: {
+  email: string;
+  password: string;
+  role: UserRole;
+  displayName?: string;
+}): Promise<UserAccount> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const id = 'usr-' + crypto.randomUUID();
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = hashPasswordWithSalt(input.password, salt);
+
+  db.run(
+    `INSERT INTO users (id, email, display_name, role, password_hash, salt, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+    [id, input.email, input.displayName || null, input.role, hash, salt, now, now]
+  );
+  persistDb();
+
+  return {
+    id,
+    email: input.email,
+    displayName: input.displayName,
+    role: input.role,
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+    lastLoginAt: null
+  };
+}
+
+export async function updateUserRole(id: string, role: UserRole): Promise<boolean> {
+  // Refuse to demote the last active OWNER, which would lock out administration.
+  const existing = await getUserById(id);
+  if (!existing) return false;
+  if (existing.role === 'OWNER' && role !== 'OWNER' && (await countActiveOwners(id)) === 0) {
+    return false;
+  }
+
+  const db = await getDb();
+  const now = new Date().toISOString();
+  db.run('UPDATE users SET role = ?, updated_at = ? WHERE id = ?', [role, now, id]);
+  persistDb();
+  return true;
+}
+
+export async function updateUserPassword(id: string, newPassword: string): Promise<boolean> {
+  const db = await getDb();
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = hashPasswordWithSalt(newPassword, salt);
+  const now = new Date().toISOString();
+  db.run('UPDATE users SET password_hash = ?, salt = ?, updated_at = ? WHERE id = ?', [hash, salt, now, id]);
+  persistDb();
+  return true;
+}
+
+/** Updates a user's email and password in a single operation. */
+export async function updateUserCredentials(id: string, email: string, newPassword: string): Promise<boolean> {
+  const db = await getDb();
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = hashPasswordWithSalt(newPassword, salt);
+  const now = new Date().toISOString();
+  db.run('UPDATE users SET email = ?, password_hash = ?, salt = ?, updated_at = ? WHERE id = ?', [
+    email,
+    hash,
+    salt,
+    now,
+    id
+  ]);
+  persistDb();
+  return true;
+}
+
+export async function setUserActive(id: string, active: boolean): Promise<boolean> {
+  // Prevent deactivating the last active OWNER.
+  if (!active) {
+    const existing = await getUserById(id);
+    if (existing?.role === 'OWNER' && (await countActiveOwners(id)) === 0) {
+      return false;
+    }
+  }
+  const db = await getDb();
+  const now = new Date().toISOString();
+  db.run('UPDATE users SET active = ?, updated_at = ? WHERE id = ?', [active ? 1 : 0, now, id]);
+  persistDb();
+  return true;
+}
+
+export async function deleteUserAccount(id: string): Promise<boolean> {
+  const existing = await getUserById(id);
+  if (!existing) return false;
+  // Never allow removing the last active OWNER.
+  if (existing.role === 'OWNER' && (await countActiveOwners(id)) === 0) {
+    return false;
+  }
+  const db = await getDb();
+  db.run('DELETE FROM users WHERE id = ?', [id]);
+  persistDb();
+  return true;
+}
+
+export async function recordUserLogin(id: string): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  db.run('UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
+  persistDb();
+}
 export async function getAllLocations(): Promise<LocationItem[]> {
   const db = await getDb();
   const res = db.exec('SELECT id, name, latitude, longitude, timezone, is_default, created_at, last_checked_at, status, current_risk_level FROM locations ORDER BY is_default DESC, name ASC');
