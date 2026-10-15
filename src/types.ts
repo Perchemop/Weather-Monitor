@@ -277,6 +277,7 @@ export interface OwnerSettings {
   monitorIntervalMinutes: number;
   alertCooldownMinutes: number;
   recoveryNotificationsEnabled: boolean;
+  dataRetentionDays: number;
   thresholds: RiskThresholds;
 }
 

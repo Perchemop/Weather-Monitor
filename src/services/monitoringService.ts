@@ -16,7 +16,9 @@ import { fetchRealWeatherData } from './weatherService.js';
 import { calculateDeterministicRisk } from './riskEngine.js';
 import { evaluateAndProcessAlerts } from './alertEngine.js';
 import { sendAlertEmail, sendRecoveryEmail, processAlertRetryQueue } from './emailService.js';
+import { sendAlertPush, sendRecoveryPush } from './pushService.js';
 import { redactSecretsInError } from '../utils/security.js';
+import { logger } from '../utils/logger.js';
 
 class MonitoringService {
   private timer: NodeJS.Timeout | null = null;
@@ -187,6 +189,22 @@ class MonitoringService {
             }
           }
 
+          // 5b. Deliver device push notifications (independent of email opt-in so
+          // subscribed devices still receive safety alerts).
+          for (const alert of newAlerts) {
+            await sendAlertPush({
+              title: alert.title,
+              description: alert.message,
+              severity: alert.severity,
+              locationName: loc.name
+            }).catch(() => {});
+          }
+          if (settings.recoveryNotificationsEnabled) {
+            for (const cleared of clearedAlerts) {
+              await sendRecoveryPush({ title: cleared.title, locationName: loc.name }).catch(() => {});
+            }
+          }
+
           processedCount++;
         } catch (locErr: any) {
           const rawLocErr = locErr?.message || `Failed monitoring location ${loc.name}`;
@@ -215,9 +233,10 @@ class MonitoringService {
       if (now - this.lastRetentionCheck > 24 * 60 * 60 * 1000) {
         this.lastRetentionCheck = now;
         try {
-          await enforceDataRetention(30);
+          const retentionDays = Math.max(1, settings.dataRetentionDays || 30);
+          await enforceDataRetention(retentionDays);
         } catch (retErr) {
-          console.warn('[MonitoringService] Data retention cleanup error:', retErr);
+          logger.warn('retention_cleanup_failed', { error: redactSecretsInError(String(retErr)) });
         }
       }
 

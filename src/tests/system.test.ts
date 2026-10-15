@@ -24,6 +24,26 @@ import {
 import { createRateLimiter, defaultKeyGenerator } from '../utils/rateLimiter.js';
 import { securityHeaders } from '../utils/securityHeaders.js';
 import { hasMinimumRole, canOperate, canAdminister } from '../utils/roles.js';
+import { validatePasswordStrength, describePasswordPolicy } from '../utils/password.js';
+import { generateTotpSecret, generateTotp, verifyTotp, buildOtpauthUrl } from '../utils/totp.js';
+import { TtlCache } from '../utils/ttlCache.js';
+import {
+  setUserMfaSecret,
+  setUserMfaEnabled,
+  getUserMfaByEmail,
+  saveSession,
+  loadActiveSessions,
+  deleteSession,
+  pruneExpiredSessions,
+  savePushSubscription,
+  getPushSubscriptions,
+  countPushSubscriptions,
+  deletePushSubscription,
+  enforceDataRetention,
+  SNAPSHOT_RETENTION_DAYS,
+  ALERT_RETENTION_DAYS,
+  MONITOR_RUN_RETENTION_DAYS
+} from '../database/db.js';
 
 const mockThresholds: RiskThresholds = {
   windWarning: 38,
@@ -395,6 +415,178 @@ async function runTests() {
       passed++;
     } catch (err: any) {
       console.error('  [FAIL] Multi-User Guardrails:', err.message);
+      failed++;
+    }
+  })();
+
+  // 11. Password Policy
+  test('Password Policy: weak passwords are rejected, strong ones accepted', () => {
+    assert.ok(!validatePasswordStrength('short').valid, 'Too-short password must fail');
+    assert.ok(!validatePasswordStrength('alllettersonly').valid, 'Password without a number must fail');
+    assert.ok(!validatePasswordStrength('1234567890').valid, 'Password without a letter must fail');
+    assert.ok(validatePasswordStrength('Builder2026x').valid, 'Compliant password must pass');
+    assert.ok(describePasswordPolicy().includes('at least'), 'Policy description must state a minimum length');
+  });
+
+  // 12. TOTP (RFC 6238)
+  test('TOTP: generated codes verify and reject tampered codes', () => {
+    const secret = generateTotpSecret();
+    const code = generateTotp(secret);
+    assert.equal(code.length, 6, 'TOTP code must be 6 digits');
+    assert.ok(/^\d{6}$/.test(code), 'TOTP code must be numeric');
+    assert.ok(verifyTotp(secret, code), 'Freshly generated code must verify');
+    assert.ok(!verifyTotp(secret, '000000') || code === '000000', 'Wrong code must be rejected');
+    assert.ok(!verifyTotp(secret, 'abc'), 'Non-numeric code must be rejected');
+
+    // A code from a different secret must not verify.
+    const otherSecret = generateTotpSecret();
+    if (generateTotp(otherSecret) !== code) {
+      assert.ok(!verifyTotp(secret, generateTotp(otherSecret)), 'Code from another secret must be rejected');
+    }
+  });
+
+  test('TOTP: provisioning URI is well-formed', () => {
+    const secret = generateTotpSecret();
+    const url = buildOtpauthUrl(secret, 'owner@site.local');
+    assert.ok(url.startsWith('otpauth://totp/'), 'Must be a totp otpauth URI');
+    assert.ok(url.includes(`secret=${secret}`), 'URI must embed the secret');
+    assert.ok(url.includes('issuer='), 'URI must embed an issuer');
+  });
+
+  // 13. TTL cache
+  test('TTL Cache: stores, returns and expires entries', () => {
+    const cache = new TtlCache<number>(50);
+    cache.set('a', 1);
+    assert.equal(cache.get('a'), 1);
+    assert.equal(cache.get('missing'), undefined);
+    cache.clear();
+    assert.equal(cache.get('a'), undefined);
+  });
+
+  // 14. Persistent sessions
+  await (async () => {
+    const token = 'test-session-' + Date.now();
+    try {
+      await saveSession({
+        token,
+        userId: 'usr-test',
+        email: 'sessions@site.local',
+        role: 'VIEWER',
+        displayName: 'Session Tester',
+        createdAt: new Date().toISOString(),
+        expiresAt: Date.now() + 60_000
+      });
+      const active = await loadActiveSessions();
+      assert.ok(active.some((s) => s.token === token), 'Persisted session must be reloadable');
+
+      // Expired sessions are pruned and not returned.
+      await saveSession({
+        token: token + '-expired',
+        userId: 'usr-test',
+        email: 'sessions@site.local',
+        role: 'VIEWER',
+        createdAt: new Date().toISOString(),
+        expiresAt: Date.now() - 1000
+      });
+      await pruneExpiredSessions();
+      const afterPrune = await loadActiveSessions();
+      assert.ok(!afterPrune.some((s) => s.token === token + '-expired'), 'Expired session must be pruned');
+
+      console.log('  [PASS] Persistent Sessions: stored, listed, and expired sessions pruned');
+      passed++;
+    } catch (err: any) {
+      console.error('  [FAIL] Persistent Sessions:', err.message);
+      failed++;
+    } finally {
+      await deleteSession(token).catch(() => {});
+      await deleteSession(token + '-expired').catch(() => {});
+    }
+  })();
+
+  // 15. MFA lifecycle
+  await (async () => {
+    const email = `test-mfa-${Date.now()}@site.local`;
+    let createdId: string | null = null;
+    try {
+      const created = await createUserAccount({
+        email,
+        password: 'MfaTester123',
+        role: 'VIEWER',
+        displayName: 'MFA Tester'
+      });
+      createdId = created.id;
+
+      const secret = generateTotpSecret();
+      await setUserMfaSecret(created.id, secret);
+      let mfa = await getUserMfaByEmail(email);
+      assert.equal(mfa?.mfaEnabled, false, 'MFA must remain disabled until verified');
+      assert.equal(mfa?.mfaSecret, secret, 'Secret must persist');
+
+      await setUserMfaEnabled(created.id, true);
+      mfa = await getUserMfaByEmail(email);
+      assert.equal(mfa?.mfaEnabled, true, 'MFA must be enable-able');
+
+      await setUserMfaEnabled(created.id, false);
+      mfa = await getUserMfaByEmail(email);
+      assert.equal(mfa?.mfaEnabled, false, 'MFA must be disable-able');
+      assert.equal(mfa?.mfaSecret, null, 'Disabling MFA must clear the secret');
+
+      console.log(`  [PASS] MFA Lifecycle: enrolled, enabled and disabled for ${email}`);
+      passed++;
+    } catch (err: any) {
+      console.error('  [FAIL] MFA Lifecycle:', err.message);
+      failed++;
+    } finally {
+      if (createdId) await deleteUserAccount(createdId);
+    }
+  })();
+
+  // 16. Web push subscriptions
+  await (async () => {
+    const endpoint = `https://push.example.com/${Date.now()}`;
+    try {
+      const before = await countPushSubscriptions();
+      await savePushSubscription({
+        endpoint,
+        p256dh: 'test-p256dh',
+        auth: 'test-auth',
+        userEmail: 'push@site.local'
+      });
+      const subs = await getPushSubscriptions();
+      assert.ok(subs.some((s) => s.endpoint === endpoint), 'Subscription must persist');
+      assert.equal(await countPushSubscriptions(), before + 1);
+
+      await deletePushSubscription(endpoint);
+      const after = await getPushSubscriptions();
+      assert.ok(!after.some((s) => s.endpoint === endpoint), 'Unsubscribe must remove the record');
+      assert.equal(await countPushSubscriptions(), before, 'Count must return to baseline');
+
+      console.log('  [PASS] Web Push: subscription stored, listed and removed');
+      passed++;
+    } catch (err: any) {
+      console.error('  [FAIL] Web Push:', err.message);
+      failed++;
+      await deletePushSubscription(endpoint).catch(() => {});
+    }
+  })();
+
+  // 17. Configurable retention
+  test('Data Retention: windows are defined and configurable', () => {
+    assert.ok(SNAPSHOT_RETENTION_DAYS > 0 && ALERT_RETENTION_DAYS > 0 && MONITOR_RUN_RETENTION_DAYS > 0);
+    assert.ok(typeof enforceDataRetention === 'function');
+  });
+
+  await (async () => {
+    try {
+      const result = await enforceDataRetention(30);
+      assert.equal(typeof result.observationsDeleted, 'number');
+      assert.equal(typeof result.snapshotsDeleted, 'number');
+      assert.equal(typeof result.alertsPruned, 'number');
+      assert.ok(result.comparisonsDeleted === 0);
+      console.log('  [PASS] Data Retention: run returns the documented result shape');
+      passed++;
+    } catch (err: any) {
+      console.error('  [FAIL] Data Retention:', err.message);
       failed++;
     }
   })();

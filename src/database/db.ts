@@ -264,6 +264,56 @@ const MIGRATIONS: Migration[] = [
         );
       `);
     }
+  },
+  {
+    version: 6,
+    name: '006_user_mfa',
+    up: (db: Database) => {
+      const info = db.exec('PRAGMA table_info(users)');
+      const columns = info[0]?.values?.map((v) => v[1] as string) || [];
+      if (!columns.includes('mfa_secret')) {
+        db.run('ALTER TABLE users ADD COLUMN mfa_secret TEXT');
+      }
+      if (!columns.includes('mfa_enabled')) {
+        db.run('ALTER TABLE users ADD COLUMN mfa_enabled INTEGER NOT NULL DEFAULT 0');
+      }
+    }
+  },
+  {
+    version: 7,
+    name: '007_persistent_sessions',
+    up: (db: Database) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          token TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          email TEXT NOT NULL,
+          role TEXT NOT NULL,
+          display_name TEXT,
+          created_at TEXT NOT NULL,
+          expires_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions (expires_at);
+      `);
+    }
+  },
+  {
+    version: 8,
+    name: '008_push_subscriptions',
+    up: (db: Database) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+          id TEXT PRIMARY KEY,
+          endpoint TEXT NOT NULL UNIQUE,
+          p256dh TEXT NOT NULL,
+          auth TEXT NOT NULL,
+          user_id TEXT,
+          user_email TEXT,
+          created_at TEXT NOT NULL
+        );
+      `);
+    }
   }
 ];
 
@@ -671,6 +721,192 @@ export async function recordUserLogin(id: string): Promise<void> {
   const now = new Date().toISOString();
   db.run('UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
   persistDb();
+}
+
+// ---------------------------------------------------------------------------
+// Multi-factor authentication (TOTP)
+// ---------------------------------------------------------------------------
+
+export async function setUserMfaSecret(id: string, secret: string): Promise<void> {
+  const db = await getDb();
+  db.run('UPDATE users SET mfa_secret = ?, updated_at = ? WHERE id = ?', [secret, new Date().toISOString(), id]);
+  persistDb();
+}
+
+export async function setUserMfaEnabled(id: string, enabled: boolean): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  // Clearing the secret when disabling ensures a fresh enrolment next time.
+  if (enabled) {
+    db.run('UPDATE users SET mfa_enabled = 1, updated_at = ? WHERE id = ?', [now, id]);
+  } else {
+    db.run('UPDATE users SET mfa_enabled = 0, mfa_secret = NULL, updated_at = ? WHERE id = ?', [now, id]);
+  }
+  persistDb();
+}
+
+export async function getUserMfaByEmail(
+  email: string
+): Promise<{ id: string; email: string; mfaEnabled: boolean; mfaSecret: string | null } | null> {
+  const db = await getDb();
+  const res = db.exec('SELECT id, email, mfa_enabled, mfa_secret FROM users WHERE email = ? LIMIT 1', [email]);
+  if (!res[0] || !res[0].values[0]) return null;
+  const v = res[0].values[0];
+  return {
+    id: v[0] as string,
+    email: v[1] as string,
+    mfaEnabled: (v[2] as number) === 1,
+    mfaSecret: (v[3] as string) || null
+  };
+}
+
+export async function getUserMfaById(
+  id: string
+): Promise<{ id: string; email: string; mfaEnabled: boolean; mfaSecret: string | null } | null> {
+  const db = await getDb();
+  const res = db.exec('SELECT id, email, mfa_enabled, mfa_secret FROM users WHERE id = ? LIMIT 1', [id]);
+  if (!res[0] || !res[0].values[0]) return null;
+  const v = res[0].values[0];
+  return {
+    id: v[0] as string,
+    email: v[1] as string,
+    mfaEnabled: (v[2] as number) === 1,
+    mfaSecret: (v[3] as string) || null
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Persistent sessions
+// ---------------------------------------------------------------------------
+
+export interface StoredSession {
+  token: string;
+  userId: string;
+  email: string;
+  role: UserRole;
+  displayName?: string;
+  createdAt: string;
+  expiresAt: number;
+}
+
+export async function saveSession(session: StoredSession): Promise<void> {
+  const db = await getDb();
+  db.run(
+    `INSERT OR REPLACE INTO sessions (token, user_id, email, role, display_name, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      session.token,
+      session.userId,
+      session.email,
+      session.role,
+      session.displayName || null,
+      session.createdAt,
+      session.expiresAt
+    ]
+  );
+  persistDb();
+}
+
+export async function deleteSession(token: string): Promise<void> {
+  const db = await getDb();
+  db.run('DELETE FROM sessions WHERE token = ?', [token]);
+  persistDb();
+}
+
+export async function deleteSessionsForUser(userId: string): Promise<number> {
+  const db = await getDb();
+  const before = db.exec('SELECT COUNT(*) FROM sessions WHERE user_id = ?', [userId]);
+  const count = (before[0]?.values[0]?.[0] as number) || 0;
+  db.run('DELETE FROM sessions WHERE user_id = ?', [userId]);
+  persistDb();
+  return count;
+}
+
+export async function loadActiveSessions(): Promise<StoredSession[]> {
+  const db = await getDb();
+  const res = db.exec(
+    `SELECT token, user_id, email, role, display_name, created_at, expires_at
+     FROM sessions WHERE expires_at > ? ORDER BY created_at DESC`,
+    [Date.now()]
+  );
+  if (!res[0]) return [];
+  return res[0].values.map((v) => ({
+    token: v[0] as string,
+    userId: v[1] as string,
+    email: v[2] as string,
+    role: v[3] as UserRole,
+    displayName: (v[4] as string) || undefined,
+    createdAt: v[5] as string,
+    expiresAt: v[6] as number
+  }));
+}
+
+export async function pruneExpiredSessions(): Promise<void> {
+  const db = await getDb();
+  db.run('DELETE FROM sessions WHERE expires_at <= ?', [Date.now()]);
+  persistDb();
+}
+
+// ---------------------------------------------------------------------------
+// Web Push subscriptions
+// ---------------------------------------------------------------------------
+
+export interface PushSubscriptionRecord {
+  id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userId?: string;
+  userEmail?: string;
+  createdAt: string;
+}
+
+export async function savePushSubscription(input: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userId?: string;
+  userEmail?: string;
+}): Promise<PushSubscriptionRecord> {
+  const db = await getDb();
+  const id = 'push-' + crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT OR REPLACE INTO push_subscriptions (id, endpoint, p256dh, auth, user_id, user_email, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, input.endpoint, input.p256dh, input.auth, input.userId || null, input.userEmail || null, now]
+  );
+  persistDb();
+  return { id, ...input, createdAt: now };
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  const db = await getDb();
+  db.run('DELETE FROM push_subscriptions WHERE endpoint = ?', [endpoint]);
+  persistDb();
+}
+
+export async function getPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
+  const db = await getDb();
+  const res = db.exec(
+    'SELECT id, endpoint, p256dh, auth, user_id, user_email, created_at FROM push_subscriptions'
+  );
+  if (!res[0]) return [];
+  return res[0].values.map((v) => ({
+    id: v[0] as string,
+    endpoint: v[1] as string,
+    p256dh: v[2] as string,
+    auth: v[3] as string,
+    userId: (v[4] as string) || undefined,
+    userEmail: (v[5] as string) || undefined,
+    createdAt: v[6] as string
+  }));
+}
+
+export async function countPushSubscriptions(): Promise<number> {
+  const db = await getDb();
+  const res = db.exec('SELECT COUNT(*) FROM push_subscriptions');
+  return (res[0]?.values[0]?.[0] as number) || 0;
 }
 export async function getAllLocations(): Promise<LocationItem[]> {
   const db = await getDb();
@@ -1295,6 +1531,7 @@ export async function getOwnerSettings(): Promise<OwnerSettings> {
     monitorIntervalMinutes: map['monitor_interval_minutes'] ? parseInt(map['monitor_interval_minutes'], 10) : 15,
     alertCooldownMinutes: map['alert_cooldown_minutes'] ? parseInt(map['alert_cooldown_minutes'], 10) : 60,
     recoveryNotificationsEnabled: map['recovery_notifications_enabled'] === 'true',
+    dataRetentionDays: map['data_retention_days'] ? parseInt(map['data_retention_days'], 10) : 30,
     thresholds
   };
 }
@@ -1323,6 +1560,7 @@ export async function saveOwnerSettings(settings: Partial<OwnerSettings>): Promi
   if (settings.alertCooldownMinutes !== undefined) setK('alert_cooldown_minutes', settings.alertCooldownMinutes);
   if (settings.recoveryNotificationsEnabled !== undefined)
     setK('recovery_notifications_enabled', settings.recoveryNotificationsEnabled);
+  if (settings.dataRetentionDays !== undefined) setK('data_retention_days', settings.dataRetentionDays);
   if (settings.thresholds !== undefined) setK('risk_thresholds', settings.thresholds);
 
   persistDb();
@@ -1357,6 +1595,11 @@ export async function getAuditLogs(limit = 40): Promise<Array<{ id: string; time
 }
 
 // Data Retention
+/** Fixed retention windows for the shorter-lived derived tables. */
+export const SNAPSHOT_RETENTION_DAYS = 14;
+export const ALERT_RETENTION_DAYS = 90;
+export const MONITOR_RUN_RETENTION_DAYS = 30;
+
 export async function enforceDataRetention(retentionDays = 30): Promise<{
   observationsDeleted: number;
   snapshotsDeleted: number;
@@ -1366,9 +1609,9 @@ export async function enforceDataRetention(retentionDays = 30): Promise<{
   const db = await getDb();
   const now = new Date();
   const obsCutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
-  const snapCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
-  const alertsCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
-  const monitorCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const snapCutoff = new Date(now.getTime() - SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const alertsCutoff = new Date(now.getTime() - ALERT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const monitorCutoff = new Date(now.getTime() - MONITOR_RUN_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   // 1. Observations
   const obsCountRes = db.exec('SELECT COUNT(*) FROM weather_observations WHERE created_at < ?', [obsCutoff]);
@@ -1526,4 +1769,27 @@ export function getDatabaseBackupsList(): { filename: string; size: number; crea
   } catch {
     return [];
   }
+}
+
+/**
+ * Restores the live database from a previously created backup snapshot.
+ *
+ * A safety snapshot of the current database is taken first, so a restore is
+ * itself reversible. The filename is strictly validated to prevent traversal.
+ */
+export async function restoreDatabaseBackup(filename: string): Promise<boolean> {
+  if (typeof filename !== 'string' || !/^weather-monitor-[A-Za-z0-9._-]+\.sqlite$/.test(filename)) {
+    return false;
+  }
+  const backupFilePath = path.join(BACKUP_DIR, filename);
+  if (!fs.existsSync(backupFilePath)) return false;
+
+  // Take a safety snapshot of the current state before overwriting.
+  await createDatabaseBackup();
+
+  // Drop the in-memory handle so the next getDb() reloads from the restored file.
+  dbInstance = null;
+  fs.copyFileSync(backupFilePath, DB_FILE);
+  await getDb();
+  return true;
 }

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { UserAccount, UserRole } from '../types';
 import { useToast } from './ToastProvider';
+import { apiFetch } from '../utils/api';
 
 interface RoleMeta {
   label: string;
@@ -62,16 +63,6 @@ export function UsersView() {
   const [resetTarget, setResetTarget] = useState<UserAccount | null>(null);
   const [resetPassword, setResetPassword] = useState('');
 
-  const apiFetch = useCallback((url: string, init?: RequestInit) => {
-    const token = localStorage.getItem('cwm_session_token');
-    const headers = new Headers(init?.headers || {});
-    if (token) {
-      headers.set('x-session-token', token);
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    return fetch(url, { ...init, headers });
-  }, []);
-
   const fetchUsers = useCallback(async () => {
     try {
       const res = await apiFetch('/api/users');
@@ -86,7 +77,7 @@ export function UsersView() {
     } finally {
       setIsLoading(false);
     }
-  }, [apiFetch, toast]);
+  }, [toast]);
 
   useEffect(() => {
     fetchUsers();
@@ -94,8 +85,8 @@ export function UsersView() {
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters.');
+    if (newPassword.length < 10 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      toast.error('Password must be at least 10 characters and include a letter and a number.');
       return;
     }
     setIsBusy(true);
@@ -189,8 +180,8 @@ export function UsersView() {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetTarget) return;
-    if (resetPassword.length < 6) {
-      toast.error('Password must be at least 6 characters.');
+    if (resetPassword.length < 10 || !/[A-Za-z]/.test(resetPassword) || !/[0-9]/.test(resetPassword)) {
+      toast.error('Password must be at least 10 characters and include a letter and a number.');
       return;
     }
     setIsBusy(true);
@@ -313,7 +304,7 @@ export function UsersView() {
                 required
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min 6 characters"
+                placeholder="Min 10 characters"
                 className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
               />
             </div>
@@ -473,7 +464,7 @@ export function UsersView() {
               required
               value={resetPassword}
               onChange={(e) => setResetPassword(e.target.value)}
-              placeholder="New password (min 6 characters)"
+              placeholder="New password (min 10 characters)"
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-amber-500 font-mono text-sm"
             />
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
