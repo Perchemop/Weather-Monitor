@@ -6,6 +6,7 @@
 import './setup.js';
 import assert from 'node:assert/strict';
 import { calculateDeterministicRisk, SAFETY_DISCLAIMER } from '../services/riskEngine.js';
+import { buildWeeklyPerformanceSummary } from '../services/performanceSummary.js';
 import { redactSecretsInError, maskSecret } from '../utils/security.js';
 import { evaluateDataFreshness } from '../utils/time.js';
 import { CurrentWeather, HourlyForecastItem, RiskThresholds } from '../types.js';
@@ -614,6 +615,66 @@ async function runTests() {
       failed++;
     }
   })();
+
+  // 18. Weekly performance summary builder
+  test('Performance Summary: aggregates windowed runs, conditions and alerts', () => {
+    const now = new Date('2026-10-16T12:00:00.000Z');
+    const recent = new Date(now.getTime() - 2 * 24 * 3600 * 1000).toISOString();
+    const stale = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
+
+    const observations: CurrentWeather[] = [
+      createMockWeather({ timestamp: recent, temperature: 30, windGusts: 62, windSpeed: 25, rainAmount: 4, uvIndex: 9 }),
+      createMockWeather({ timestamp: recent, temperature: 14, windGusts: 40, windSpeed: 15, rainAmount: 1, uvIndex: 3 }),
+      createMockWeather({ timestamp: stale, temperature: 45, windGusts: 90, windSpeed: 80, rainAmount: 20, uvIndex: 12 })
+    ];
+
+    const alerts = [
+      { id: 'a1', locationId: 'loc-1', locationName: 'Site', alertType: 'HIGH WIND', severity: 'CRITICAL', status: 'ACTIVE', createdAt: recent } as any,
+      { id: 'a2', locationId: 'loc-1', locationName: 'Site', alertType: 'HIGH WIND', severity: 'HIGH', status: 'CLEARED', createdAt: recent } as any,
+      { id: 'a3', locationId: 'loc-1', locationName: 'Site', alertType: 'HEAVY RAIN', severity: 'MODERATE', status: 'ACTIVE', createdAt: recent } as any,
+      { id: 'a4', locationId: 'loc-1', locationName: 'Site', alertType: 'STORM', severity: 'CRITICAL', status: 'ACTIVE', createdAt: stale } as any
+    ];
+
+    const runs = [
+      { id: 'r1', startedAt: recent, status: 'SUCCESS', itemsProcessed: 1 } as any,
+      { id: 'r2', startedAt: recent, status: 'FAILED', itemsProcessed: 0 } as any,
+      { id: 'r3', startedAt: stale, status: 'SUCCESS', itemsProcessed: 1 } as any
+    ];
+
+    const summary = buildWeeklyPerformanceSummary({
+      locationId: 'loc-1',
+      locationName: 'Site',
+      monitoringEnabled: true,
+      intervalMinutes: 15,
+      monitorStatus: {
+        status: 'ACTIVE',
+        isRunning: true,
+        isChecking: false,
+        lastCheckTime: recent,
+        nextCheckTime: now.toISOString(),
+        lastError: null,
+        consecutiveFailures: 0
+      },
+      observations,
+      alerts,
+      runs,
+      now
+    });
+
+    // Window filters out the 30-day-old entries.
+    assert.equal(summary.conditions.peakGustKmh, 62);
+    assert.equal(summary.conditions.maxTempC, 30);
+    assert.equal(summary.conditions.minTempC, 14);
+    assert.equal(summary.conditions.totalRainMm, 5);
+    assert.equal(summary.alerts.total, 3);
+    assert.equal(summary.alerts.severe, 2);
+    assert.equal(summary.alerts.open, 2);
+    assert.equal(summary.alerts.byType[0].type, 'HIGH WIND');
+    assert.equal(summary.monitoring.runsTotal, 2);
+    assert.equal(summary.monitoring.successRatePct, 50);
+    assert.equal(summary.monitoring.observations, 2);
+    assert.ok(summary.highlights.length >= 2);
+  });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {

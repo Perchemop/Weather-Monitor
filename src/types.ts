@@ -247,6 +247,52 @@ export interface SystemHealth {
   databaseSizeBytes: number;
 }
 
+/**
+ * Rolling on-screen performance report.
+ *
+ * Surfaces the same information a weekly operations digest would carry —
+ * monitoring reliability, observed condition extremes and alert activity — so
+ * operators can review the last 7 days directly in the app.
+ */
+export interface WeeklyPerformanceSummary {
+  generatedAt: string;
+  windowDays: number;
+  locationId: string | null;
+  locationName: string;
+  monitoring: {
+    enabled: boolean;
+    status: 'ACTIVE' | 'STOPPED' | 'ERROR';
+    intervalMinutes: number;
+    lastCheckTime: string | null;
+    nextCheckTime: string | null;
+    consecutiveFailures: number;
+    runsTotal: number;
+    runsSucceeded: number;
+    runsFailed: number;
+    successRatePct: number;
+    observations: number;
+    expectedObservations: number;
+    coveragePct: number;
+  };
+  conditions: {
+    maxTempC: number | null;
+    minTempC: number | null;
+    peakGustKmh: number | null;
+    avgWindKmh: number | null;
+    totalRainMm: number;
+    maxUvIndex: number | null;
+  };
+  alerts: {
+    total: number;
+    severe: number;
+    open: number;
+    bySeverity: Record<AlertSeverity, number>;
+    byType: { type: string; count: number }[];
+    lastTriggeredAt: string | null;
+  };
+  highlights: string[];
+}
+
 export interface RiskThresholds {
   windWarning: number; // km/h (e.g. 40)
   windHigh: number; // km/h (e.g. 50)
