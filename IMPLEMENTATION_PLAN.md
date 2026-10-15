@@ -134,3 +134,39 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
   - Vendor chunking for recharts and icon libraries.
   - Initial bundle reduced from ~820 kB to ~317 kB (~92 kB gzip).
 
+### Phase 6 — Security, Push & Operations ✅
+- **Step 6.1: Security Hardening**
+  - Cookie-only sessions: the session token is no longer returned in JSON bodies
+    or stored in `localStorage`; the `HttpOnly` cookie is the sole browser credential.
+  - CSRF double-submit protection (`cwm_csrf` cookie + `x-csrf-token` header) for
+    cookie-authenticated state changes.
+  - Env-driven `Secure` cookie flag (`SECURE_COOKIES`).
+  - Per-account failed-login lockout (`LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCKOUT_MINUTES`).
+  - Configurable password policy (length + letter + number) enforced across setup,
+    create, reset, and change flows (server and client).
+  - Optional RFC 6238 TOTP two-factor authentication (migration 006) with setup /
+    enable / disable endpoints and an MFA prompt at sign-in.
+  - `/api/auth/status` no longer discloses the owner email while unauthenticated.
+  - AI endpoints rate-limited (20/min) and cached (10-minute TTL) to control cost.
+- **Step 6.2: Web Push Notifications**
+  - `push_subscriptions` table (migration 008) and VAPID key persistence
+    (`data/vapid.json`) via `web-push`.
+  - Subscribe / unsubscribe / test endpoints, plus HIGH & CRITICAL alert delivery
+    from the monitoring service.
+  - Service worker `push` + `notificationclick` handlers.
+  - Device enrolment card in Settings → Security & Auth.
+- **Step 6.3: Operations & Delivery**
+  - Structured JSON logging with request timing (`src/utils/logger.ts`).
+  - Persistent session signing secret (`data/session-secret`) and sessions that
+    survive restarts (`sessions` table, migration 007) with a logout-all endpoint.
+  - Unauthenticated `/healthz` liveness probe.
+  - Backup restore from a stored snapshot (with path-traversal validation and an
+    automatic pre-restore safety snapshot).
+  - GitHub Actions CI (type-check, tests, build, container build).
+  - Multi-stage `Dockerfile`, `docker-compose.yml`, and `.dockerignore`.
+  - Configurable observation retention window (`dataRetentionDays`); the retention
+    toast now reads the correct API fields and the policy text matches the code.
+  - `LOCAL_ONLY` privacy mode now skips the third-party WeatherAPI provider.
+  - Repo standardised on npm (`package-lock.json`, `engines`, `.nvmrc`); package
+    renamed from `react-example` to `construction-weather-monitor`.
+

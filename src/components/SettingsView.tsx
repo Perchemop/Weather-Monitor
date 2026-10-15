@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { OwnerSettings, RiskThresholds, SecretsStatus } from '../types';
 import { useToast } from './ToastProvider';
+import { apiFetch } from '../utils/api';
 
 interface SettingsViewProps {
   onSettingsSaved?: () => void;
@@ -60,22 +61,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newEmail, setNewEmail] = useState('');
 
-  // Authorized API helper
-  const apiFetch = (url: string, init?: RequestInit) => {
-    const token = localStorage.getItem('cwm_session_token');
-    const headers = new Headers(init?.headers || {});
-    if (token) {
-      headers.set('x-session-token', token);
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    return fetch(url, { ...init, headers });
-  };
+  // Multi-factor authentication state
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaSetupSecret, setMfaSetupSecret] = useState<string | null>(null);
+  const [mfaOtpauthUrl, setMfaOtpauthUrl] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaDisablePassword, setMfaDisablePassword] = useState('');
 
+  // Web push notification state
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushConfigured, setPushConfigured] = useState(false);
+
+  // Authorized API helper (cookie auth + CSRF handled centrally)
   useEffect(() => {
     fetchSettings();
     fetchBackups();
+    fetchMfaStatus();
+    detectPushState();
   }, []);
-
   const fetchSettings = async () => {
     try {
       const res = await apiFetch('/api/settings');
@@ -133,7 +139,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
       const res = await apiFetch('/api/data/retention/run', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        const msg = `Pruned: ${data.result.deletedObservations} observations, ${data.result.deletedAlerts} alerts, ${data.result.deletedSnapshots} snapshots.`;
+        const msg = `Pruned: ${data.result.observationsDeleted} observations, ${data.result.alertsPruned} alerts, ${data.result.snapshotsDeleted} snapshots.`;
         setRetentionMessage(msg);
         toast.success(msg);
       } else {
@@ -257,8 +263,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
       toast.error('New passwords do not match.');
       return;
     }
-    if (newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters.');
+    if (newPassword.length < 10 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      toast.error('Password must be at least 10 characters and include a letter and a number.');
       return;
     }
 
@@ -279,6 +285,190 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
       }
     } catch {
       toast.error('Failed to update password.');
+    }
+  };
+
+  // ---- Web push notification state detection ----
+  const detectPushState = async () => {
+    const supported =
+      typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window;
+    setPushSupported(supported);
+    try {
+      const statusRes = await apiFetch('/api/push/status');
+      if (statusRes.ok) {
+        const data = await statusRes.json();
+        setPushConfigured(Boolean(data.configured));
+      }
+    } catch {}
+    if (supported) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        setPushSubscribed(Boolean(sub));
+      } catch {}
+    }
+  };
+
+  // ---- Multi-factor authentication handlers ----
+  const fetchMfaStatus = async () => {    try {
+      const res = await apiFetch('/api/auth/mfa/status');
+      if (res.ok) {
+        const data = await res.json();
+        setMfaEnabled(Boolean(data.enabled));
+      }
+    } catch {}
+  };
+
+  const handleStartMfaSetup = async () => {
+    setMfaBusy(true);
+    try {
+      const res = await apiFetch('/api/auth/mfa/setup', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setMfaSetupSecret(data.secret);
+        setMfaOtpauthUrl(data.otpauthUrl);
+      } else {
+        toast.error(data.error || 'Failed to start MFA setup.');
+      }
+    } catch {
+      toast.error('Failed to start MFA setup.');
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const handleEnableMfa = async () => {
+    setMfaBusy(true);
+    try {
+      const res = await apiFetch('/api/auth/mfa/enable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: mfaCode })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMfaEnabled(true);
+        setMfaSetupSecret(null);
+        setMfaOtpauthUrl(null);
+        setMfaCode('');
+        toast.success('Multi-factor authentication enabled.');
+      } else {
+        toast.error(data.error || 'Failed to enable MFA.');
+      }
+    } catch {
+      toast.error('Failed to enable MFA.');
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const handleDisableMfa = async () => {
+    setMfaBusy(true);
+    try {
+      const res = await apiFetch('/api/auth/mfa/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: mfaDisablePassword })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMfaEnabled(false);
+        setMfaDisablePassword('');
+        toast.success('Multi-factor authentication disabled.');
+      } else {
+        toast.error(data.error || 'Failed to disable MFA.');
+      }
+    } catch {
+      toast.error('Failed to disable MFA.');
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  // ---- Web push notification handlers ----
+  const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+    return outputArray;
+  };
+
+  const handleEnablePush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      toast.error('This browser does not support push notifications.');
+      return;
+    }
+    setPushBusy(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        toast.error('Notification permission was not granted.');
+        return;
+      }
+      const keyRes = await apiFetch('/api/push/public-key');
+      const keyData = await keyRes.json();
+      if (!keyData.publicKey) {
+        toast.error('Push notifications are not configured on the server.');
+        return;
+      }
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
+      });
+      const res = await apiFetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subscription.toJSON())
+      });
+      if (res.ok) {
+        setPushSubscribed(true);
+        toast.success('This device will now receive safety alerts.');
+      } else {
+        toast.error('Failed to register this device for alerts.');
+      }
+    } catch {
+      toast.error('Failed to enable push notifications.');
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleDisablePush = async () => {
+    setPushBusy(true);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await apiFetch('/api/push/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: subscription.endpoint })
+        });
+        await subscription.unsubscribe();
+      }
+      setPushSubscribed(false);
+      toast.info('This device will no longer receive push alerts.');
+    } catch {
+      toast.error('Failed to disable push notifications.');
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setPushBusy(true);
+    try {
+      const res = await apiFetch('/api/push/test', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) toast.success(`Test notification sent to ${data.sent} device(s).`);
+      else toast.error(data.error || 'Failed to send test notification.');
+    } catch {
+      toast.error('Failed to send test notification.');
+    } finally {
+      setPushBusy(false);
     }
   };
 
@@ -838,9 +1028,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
             </div>
 
             <p className="text-xs font-mono text-slate-400 leading-relaxed">
-              Pruning automatically drops historical logs older than retention thresholds to keep the SQLite database light and performant:
-              Observations <strong>90 days</strong>, Cleared Alerts <strong>180 days</strong>, Forecast Snapshots <strong>30 days</strong>.
+              Pruning automatically drops historical logs older than the retention thresholds to keep the SQLite database light and performant:
+              Observations <strong>{settings?.dataRetentionDays ?? 30} days</strong>, Cleared Alerts <strong>90 days</strong>, Forecast Snapshots <strong>14 days</strong>.
             </p>
+
+            <div className="flex items-center gap-3">
+              <label className="text-2xs font-mono uppercase tracking-wider text-slate-400 shrink-0">
+                Observation retention (days)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={3650}
+                value={settings?.dataRetentionDays ?? 30}
+                onChange={(e) =>
+                  setSettings((prev) =>
+                    prev ? { ...prev, dataRetentionDays: Math.max(1, Number(e.target.value) || 1) } : prev
+                  )
+                }
+                className="w-24 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500"
+              />
+              <span className="text-2xs font-mono text-slate-500">
+                Save changes above to apply the new window.
+              </span>
+            </div>
 
             <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800">
               <span className="text-2xs font-mono text-slate-500">
@@ -956,6 +1167,186 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
                 Update Master Password
               </button>
             </form>
+          </div>
+
+          {/* Multi-Factor Authentication */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
+                  TWO-FACTOR AUTHENTICATION (TOTP)
+                </h4>
+              </div>
+              <span
+                className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${
+                  mfaEnabled
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {mfaEnabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+
+            {!mfaEnabled && !mfaSetupSecret && (
+              <div className="space-y-3">
+                <p className="text-xs font-mono text-slate-400 leading-relaxed">
+                  Add a time-based one-time password as a second factor for your account. Compatible
+                  with Google Authenticator, Authy and 1Password.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleStartMfaSetup}
+                  disabled={mfaBusy}
+                  className="px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {mfaBusy ? 'Preparing...' : 'Begin MFA Setup'}
+                </button>
+              </div>
+            )}
+
+            {!mfaEnabled && mfaSetupSecret && (
+              <div className="space-y-3 text-xs font-mono">
+                <p className="text-slate-400">
+                  Enter this secret in your authenticator app, then confirm the 6-digit code below.
+                </p>
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                  <div className="text-2xs uppercase tracking-wider text-slate-500 mb-1">Secret</div>
+                  <code className="text-amber-300 break-all select-all">{mfaSetupSecret}</code>
+                  {mfaOtpauthUrl && (
+                    <div className="mt-2 text-2xs text-slate-500 break-all">{mfaOtpauthUrl}</div>
+                  )}
+                </div>
+                <div className="flex items-end gap-3">
+                  <div>
+                    <label className="text-slate-400 block mb-1">6-digit code:</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                      className="w-32 bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 tracking-[0.3em] text-center focus:outline-none focus:border-emerald-500 font-mono"
+                      placeholder="000000"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleEnableMfa}
+                    disabled={mfaBusy || mfaCode.length !== 6}
+                    className="px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    Enable MFA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMfaSetupSecret(null);
+                      setMfaOtpauthUrl(null);
+                      setMfaCode('');
+                    }}
+                    className="px-3 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {mfaEnabled && (
+              <div className="space-y-3 text-xs font-mono">
+                <p className="text-slate-400">
+                  Two-factor authentication is active. You will be prompted for a code at sign-in.
+                </p>
+                <div className="flex items-end gap-3">
+                  <div>
+                    <label className="text-slate-400 block mb-1">Confirm password to disable:</label>
+                    <input
+                      type="password"
+                      value={mfaDisablePassword}
+                      onChange={(e) => setMfaDisablePassword(e.target.value)}
+                      className="w-56 bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-red-500 font-mono"
+                      placeholder="••••••••••••"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDisableMfa}
+                    disabled={mfaBusy || !mfaDisablePassword}
+                    className="px-4 py-2.5 rounded-lg bg-red-500/90 hover:bg-red-500 text-white font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    Disable MFA
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Device Push Notifications */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Send className="w-4 h-4 text-cyan-400" />
+                <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
+                  DEVICE PUSH NOTIFICATIONS
+                </h4>
+              </div>
+              <span
+                className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${
+                  pushSubscribed
+                    ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {pushSubscribed ? 'Subscribed' : 'Off'}
+              </span>
+            </div>
+            <p className="text-xs font-mono text-slate-400 leading-relaxed">
+              Receive safety alerts as device notifications, even when this tab is closed. Works with
+              the installed app or a supported browser.
+            </p>
+            {!pushSupported ? (
+              <p className="text-xs font-mono text-amber-400">
+                This browser does not support push notifications.
+              </p>
+            ) : !pushConfigured ? (
+              <p className="text-xs font-mono text-amber-400">
+                Push notifications are not configured on the server.
+              </p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                {!pushSubscribed ? (
+                  <button
+                    type="button"
+                    onClick={handleEnablePush}
+                    disabled={pushBusy}
+                    className="px-4 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs font-mono transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {pushBusy ? 'Enabling...' : 'Enable on This Device'}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleTestPush}
+                      disabled={pushBusy}
+                      className="px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs font-mono transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      Send Test
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDisablePush}
+                      disabled={pushBusy}
+                      className="px-4 py-2.5 rounded-lg bg-red-500/90 hover:bg-red-500 text-white font-bold text-xs font-mono transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      Disable
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

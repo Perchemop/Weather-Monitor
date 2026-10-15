@@ -1,8 +1,8 @@
+import './src/env.js';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import cookieParser from 'cookie-parser';
 import crypto from 'crypto';
-import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 
 import {
@@ -32,12 +32,12 @@ import {
   getDatabaseBinary,
   createDatabaseBackup,
   getDatabaseBackupsList,
+  restoreDatabaseBackup,
   setupInitialPassword,
   addAuditLog,
   enforceDataRetention,
   getDataRetentionLogs,
   // Multi-user account management
-  countUsers,
   getAllUsers,
   getUserById,
   createUserAccount,
@@ -47,16 +47,42 @@ import {
   setUserActive,
   deleteUserAccount,
   recordUserLogin,
-  verifyUserCredentials
+  verifyUserCredentials,
+  // MFA
+  setUserMfaSecret,
+  setUserMfaEnabled,
+  getUserMfaByEmail,
+  getUserMfaById,
+  // Persistent sessions
+  saveSession,
+  deleteSession,
+  deleteSessionsForUser,
+  loadActiveSessions,
+  pruneExpiredSessions,
+  // Web push
+  countPushSubscriptions
 } from './src/database/db.js';
 import { DEFAULT_THRESHOLDS } from './src/services/riskEngine.js';
 import { searchGeocodingLocations } from './src/services/weatherService.js';
 import { isSmtpConfigured, sendTestEmail, getPublicSmtpStatus } from './src/services/emailService.js';
 import { monitoringService } from './src/services/monitoringService.js';
+import {
+  initPush,
+  getVapidPublicKey,
+  isPushConfigured,
+  subscribeToPush,
+  unsubscribeFromPush,
+  sendPushToAll
+} from './src/services/pushService.js';
 import { evaluateDataFreshness } from './src/utils/time.js';
 import { maskSecret } from './src/utils/security.js';
 import { securityHeaders } from './src/utils/securityHeaders.js';
 import { createRateLimiter } from './src/utils/rateLimiter.js';
+import { logger, requestLogger } from './src/utils/logger.js';
+import { validatePasswordStrength, describePasswordPolicy } from './src/utils/password.js';
+import { TtlCache } from './src/utils/ttlCache.js';
+import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from './src/utils/totp.js';
+import { loadOrCreateSessionSecret } from './src/utils/secretStore.js';
 import { UserAccount, UserRole } from './src/types.js';
 import {
   generateAiWeatherBriefing,
@@ -64,14 +90,20 @@ import {
   generateAiHistoricalSummary
 } from './src/services/aiWeatherService.js';
 
-dotenv.config();
-
 const PORT = 3000;
-const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+const SESSION_SECRET = loadOrCreateSessionSecret();
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// Cookies are marked Secure only when explicitly enabled, because the default
+// deployment is a plain-HTTP local enclave where Secure cookies are never sent.
+const SECURE_COOKIES = process.env.SECURE_COOKIES === 'true';
+
+// When enabled, the third-party WeatherAPI provider is skipped entirely.
+const LOCAL_ONLY = process.env.LOCAL_ONLY === 'true';
+
 // Simple secure in-memory session store, keyed by token. Each entry is bound
-// to a user account and carries an absolute expiry.
+// to a user account and carries an absolute expiry. Entries are mirrored to
+// SQLite so logins survive process restarts.
 interface SessionEntry {
   userId: string;
   email: string;
@@ -89,14 +121,19 @@ interface AuthedRequest extends Request {
 
 function createSession(user: UserAccount): string {
   const token = crypto.randomBytes(32).toString('hex');
-  activeSessions.set(token, {
+  const entry: SessionEntry = {
     userId: user.id,
     email: user.email,
     role: user.role,
     displayName: user.displayName,
     createdAt: new Date().toISOString(),
     expiresAt: Date.now() + SESSION_TTL_MS
-  });
+  };
+  activeSessions.set(token, entry);
+  // Write-through persistence (best-effort; a failure must not block login).
+  saveSession({ token, ...entry }).catch((err) =>
+    logger.warn('session_persist_failed', { error: String(err) })
+  );
   return token;
 }
 
@@ -118,6 +155,7 @@ function getSession(token?: string): SessionEntry | undefined {
   if (!entry) return undefined;
   if (entry.expiresAt <= Date.now()) {
     activeSessions.delete(token);
+    deleteSession(token).catch(() => {});
     return undefined;
   }
   return entry;
@@ -133,6 +171,46 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
   (req as AuthedRequest).session = session;
   next();
 }
+
+/**
+ * CSRF defence for cookie-authenticated state changes.
+ *
+ * Requests authenticated with an explicit token header (x-session-token /
+ * Bearer) are exempt because they cannot be forged cross-site. Cookie-based
+ * requests must echo the readable `cwm_csrf` cookie in the `x-csrf-token`
+ * header (double-submit pattern).
+ */
+function requireCsrf(req: Request, res: Response, next: NextFunction): void {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    next();
+    return;
+  }
+  // Only cookie-authenticated requests are vulnerable to CSRF. Unauthenticated
+  // requests (login/setup) and explicit token-header clients are exempt.
+  if (!req.cookies?.cwm_session) {
+    next();
+    return;
+  }
+  const cookieToken = req.cookies?.cwm_csrf;
+  const headerToken = req.headers['x-csrf-token'];
+  if (!cookieToken || typeof headerToken !== 'string' || cookieToken !== headerToken) {
+    res.status(403).json({ error: 'Invalid or missing CSRF token.' });
+    return;
+  }
+  next();
+}
+
+/** Issues the readable double-submit CSRF cookie alongside a login. */
+function issueCsrfCookie(res: Response): void {
+  const csrfToken = crypto.randomBytes(24).toString('hex');
+  res.cookie('cwm_csrf', csrfToken, {
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: SECURE_COOKIES,
+    maxAge: SESSION_TTL_MS
+  });
+}
+
 
 /**
  * Role-gating middleware. The OWNER role always satisfies any gate; otherwise
@@ -154,6 +232,39 @@ function requireRole(...roles: UserRole[]) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Per-account login lockout
+// ---------------------------------------------------------------------------
+const LOGIN_MAX_ATTEMPTS = Math.max(3, Number(process.env.LOGIN_MAX_ATTEMPTS) || 5);
+const LOGIN_LOCKOUT_MS = Math.max(1, Number(process.env.LOGIN_LOCKOUT_MINUTES) || 15) * 60 * 1000;
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+function lockoutRemainingMs(key: string): number {
+  const entry = loginAttempts.get(key);
+  if (!entry) return 0;
+  if (entry.lockedUntil > Date.now()) return entry.lockedUntil - Date.now();
+  return 0;
+}
+
+function recordLoginFailure(key: string): void {
+  const entry = loginAttempts.get(key) || { count: 0, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= LOGIN_MAX_ATTEMPTS) {
+    entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
+    entry.count = 0;
+  }
+  loginAttempts.set(key, entry);
+}
+
+function clearLoginFailures(key: string): void {
+  loginAttempts.delete(key);
+}
+
+// Caches AI responses to avoid re-billing Gemini for identical requests.
+const aiBriefingCache = new TtlCache<unknown>(10 * 60 * 1000, 200);
+const aiHistoryCache = new TtlCache<unknown>(10 * 60 * 1000, 200);
+
+
 async function startServer() {
   const app = express();
 
@@ -168,6 +279,7 @@ async function startServer() {
     dev: process.env.NODE_ENV !== 'production'
   }));
 
+  app.use(requestLogger);
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser(SESSION_SECRET));
 
@@ -184,41 +296,85 @@ async function startServer() {
     max: 300
   });
 
+  // Dedicated limiter for cost-bearing AI endpoints.
+  const aiLimiter = createRateLimiter({
+    windowMs: 60 * 1000,
+    max: 20,
+    message: 'Too many AI requests. Please wait a moment before retrying.'
+  });
+
   app.use('/api/', apiLimiter);
+
+  // CSRF double-submit protection for cookie-authenticated state changes.
+  app.use('/api/', requireCsrf);
 
   // Initialize SQLite database
   await getDb();
-  console.log('[Server] SQLite database initialized.');
+  logger.info('database_initialised');
+
+  // Restore persistent sessions so logins survive restarts.
+  try {
+    await pruneExpiredSessions();
+    const stored = await loadActiveSessions();
+    for (const s of stored) {
+      activeSessions.set(s.token, {
+        userId: s.userId,
+        email: s.email,
+        role: s.role,
+        displayName: s.displayName,
+        createdAt: s.createdAt,
+        expiresAt: s.expiresAt
+      });
+    }
+    logger.info('sessions_restored', { count: stored.length });
+  } catch (err) {
+    logger.warn('session_restore_failed', { error: String(err) });
+  }
+
+  // Initialize Web Push (generates/persists VAPID keys on first boot).
+  initPush();
 
   // Start background monitoring service
   await monitoringService.start();
-  console.log('[Server] Background monitoring service started.');
+  logger.info('monitoring_started');
 
   // Background automated backup snapshot every 30 minutes
   setInterval(() => {
-    createDatabaseBackup().catch((e) => console.error('[Server Backup] Automated snapshot error:', e));
+    createDatabaseBackup().catch((e) => logger.error('backup_snapshot_failed', { error: String(e) }));
   }, 30 * 60 * 1000);
+
+  // ----------------- LIVENESS (UNAUTHENTICATED) -----------------
+  // Deliberately minimal and unauthenticated so container orchestrators and
+  // load balancers can probe the process without credentials.
+  app.get('/healthz', (_req: Request, res: Response) => {
+    res.json({ status: 'ok', uptimeSeconds: Math.floor(process.uptime()) });
+  });
 
   // ----------------- AUTHENTICATION ROUTES -----------------
   app.get('/api/auth/status', async (req: Request, res: Response) => {
     const session = getSession(extractSessionToken(req));
     const authenticated = Boolean(session);
     const owner = await getOwnerInfo();
+
+    // While unauthenticated, avoid disclosing the owner email (account
+    // enumeration) or operator display name.
     res.json({
       authenticated,
       isFirstRun: !owner?.isConfigured,
-      email: session?.email || owner?.email || process.env.OWNER_EMAIL || 'owner@local',
-      displayName: session?.displayName || 'Site Owner',
-      role: session?.role,
-      ownerEmail: owner?.email || process.env.OWNER_EMAIL || 'owner@local',
-      ownerName: 'Site Owner'
+      email: authenticated ? session!.email : undefined,
+      displayName: authenticated ? session!.displayName || 'Site Owner' : undefined,
+      role: authenticated ? session!.role : undefined,
+      ownerEmail: authenticated ? owner?.email || process.env.OWNER_EMAIL || 'owner@local' : undefined,
+      ownerName: authenticated ? 'Site Owner' : undefined,
+      mfaSupported: true
     });
   });
 
   app.post('/api/auth/setup', authLimiter, async (req: Request, res: Response) => {
     const { password, email } = req.body;
-    if (!password || password.length < 6) {
-      res.status(400).json({ error: 'Master password must be at least 6 characters.' });
+    const strength = validatePasswordStrength(password);
+    if (!strength.valid) {
+      res.status(400).json({ error: describePasswordPolicy() });
       return;
     }
     await setupInitialPassword(password, email);
@@ -244,40 +400,70 @@ async function startServer() {
     res.cookie('cwm_session', token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: false, // Local environment
+      secure: SECURE_COOKIES,
       maxAge: SESSION_TTL_MS
     });
+    issueCsrfCookie(res);
     await addAuditLog('AUTH_SETUP', `Initial master password set for ${email || 'owner'}`);
-    res.json({ success: true, token, email: sessionUser.email, role: sessionUser.role });
+    // The session token is intentionally NOT returned in the body; the HttpOnly
+    // cookie is the sole credential for browser clients.
+    res.json({ success: true, email: sessionUser.email, role: sessionUser.role });
   });
 
   app.post('/api/auth/login', authLimiter, async (req: Request, res: Response) => {
-    const { password, email } = req.body;
+    const { password, email, mfaCode } = req.body;
     if (!password) {
       res.status(400).json({ error: 'Password is required' });
       return;
     }
 
+    const lockKey = String(email || 'owner').toLowerCase();
+    const remaining = lockoutRemainingMs(lockKey);
+    if (remaining > 0) {
+      res.status(429).json({
+        error: `Account temporarily locked. Try again in ${Math.ceil(remaining / 60000)} minute(s).`,
+        lockedForSeconds: Math.ceil(remaining / 1000)
+      });
+      return;
+    }
+
     const { valid, user } = await verifyUserCredentials(password, email);
     if (!valid || !user) {
+      recordLoginFailure(lockKey);
       await addAuditLog('AUTH_FAILED', `Failed login attempt for ${email || 'owner'}`);
       res.status(401).json({ error: 'Invalid credentials. Please try again.' });
       return;
     }
 
+    // Second factor: if enabled, require a valid TOTP code in the same request.
+    const mfa = await getUserMfaByEmail(user.email);
+    if (mfa?.mfaEnabled) {
+      if (!mfaCode) {
+        res.status(401).json({ error: 'Multi-factor code required.', mfaRequired: true });
+        return;
+      }
+      if (!mfa.mfaSecret || !verifyTotp(mfa.mfaSecret, String(mfaCode))) {
+        recordLoginFailure(lockKey);
+        await addAuditLog('AUTH_MFA_FAILED', `Invalid MFA code for ${user.email}`);
+        res.status(401).json({ error: 'Invalid multi-factor code.', mfaRequired: true });
+        return;
+      }
+    }
+
+    clearLoginFailures(lockKey);
     const token = createSession(user);
     res.cookie('cwm_session', token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: false, // Local environment
+      secure: SECURE_COOKIES,
       maxAge: SESSION_TTL_MS // 7 days
     });
+    issueCsrfCookie(res);
 
     await recordUserLogin(user.id);
     await addAuditLog('AUTH_SUCCESS', `Successful login for ${user.email} (${user.role})`);
     res.json({
       success: true,
-      token,
       email: user.email,
       displayName: user.displayName,
       role: user.role
@@ -286,9 +472,26 @@ async function startServer() {
 
   app.post('/api/auth/logout', (req: Request, res: Response) => {
     const token = extractSessionToken(req);
-    if (token) activeSessions.delete(token);
+    if (token) {
+      activeSessions.delete(token);
+      deleteSession(token).catch(() => {});
+    }
     res.clearCookie('cwm_session');
+    res.clearCookie('cwm_csrf');
     res.json({ success: true });
+  });
+
+  // Revokes every session for the caller (e.g. after a suspected compromise).
+  app.post('/api/auth/logout-all', requireAuth, async (req: Request, res: Response) => {
+    const session = (req as AuthedRequest).session!;
+    for (const [token, entry] of activeSessions) {
+      if (entry.userId === session.userId) activeSessions.delete(token);
+    }
+    await deleteSessionsForUser(session.userId);
+    res.clearCookie('cwm_session');
+    res.clearCookie('cwm_csrf');
+    await addAuditLog('AUTH_LOGOUT_ALL', `All sessions revoked for ${session.email}`);
+    res.json({ success: true, message: 'All sessions have been revoked.' });
   });
 
   app.post('/api/auth/change-password', requireAuth, async (req: Request, res: Response) => {
@@ -305,8 +508,9 @@ async function startServer() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      res.status(400).json({ error: 'New password must be at least 6 characters.' });
+    const strength = validatePasswordStrength(newPassword);
+    if (!strength.valid) {
+      res.status(400).json({ error: describePasswordPolicy() });
       return;
     }
 
@@ -314,10 +518,62 @@ async function startServer() {
     // Keep the live session in sync with the new email.
     const token = extractSessionToken(req);
     const entry = token ? activeSessions.get(token) : undefined;
-    if (entry && newEmail) entry.email = newEmail;
+    if (entry && newEmail) {
+      entry.email = newEmail;
+      const stored = { token, ...entry };
+      saveSession(stored).catch(() => {});
+    }
 
     await addAuditLog('PASSWORD_CHANGED', `Password updated for ${session.email}`);
     res.json({ success: true, message: 'Password updated successfully.' });
+  });
+
+  // ----------------- MULTI-FACTOR AUTHENTICATION (TOTP) -----------------
+  app.get('/api/auth/mfa/status', requireAuth, async (req: Request, res: Response) => {
+    const session = (req as AuthedRequest).session!;
+    const mfa = await getUserMfaById(session.userId);
+    res.json({ enabled: Boolean(mfa?.mfaEnabled) });
+  });
+
+  app.post('/api/auth/mfa/setup', requireAuth, async (req: Request, res: Response) => {
+    const session = (req as AuthedRequest).session!;
+    const secret = generateTotpSecret();
+    await setUserMfaSecret(session.userId, secret);
+    res.json({
+      secret,
+      otpauthUrl: buildOtpauthUrl(secret, session.email),
+      message: 'Scan the secret in your authenticator app, then verify a code to enable MFA.'
+    });
+  });
+
+  app.post('/api/auth/mfa/enable', requireAuth, async (req: Request, res: Response) => {
+    const session = (req as AuthedRequest).session!;
+    const { code } = req.body;
+    const mfa = await getUserMfaById(session.userId);
+    if (!mfa?.mfaSecret) {
+      res.status(400).json({ error: 'Start MFA setup before enabling.' });
+      return;
+    }
+    if (!verifyTotp(mfa.mfaSecret, String(code || ''))) {
+      res.status(400).json({ error: 'That code is not valid. Check your device clock and try again.' });
+      return;
+    }
+    await setUserMfaEnabled(session.userId, true);
+    await addAuditLog('MFA_ENABLED', `Multi-factor authentication enabled for ${session.email}`);
+    res.json({ success: true, message: 'Multi-factor authentication enabled.' });
+  });
+
+  app.post('/api/auth/mfa/disable', requireAuth, async (req: Request, res: Response) => {
+    const session = (req as AuthedRequest).session!;
+    const { password } = req.body;
+    const { valid } = await verifyUserCredentials(String(password || ''), session.email);
+    if (!valid) {
+      res.status(403).json({ error: 'Password confirmation failed.' });
+      return;
+    }
+    await setUserMfaEnabled(session.userId, false);
+    await addAuditLog('MFA_DISABLED', `Multi-factor authentication disabled for ${session.email}`);
+    res.json({ success: true, message: 'Multi-factor authentication disabled.' });
   });
 
   // ----------------- USER & ACCESS MANAGEMENT (OWNER ONLY) -----------------
@@ -333,8 +589,9 @@ async function startServer() {
       res.status(400).json({ error: 'A valid email address is required.' });
       return;
     }
-    if (!password || password.length < 6) {
-      res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    const strength = validatePasswordStrength(password);
+    if (!strength.valid) {
+      res.status(400).json({ error: describePasswordPolicy() });
       return;
     }
     if (!['OWNER', 'MANAGER', 'VIEWER'].includes(role)) {
@@ -413,8 +670,9 @@ async function startServer() {
   app.post('/api/users/:id/password', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const { id } = req.params;
     const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6) {
-      res.status(400).json({ error: 'New password must be at least 6 characters.' });
+    const strength = validatePasswordStrength(newPassword);
+    if (!strength.valid) {
+      res.status(400).json({ error: describePasswordPolicy() });
       return;
     }
     const target = await getUserById(id);
@@ -492,8 +750,8 @@ async function startServer() {
         activeAlerts,
         monitorStatus,
         comparison,
-        hasWeatherApiKey: Boolean(process.env.WEATHER_API_KEY),
-        activeProvider: comparison?.activeDataSource || (process.env.WEATHER_API_KEY ? 'WeatherAPI (Main Reference)' : 'Open-Meteo'),
+        hasWeatherApiKey: !LOCAL_ONLY && Boolean(process.env.WEATHER_API_KEY),
+        activeProvider: comparison?.activeDataSource || (!LOCAL_ONLY && process.env.WEATHER_API_KEY ? 'WeatherAPI (Main Reference)' : 'Open-Meteo'),
         dataStatus: freshness.status,
         freshness
       });
@@ -554,8 +812,8 @@ async function startServer() {
       res.json({
         location: targetLoc,
         comparison,
-        hasWeatherApiKey: Boolean(process.env.WEATHER_API_KEY),
-        activeProvider: comparison?.activeDataSource || (process.env.WEATHER_API_KEY ? 'WeatherAPI (Main Reference)' : 'Open-Meteo')
+        hasWeatherApiKey: !LOCAL_ONLY && Boolean(process.env.WEATHER_API_KEY),
+        activeProvider: comparison?.activeDataSource || (!LOCAL_ONLY && process.env.WEATHER_API_KEY ? 'WeatherAPI (Main Reference)' : 'Open-Meteo')
       });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Failed to fetch cross reference' });
@@ -694,6 +952,16 @@ async function startServer() {
       updates.monitorIntervalMinutes = interval;
     }
 
+    // Validate data retention window
+    if (updates.dataRetentionDays !== undefined) {
+      const days = Number(updates.dataRetentionDays);
+      if (!Number.isFinite(days) || days < 1 || days > 3650) {
+        res.status(400).json({ error: 'Data retention must be between 1 and 3650 days.' });
+        return;
+      }
+      updates.dataRetentionDays = Math.floor(days);
+    }
+
     await saveOwnerSettings(updates);
     if (updates.monitorIntervalMinutes !== undefined) {
       monitoringService.updateInterval(updates.monitorIntervalMinutes);
@@ -725,7 +993,7 @@ async function startServer() {
   });
 
   // ----------------- AI WEATHER ADVISORY (GEMINI) -----------------
-  app.post('/api/ai/briefing', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/ai/briefing', requireAuth, aiLimiter, async (req: Request, res: Response) => {
     try {
       const locId = (req.body?.locationId as string) || undefined;
       const locations = await getAllLocations();
@@ -753,11 +1021,18 @@ async function startServer() {
         return;
       }
 
-      const briefing = await generateAiWeatherBriefing(
-        targetLoc.name,
-        current,
-        risk,
-        forecast?.hourly || []
+      // Cache key reflects the inputs that actually change the narrative.
+      const cacheKey = [
+        'briefing',
+        targetLoc.id,
+        risk.level,
+        Math.round(current.temperature),
+        Math.round(current.windGusts),
+        Math.round(current.humidity)
+      ].join(':');
+
+      const briefing = await aiBriefingCache.wrap(cacheKey, () =>
+        generateAiWeatherBriefing(targetLoc.name, current!, risk!, forecast?.hourly || [])
       );
 
       res.json(briefing);
@@ -766,11 +1041,18 @@ async function startServer() {
     }
   });
 
-  app.post('/api/ai/alert-explanation', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/ai/alert-explanation', requireAuth, aiLimiter, async (req: Request, res: Response) => {
     try {
       const { alertId } = req.body;
       if (!alertId) {
         res.status(400).json({ error: 'alertId is required.' });
+        return;
+      }
+
+      const cacheKey = `alert:${alertId}`;
+      const cached = aiBriefingCache.get(cacheKey);
+      if (cached) {
+        res.json(cached);
         return;
       }
 
@@ -793,6 +1075,7 @@ async function startServer() {
           assessedAt: pastAlert.startTime
         };
         const explanation = await generateAiAlertExplanation(pastAlert, risk as any);
+        aiBriefingCache.set(cacheKey, explanation);
         res.json(explanation);
         return;
       }
@@ -807,13 +1090,14 @@ async function startServer() {
       };
 
       const explanation = await generateAiAlertExplanation(alert, risk as any);
+      aiBriefingCache.set(cacheKey, explanation);
       res.json(explanation);
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Failed to generate AI alert explanation.' });
     }
   });
 
-  app.get('/api/ai/history-summary', requireAuth, async (req: Request, res: Response) => {
+  app.get('/api/ai/history-summary', requireAuth, aiLimiter, async (req: Request, res: Response) => {
     try {
       const locId = (req.query.locationId as string) || undefined;
       const range = (req.query.range as any) || 'today';
@@ -828,7 +1112,10 @@ async function startServer() {
       }
 
       const observations = await getHistoricalObservations(targetLoc.id, range);
-      const summary = await generateAiHistoricalSummary(targetLoc.name, observations);
+      const cacheKey = `history:${targetLoc.id}:${range}:${observations.length}`;
+      const summary = await aiHistoryCache.wrap(cacheKey, () =>
+        generateAiHistoricalSummary(targetLoc.name, observations)
+      );
       res.json(summary);
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Failed to generate historical summary.' });
@@ -838,7 +1125,8 @@ async function startServer() {
   // ----------------- DATA RETENTION & PRIVACY -----------------
   app.post('/api/data/retention/run', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     try {
-      const days = Number(req.body?.retentionDays) || 30;
+      const settings = await getOwnerSettings();
+      const days = Number(req.body?.retentionDays) || settings.dataRetentionDays || 30;
       const result = await enforceDataRetention(days);
       res.json({ success: true, result });
     } catch (err: any) {
@@ -867,7 +1155,8 @@ async function startServer() {
         weatherApiKeyMasked: weatherKey ? maskSecret(weatherKey, 4) : 'Not configured',
         smtpConfigured: smtpInfo.configured,
         smtpHost: smtpInfo.host || 'Not configured',
-        geminiKeyConfigured: Boolean(geminiKey.trim())
+        geminiKeyConfigured: Boolean(geminiKey.trim()),
+        pushConfigured: isPushConfigured()
       });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Failed to retrieve secrets status.' });
@@ -944,6 +1233,80 @@ async function startServer() {
     }
   });
 
+  app.post('/api/data/backup/restore', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+    try {
+      const { filename } = req.body;
+      if (!filename || typeof filename !== 'string') {
+        res.status(400).json({ error: 'A backup filename is required.' });
+        return;
+      }
+      const actor = (req as AuthedRequest).session!;
+      const ok = await restoreDatabaseBackup(filename);
+      if (!ok) {
+        res.status(404).json({ error: 'Backup not found or invalid filename.' });
+        return;
+      }
+      // Sessions may reference users that no longer exist in the restored file.
+      activeSessions.clear();
+      await pruneExpiredSessions();
+      await addAuditLog('BACKUP_RESTORED', `${actor.email} restored database from ${filename}`);
+      res.clearCookie('cwm_session');
+      res.clearCookie('cwm_csrf');
+      res.json({
+        success: true,
+        message: 'Database restored. Please sign in again.',
+        signedOut: true
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to restore database backup.' });
+    }
+  });
+
+  // ----------------- WEB PUSH NOTIFICATIONS -----------------
+  app.get('/api/push/public-key', requireAuth, (_req: Request, res: Response) => {
+    res.json({ publicKey: getVapidPublicKey(), configured: isPushConfigured() });
+  });
+
+  app.get('/api/push/status', requireAuth, async (_req: Request, res: Response) => {
+    const count = await countPushSubscriptions();
+    res.json({ configured: isPushConfigured(), subscriptions: count });
+  });
+
+  app.post('/api/push/subscribe', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const session = (req as AuthedRequest).session!;
+      const { endpoint, keys } = req.body || {};
+      await subscribeToPush({
+        endpoint,
+        keys,
+        userId: session.userId,
+        userEmail: session.email
+      });
+      res.json({ success: true, message: 'Device subscribed to safety alerts.' });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || 'Failed to store push subscription.' });
+    }
+  });
+
+  app.post('/api/push/unsubscribe', requireAuth, async (req: Request, res: Response) => {
+    await unsubscribeFromPush(req.body?.endpoint);
+    res.json({ success: true });
+  });
+
+  app.post('/api/push/test', requireAuth, async (req: Request, res: Response) => {
+    if (!isPushConfigured()) {
+      res.status(400).json({ error: 'Push notifications are not configured.' });
+      return;
+    }
+    const result = await sendPushToAll({
+      title: 'Test notification',
+      body: 'Push notifications are working on this device.',
+      tag: 'push-test',
+      url: '/'
+    });
+    res.json({ success: true, ...result });
+  });
+
   // ----------------- VITE MIDDLEWARE (DEV) / STATIC (PROD) -----------------
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -960,10 +1323,10 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] Construction Weather Monitor running on http://localhost:${PORT}`);
+    logger.info('server_listening', { url: `http://localhost:${PORT}`, port: PORT });
   });
 }
 
 startServer().catch((err) => {
-  console.error('[Server Startup Error]:', err);
+  logger.error('server_startup_failed', { error: err?.message || String(err) });
 });

@@ -9,7 +9,7 @@
  *  - Mutations, auth, and backup endpoints are never cached or served stale.
  */
 
-const SW_VERSION = 'cwm-v1';
+const SW_VERSION = 'cwm-v2';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const ASSET_CACHE = `${SW_VERSION}-assets`;
 const API_CACHE = `${SW_VERSION}-api`;
@@ -142,4 +142,57 @@ self.addEventListener('fetch', (event) => {
   ) {
     event.respondWith(cacheFirstAsset(request));
   }
+});
+
+// ---------------------------------------------------------------------------
+// Web Push
+// ---------------------------------------------------------------------------
+
+/** Renders an incoming push message as a visible OS notification. */
+self.addEventListener('push', (event) => {
+  let payload = {
+    title: 'Weather Monitor alert',
+    body: 'A new safety condition requires attention.',
+    tag: 'cwm-alert',
+    url: '/'
+  };
+
+  if (event.data) {
+    try {
+      payload = { ...payload, ...event.data.json() };
+    } catch {
+      payload.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      tag: payload.tag,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      data: { url: payload.url || '/' },
+      requireInteraction: payload.severity === 'CRITICAL' || payload.severity === 'HIGH'
+    })
+  );
+});
+
+/** Focuses an existing tab (or opens one) when a notification is clicked. */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+
+  event.waitUntil(
+    (async () => {
+      const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of allClients) {
+        if ('focus' in client) {
+          await client.focus();
+          if ('navigate' in client) await client.navigate(targetUrl);
+          return;
+        }
+      }
+      if (self.clients.openWindow) await self.clients.openWindow(targetUrl);
+    })()
+  );
 });

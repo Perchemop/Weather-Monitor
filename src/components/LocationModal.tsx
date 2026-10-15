@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, Plus, Check, Trash2, Search, X, Star, AlertCircle } from 'lucide-react';
 import { LocationItem } from '../types';
 import { useToast } from './ToastProvider';
+import { apiFetch } from '../utils/api';
 
 interface LocationModalProps {
   isOpen: boolean;
@@ -35,17 +36,6 @@ export const LocationModal: React.FC<LocationModalProps> = ({
 
   // Confirmation state for deleting
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  // Authorized API helper
-  const apiFetch = (url: string, init?: RequestInit) => {
-    const token = localStorage.getItem('cwm_session_token');
-    const headers = new Headers(init?.headers || {});
-    if (token) {
-      headers.set('x-session-token', token);
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    return fetch(url, { ...init, headers });
-  };
 
   // Debounced search
   useEffect(() => {

@@ -37,6 +37,7 @@ import { fetchRealWeatherData } from './services/weatherService';
 import { calculateDeterministicRisk } from './services/riskEngine';
 import { CrossReferenceCard } from './components/CrossReferenceCard';
 import { AiBriefingCard } from './components/AiBriefingCard';
+import { apiFetch } from './utils/api';
 import { ShieldCheck, Database, HardHat, CheckCircle2, ArrowRightLeft, WifiOff } from 'lucide-react';
 
 const FALLBACK_SITE: LocationItem = {
@@ -104,18 +105,8 @@ export default function App() {
     };
   }, []);
 
-  // Authorized API caller with session token & cookie backup
-  const apiFetch = useCallback(async (url: string, init?: RequestInit): Promise<Response> => {
-    const token = localStorage.getItem('cwm_session_token');
-    const headers = new Headers(init?.headers || {});
-    if (token) {
-      headers.set('x-session-token', token);
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    return fetch(url, { ...init, headers });
-  }, []);
-
-  // Check authentication status on startup
+  // Authorized API caller. Authentication rides on the HttpOnly session cookie;
+  // CSRF is handled automatically inside apiFetch.
   useEffect(() => {
     const verifyAuth = async () => {
       try {
@@ -136,11 +127,10 @@ export default function App() {
       }
     };
     verifyAuth();
-  }, [apiFetch]);
+  }, []);
 
   // Handle successful login or first-run setup
-  const handleAuthenticated = (token: string, email: string, role: UserRole = 'OWNER') => {
-    localStorage.setItem('cwm_session_token', token);
+  const handleAuthenticated = (email: string, role: UserRole = 'OWNER') => {
     setIsAuthenticated(true);
     setIsFirstRun(false);
     setOwnerEmail(email);
@@ -154,7 +144,6 @@ export default function App() {
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' });
     } catch {}
-    localStorage.removeItem('cwm_session_token');
     setIsAuthenticated(false);
     setUserRole('VIEWER');
     toast.info('Safety Enclave session locked.');
