@@ -15,7 +15,9 @@ Autonomous, local-first microclimate risk evaluation and automated safety alerti
 - **Installable, Offline-Capable & Push-Enabled (PWA)**: A service worker precaches the app shell, caches read-only API responses, and delivers Web Push safety alerts to subscribed devices even when the app is closed.
 - **Master Security & Scrypt Hashing**: Password-protected access with RFC 7914 Scrypt memory-hard key derivation.
 - **Automated Retention & Snapshot Rotation**: 30-minute automated database backups with 10-point rolling history, 24-hour retention pruning with a configurable observation window, and one-click restore-from-backup.
-- **Operational Delivery**: Structured JSON logging, an unauthenticated `/healthz` liveness probe, GitHub Actions CI, and a Dockerfile + Compose stack.
+- **Per-User Push Preferences**: Each operator controls their own Web Push delivery — a master switch, a minimum alert severity floor, and an opt-in for recovery (all-clear) notifications — without unsubscribing their devices.
+- **Serverless Static Build (GitHub Pages)**: The same UI can be built with `npm run build:static` to run entirely in the browser — no server, no database. Weather comes straight from Open-Meteo, risk/alerts use the shared deterministic engine, state persists in IndexedDB, and alerts use native browser notifications.
+- **Operational Delivery**: Structured JSON logging, an unauthenticated `/healthz` liveness probe, an auth-or-token-gated Prometheus `/metrics` endpoint, GitHub Actions CI, and a Dockerfile + Compose stack.
 
 ---
 
@@ -57,7 +59,8 @@ same policy by hiding tabs an operator cannot use.
 - The **last active Owner** cannot be demoted, deactivated, or deleted.
 - Owners may reset any operator's password; operators may change their own.
 - Existing single-user installations are migrated automatically: the legacy
-  owner becomes the first `OWNER` account on first boot.
+  `auth_owner` record becomes the first `OWNER` account on first boot. The
+  legacy table is retired (dropped) once migrated.
 - Any account may enable **TOTP two-factor authentication** from Settings →
   Security & Auth; when enabled, sign-in requires a 6-digit authenticator code.
 
@@ -107,6 +110,11 @@ VAPID_SUBJECT=mailto:owner@localhost
 LOG_LEVEL=info
 LOG_FORMAT=json
 
+# Optional shared token for scraping Prometheus metrics. When set, GET /metrics
+# accepts `Authorization: Bearer <token>` (or `?token=<token>`) for scrapers;
+# otherwise the endpoint requires an authenticated session.
+METRICS_TOKEN=
+
 # Privacy mode: skip the third-party WeatherAPI and use Open-Meteo only
 LOCAL_ONLY=false
 ```
@@ -142,11 +150,59 @@ The app is an installable Progressive Web App (`public/manifest.webmanifest` +
   amber "Offline mode" banner appears whenever connectivity is lost.
 - **Web Push alerts**: enable device notifications in Settings → Security & Auth
   to receive HIGH/CRITICAL safety alerts even when the tab is closed. VAPID keys
-  are generated and persisted automatically on first boot.
+  are generated and persisted automatically on first boot. Each operator can tune
+  their own delivery in the same panel: a master switch, a minimum alert severity,
+  and an opt-in for recovery (all-clear) notifications.
 - **Never cached**: authentication, user management, and backup endpoints always
   hit the live server (no stale or cross-session data is ever served).
 - The service worker registers in **production builds only**, so it never
   interferes with Vite HMR during development.
+
+---
+
+## Serverless Static Build (GitHub Pages)
+
+The monitor can also run with **no backend at all**, as a static site hosted on
+GitHub Pages. The browser performs the work the Express server would otherwise do.
+
+```bash
+npm run build:static        # emits dist-static/
+```
+
+- **Weather source**: Open-Meteo is called directly from the browser (geocoding +
+  forecast); no WeatherAPI key is required.
+- **Risk & alerts**: the same deterministic AS 2550.1 risk engine and alert logic
+  are reused, running client-side.
+- **Storage**: state (locations, observations, forecasts, alerts, settings) is
+  persisted in **IndexedDB** (with a `localStorage` fallback). No server, no
+  SQLite, no telemetry.
+- **Alerts**: delivered via the browser **Notification API** — opt in under
+  Settings → Cycle & Alerts. Notifications fire only while the page/tab is open
+  (a background server is what enables closed-tab push in the server build).
+- **API shim**: a `window.fetch` interceptor serves the existing `/api/*` contract
+  from the in-browser backend, so the UI is shared verbatim with the server build.
+- **Graceful degradation**: server-only features (multi-user, roles, MFA, SMTP
+  email, Web Push fan-out, server backups, the AI briefing) are hidden or return
+  explicit non-fatal responses. The AI briefing card is shown as
+  **Deterministic Rules** and produces rule-based output, not model output.
+- **Backup**: Settings → Storage exports the full local state as JSON.
+
+### Deploying to GitHub Pages
+
+`.github/workflows/pages.yml` builds the static variant and publishes it. To use it:
+
+1. Push the repository to GitHub (the workflow files require the `workflow` token
+   scope — run `gh auth refresh -s workflow` if pushing as a CLI OAuth app).
+2. In **Settings → Pages**, set the source to **GitHub Actions**.
+3. The correct project base path (`/<repo>/`) is computed automatically; a
+   user/org root site (`<owner>.github.io`) uses `/`.
+
+For a manual/local preview of the project-page layout:
+
+```bash
+VITE_APP_MODE=static VITE_BASE=/Weather-Monitor/ npx vite build
+npx vite preview --outDir dist-static --base /Weather-Monitor/
+```
 
 ---
 
@@ -156,10 +212,17 @@ The app is an installable Progressive Web App (`public/manifest.webmanifest` +
   readability, `LOG_LEVEL` to tune verbosity). Every request is logged with method,
   path, status, and latency.
 - **Liveness probe**: unauthenticated `GET /healthz` for container orchestrators.
+- **Prometheus metrics**: `GET /metrics` exposes uptime, memory, monitoring-loop
+  state, and counts for locations, observations, alerts, sessions, users, push
+  subscriptions, and monitor runs by status. Access requires an authenticated
+  session by default, or a shared `METRICS_TOKEN` bearer for scrapers.
 - **Container image**: `docker build -t construction-weather-monitor .` or
   `docker compose up --build` (persists state in `./data`).
-- **CI**: `.github/workflows/ci.yml` type-checks, runs the test suite, builds, and
-  builds the container image on every push and pull request.
+- **CI**: `.github/workflows/ci.yml` type-checks, runs the test suite, builds both
+  the server and static variants, and builds the container image on every push and
+  pull request.
+- **Pages**: `.github/workflows/pages.yml` builds the serverless static variant and
+  deploys it to GitHub Pages (see below).
 - **Backup & restore**: snapshots are created automatically every 30 minutes and on
   demand; Owners can download any snapshot or restore one directly from Settings → Storage.
 
@@ -187,30 +250,36 @@ The server will start on port 3000 (`http://localhost:3000`).
 ### Running the Test Suites
 ```bash
 npm test              # both suites
-npm run test:unit     # deterministic engine + utilities (33 checks)
-npm run test:api      # HTTP integration surface (20 checks)
+npm run test:unit     # deterministic engine + utilities (34 checks)
+npm run test:api      # HTTP integration surface (22 checks)
 ```
-The suite is now a **53-point** verification run split across two layers:
+The suite is now a **56-point** verification run split across two layers:
 
 - **Unit suite** — deterministic risk calculation, secret redaction, daylight
   savings timezone alignment, data freshness, Scrypt hashing, snapshot backups,
   security headers, rate limiting, role hierarchy, the multi-user lifecycle,
-  password policy, TOTP, persistent sessions, the TTL cache, and data retention.
+  password policy, TOTP, persistent sessions, the TTL cache, data retention, and
+  per-user push preferences.
 - **HTTP integration suite** — boots the real Express app in-process against an
   isolated temporary data directory and exercises the security surface over
   real HTTP: `/healthz`, account-enumeration resistance, cookie-only sessions,
   CSRF double-submit enforcement, header-token CSRF exemption, per-account
   lockout, the full TOTP login flow, RBAC 401/403 gates, active-session listing
   and revocation (including cross-user isolation), settings validation, the Web
-  Push subscription lifecycle, traversal-safe backup restore, and retention.
+  Push subscription lifecycle and preference access control, traversal-safe backup
+  restore, retention, and Prometheus `/metrics` access control.
 
 Tests never touch your working `./data` directory — they run in a fresh temp
 directory via the `DATA_DIR` override.
 
 ### Building for Production
 ```bash
-npm run build
+npm run build           # server build -> dist/ (Express + API)
 npm start
+```
+For the serverless GitHub Pages build:
+```bash
+npm run build:static    # static build -> dist-static/ (no backend)
 ```
 
 ### Container Deployment
