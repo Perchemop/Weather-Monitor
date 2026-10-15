@@ -545,6 +545,14 @@ export async function fetchRealWeatherData(
     apiKeyOverride ||
     (typeof process !== 'undefined' && process.env ? process.env.WEATHER_API_KEY : undefined);
 
+  // Privacy mode: when LOCAL_ONLY is enabled we deliberately skip the
+  // third-party WeatherAPI provider (which would receive the site coordinates)
+  // and serve data exclusively from the open Open-Meteo service.
+  const localOnly = typeof process !== 'undefined' && process.env?.LOCAL_ONLY === 'true';
+  if (localOnly) {
+    return fetchOpenMeteoData(latitude, longitude, locationId, locationName, timezone);
+  }
+
   // If WeatherAPI key is present, use WeatherAPI as the main reference & cross-reference with Open-Meteo
   if (apiKey && apiKey.trim().length > 0) {
     let weatherApiPayload: WeatherDataPayload | null = null;

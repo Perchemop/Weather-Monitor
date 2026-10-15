@@ -1,17 +1,29 @@
 import React, { useState } from 'react';
-import { HardHat, Lock, ShieldCheck, Key, Eye, EyeOff, AlertCircle, ArrowRight, ShieldAlert } from 'lucide-react';
+import { HardHat, Lock, ShieldCheck, Key, Eye, EyeOff, AlertCircle, ArrowRight, Smartphone } from 'lucide-react';
 import { UserRole } from '../types';
+import { apiFetch } from '../utils/api';
 
 interface LoginScreenProps {
   isFirstRun?: boolean;
   ownerEmail?: string;
-  onAuthenticated: (token: string, email: string, role: UserRole) => void;
+  onAuthenticated: (email: string, role: UserRole) => void;
+}
+
+const PASSWORD_MIN_LENGTH = 10;
+const PASSWORD_HINT = 'At least 10 characters, including a letter and a number.';
+
+function isStrongEnough(password: string): boolean {
+  return (
+    password.length >= PASSWORD_MIN_LENGTH && /[A-Za-z]/.test(password) && /[0-9]/.test(password)
+  );
 }
 
 export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', onAuthenticated }: LoginScreenProps) {
   const [email, setEmail] = useState(ownerEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -26,8 +38,10 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
     }
 
     if (isFirstRun) {
-      if (password.length < 6) {
-        setErrorMessage('Password must be at least 6 characters.');
+      if (!isStrongEnough(password)) {
+        setErrorMessage(
+          `Password must be ${PASSWORD_HINT.toLowerCase()}`
+        );
         return;
       }
       if (password !== confirmPassword) {
@@ -36,13 +50,19 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
       }
     }
 
+    if (mfaRequired && mfaCode.trim().length !== 6) {
+      setErrorMessage('Enter the 6-digit code from your authenticator app.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       const endpoint = isFirstRun ? '/api/auth/setup' : '/api/auth/login';
-      const payload = { email, password };
+      const payload: Record<string, string> = { email, password };
+      if (mfaRequired && mfaCode) payload.mfaCode = mfaCode.trim();
 
-      const res = await fetch(endpoint, {
+      const res = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -51,13 +71,17 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
       const data = await res.json();
 
       if (!res.ok) {
+        if (data?.mfaRequired) {
+          setMfaRequired(true);
+          setErrorMessage(mfaCode ? data.error : null);
+          return;
+        }
         throw new Error(data.error || 'Authentication failed. Please verify credentials.');
       }
 
-      if (data.token) {
-        localStorage.setItem('cwm_session_token', data.token);
-      }
-      onAuthenticated(data.token, data.email || email, (data.role as UserRole) || 'OWNER');
+      // The session lives in an HttpOnly cookie set by the server; nothing is
+      // persisted to JavaScript-accessible storage.
+      onAuthenticated(data.email || email, (data.role as UserRole) || 'OWNER');
     } catch (err: any) {
       setErrorMessage(err?.message || 'Connection error. Please try again.');
     } finally {
@@ -130,7 +154,7 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
               <label className="text-xs font-semibold uppercase font-mono tracking-wider text-slate-400">
                 {isFirstRun ? 'New Master Password' : 'Master Password'}
               </label>
-              <span className="text-2xs text-slate-500">Min 6 characters</span>
+              <span className="text-2xs text-slate-500">Min 10 characters</span>
             </div>
             <div className="relative">
               <input
@@ -138,7 +162,7 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                autoFocus
+                autoFocus={!mfaRequired}
                 className="w-full px-3.5 py-2.5 pr-10 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all font-mono"
                 placeholder="••••••••••••"
               />
@@ -151,6 +175,7 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {isFirstRun && <p className="text-2xs text-slate-500">{PASSWORD_HINT}</p>}
           </div>
 
           {isFirstRun && (
@@ -166,6 +191,29 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
                 className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all font-mono"
                 placeholder="••••••••••••"
               />
+            </div>
+          )}
+
+          {mfaRequired && (
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase font-mono tracking-wider text-slate-400">
+                <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
+                Authenticator Code
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                autoFocus
+                className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 text-sm tracking-[0.4em] text-center focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all font-mono"
+                placeholder="000000"
+              />
+              <p className="text-2xs text-slate-500">
+                Two-factor authentication is enabled for this account.
+              </p>
             </div>
           )}
 

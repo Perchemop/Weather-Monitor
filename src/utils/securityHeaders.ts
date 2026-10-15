@@ -35,6 +35,10 @@ function buildCsp(dev: boolean): string {
     "font-src 'self' https://fonts.gstatic.com data:",
     scriptSrc,
     connectSrc,
+    // The PWA registers a same-origin service worker and manifest.
+    "worker-src 'self'",
+    "manifest-src 'self'",
+    "frame-src 'none'",
     "form-action 'self'"
   ].join('; ');
 }
