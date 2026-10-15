@@ -51,7 +51,8 @@ Default location shipped with the code: Unconfigured Site (−34.9285, 0, UTC).
 - Per-location status (LIVE / CACHED / STALE / OFFLINE)
 
 ### 2.4 User Interface Views
-- Dashboard (Hero Risk Card, Active Alerts, Cross-Reference Card, Hourly Bar, Current Conditions, compact System Health strip)
+- Dashboard (Hero Risk Card, Active Alerts, Cross-Reference Card, Hourly Bar, Current Conditions, condensed Activity Risk link, compact System Health strip)
+- Activity Risk Matrix (dedicated tab for the construction activity impact matrix)
 - Forecast View
 - Alert History + Delivery log
 - Historical Observations

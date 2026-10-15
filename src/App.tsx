@@ -3,7 +3,6 @@ import { Navbar } from './components/Navbar';
 import { HeroRiskCard } from './components/HeroRiskCard';
 import { CurrentConditions } from './components/CurrentConditions';
 import { HourlyForecastBar } from './components/HourlyForecastBar';
-import { ConstructionImpacts } from './components/ConstructionImpacts';
 import { ActiveAlertsPanel } from './components/ActiveAlertsPanel';
 import { LocationModal } from './components/LocationModal';
 import { LoginScreen } from './components/LoginScreen';
@@ -20,6 +19,7 @@ const ReportsView = lazyNamed(() => import('./components/ReportsView'), 'Reports
 const SystemHealthView = lazyNamed(() => import('./components/SystemHealthView'), 'SystemHealthView');
 const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
 const UsersView = lazyNamed(() => import('./components/UsersView'), 'UsersView');
+const ActivityRiskView = lazyNamed(() => import('./components/ActivityRiskView'), 'ActivityRiskView');
 import {
   CurrentWeather,
   RiskAssessment,
@@ -419,6 +419,7 @@ export default function App() {
   const tempUnit = ownerSettings?.temperatureUnit || 'C';
   const windUnit = ownerSettings?.windUnit || 'km/h';
   const monitorInterval = ownerSettings?.monitorIntervalMinutes || 15;
+  const elevatedActivities = riskAssessment?.affectedActivities.filter((a) => a.riskLevel === 'HIGH' || a.riskLevel === 'CRITICAL') || [];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
@@ -489,9 +490,31 @@ export default function App() {
               isLoading={isDashboardLoading}
             />
 
-            {/* 5. Construction Impact Activity Matrix */}
+            {/* 5. Condensed activity risk summary (full matrix lives in the Activity tab) */}
             {riskAssessment && (
-              <ConstructionImpacts impacts={riskAssessment.affectedActivities} />
+              <button
+                type="button"
+                onClick={() => setActiveTab('activity')}
+                className="w-full text-left p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors group"
+              >
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <HardHat className="w-4 h-4 text-amber-400" />
+                    <span className="text-sm font-mono font-bold uppercase tracking-wider text-slate-300">Activity Risk Matrix</span>
+                  </div>
+                  <span className="text-xs font-mono text-amber-400 group-hover:text-amber-300">
+                    View full matrix →
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  {elevatedActivities.length > 0
+                    ? `${elevatedActivities.length} activity(ies) at HIGH or CRITICAL risk: ${elevatedActivities
+                        .slice(0, 3)
+                        .map((a) => a.activity)
+                        .join(', ')}${elevatedActivities.length > 3 ? '...' : ''}`
+                    : 'All monitored activities within safe thresholds.'}
+                </p>
+              </button>
             )}
 
             {/* 6. Dynamic System Health Strip */}
@@ -528,6 +551,15 @@ export default function App() {
               </button>
             </div>
           </div>
+        )}
+
+        {/* Activity Risk Matrix (dedicated tab) */}
+        {activeTab === 'activity' && (
+          <ActivityRiskView
+            risk={riskAssessment}
+            locationName={currentLocation ? currentLocation.name : 'Monitored Site'}
+            isLoading={isDashboardLoading}
+          />
         )}
 
         {/* Forecast View */}
