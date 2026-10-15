@@ -53,7 +53,22 @@ SMTP_USER=
 SMTP_PASSWORD=
 SMTP_FROM="Weather Alert <alerts@site.local>"
 OWNER_EMAIL=supervisor@site.local
+
+# Session cookie signing secret (generated per-boot if omitted)
+SESSION_SECRET=
+
+# Emit HSTS headers; enable only when served over HTTPS
+ENABLE_HSTS=false
 ```
+
+---
+
+## Security Hardening
+
+- **Security Headers**: Every response carries a strict `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, cross-origin isolation headers, and a restrictive `Permissions-Policy`. `X-Powered-By` fingerprinting is removed. HSTS is opt-in via `ENABLE_HSTS=true`.
+- **Rate Limiting**: Authentication endpoints (`/api/auth/login`, `/api/auth/setup`) are limited to 10 attempts per 15 minutes per client IP to blunt brute-force attacks, while the broader `/api` surface is limited to 300 requests per minute. Limited responses return HTTP `429` with `RateLimit-*` headers.
+- **Body Size Cap**: JSON request bodies are capped at 1 MB.
+- **Session Isolation**: Sessions require an `HttpOnly` signed cookie, `x-session-token`, or `Authorization: Bearer` token; all monitoring routes are gated by auth middleware.
 
 ---
 
