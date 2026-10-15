@@ -1,8 +1,8 @@
 /**
  * Tiny in-memory TTL cache.
  *
- * Used to avoid re-billing expensive upstream calls (e.g. Gemini briefings)
- * when several operators request the same summary within a short window.
+ * Used to avoid repeating expensive upstream calls when several callers request
+ * the same value within a short window.
  */
 export class TtlCache<T> {
   private store = new Map<string, { value: T; expiresAt: number }>();
