@@ -346,6 +346,33 @@ const MIGRATIONS: Migration[] = [
         );
       `);
     }
+  },
+  {
+    version: 11,
+    name: '011_drop_legacy_auth_owner',
+    up: (db: Database) => {
+      // The multi-user `users` table has been the single source of truth for
+      // credentials since migration 005. Preserve the legacy owner's
+      // credentials first (only if `users` is somehow still empty), then drop
+      // the redundant single-owner table.
+      try {
+        const userCount = db.exec('SELECT COUNT(*) FROM users')[0]?.values[0]?.[0] as number;
+        if (!userCount || userCount === 0) {
+          const owner = db.exec('SELECT email, password_hash, salt FROM auth_owner LIMIT 1')[0]?.values[0];
+          if (owner) {
+            const now = new Date().toISOString();
+            db.run(
+              `INSERT INTO users (id, email, display_name, role, password_hash, salt, active, created_at, updated_at)
+               VALUES (?, ?, ?, 'OWNER', ?, ?, 1, ?, ?)`,
+              ['usr-owner-1', owner[0], 'Site Owner', owner[1], owner[2], now, now]
+            );
+          }
+        }
+      } catch {
+        // `auth_owner` may not exist on a freshly created database.
+      }
+      db.run('DROP TABLE IF EXISTS auth_owner');
+    }
   }
 ];
 
@@ -392,10 +419,11 @@ function initializeSchema(db: Database) {
     );
   }
 
-  // Seed default owner account if not yet created (strictly without hardcoded static passwords)
-  const authCount = db.exec('SELECT COUNT(*) as count FROM auth_owner');
-  const hasAuth = authCount[0]?.values[0]?.[0] as number;
-  if (!hasAuth || hasAuth === 0) {
+  // Seed the primary OWNER account directly in `users` if none exist yet
+  // (strictly without hardcoded static passwords).
+  const userCount = db.exec('SELECT COUNT(*) FROM users');
+  const hasUsers = userCount[0]?.values[0]?.[0] as number;
+  if (!hasUsers || hasUsers === 0) {
     const defaultEmail = process.env.OWNER_EMAIL || 'owner@local';
     const envPassword = process.env.INITIAL_OWNER_PASSWORD || process.env.ADMIN_PASSWORD;
     const initialPass = envPassword || generateSecureBootstrapPassword(16);
@@ -411,36 +439,13 @@ function initializeSchema(db: Database) {
 
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = hashPasswordWithSalt(initialPass, salt);
+    const now = new Date().toISOString();
     db.run(
-      `INSERT INTO auth_owner (id, email, password_hash, salt, updated_at) VALUES (?, ?, ?, ?, ?)`,
-      ['owner-1', defaultEmail, hash, salt, new Date().toISOString()]
+      `INSERT INTO users (id, email, display_name, role, password_hash, salt, active, created_at, updated_at)
+       VALUES (?, ?, ?, 'OWNER', ?, ?, 1, ?, ?)`,
+      ['usr-owner-1', defaultEmail, 'Site Owner', hash, salt, now, now]
     );
   }
-
-  // Migrate the legacy single-owner record into the multi-user `users` table.
-  migrateOwnerIntoUsers(db);
-}
-
-/**
- * Ensures the primary OWNER account exists in the `users` table, seeding it
- * from the legacy `auth_owner` record when the users table is empty. This is
- * the bridge that upgrades a single-user installation to multi-user access.
- */
-function migrateOwnerIntoUsers(db: Database) {
-  const userCountRes = db.exec('SELECT COUNT(*) FROM users');
-  const userCount = userCountRes[0]?.values[0]?.[0] as number;
-  if (userCount && userCount > 0) return;
-
-  const ownerRes = db.exec('SELECT email, password_hash, salt FROM auth_owner LIMIT 1');
-  if (!ownerRes[0] || !ownerRes[0].values[0]) return;
-
-  const [email, hash, salt] = ownerRes[0].values[0] as [string, string, string];
-  const now = new Date().toISOString();
-  db.run(
-    `INSERT INTO users (id, email, display_name, role, password_hash, salt, active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    ['usr-owner-1', email, 'Site Owner', 'OWNER', hash, salt, now, now]
-  );
 }
 
 export async function getAppliedMigrations(): Promise<SchemaMigration[]> {
@@ -459,53 +464,40 @@ export function hashPasswordWithSalt(password: string, salt: string): string {
   return crypto.scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 }).toString('hex');
 }
 
-export async function verifyOwnerPassword(password: string): Promise<{ valid: boolean; email?: string }> {
-  const db = await getDb();
-  const res = db.exec('SELECT email, password_hash, salt FROM auth_owner LIMIT 1');
-  if (!res[0] || !res[0].values[0]) return { valid: false };
-
-  const [email, hash, salt] = res[0].values[0] as [string, string, string];
-  const candidateHash = hashPasswordWithSalt(password, salt);
-
-  const hashBuf = Buffer.from(hash, 'hex');
-  const candidateBuf = Buffer.from(candidateHash, 'hex');
-
-  if (hashBuf.length === candidateBuf.length && crypto.timingSafeEqual(hashBuf, candidateBuf)) {
-    return { valid: true, email };
-  }
-  return { valid: false };
-}
-
-export async function updateOwnerPassword(newPassword: string, newEmail?: string): Promise<boolean> {
-  const db = await getDb();
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = hashPasswordWithSalt(newPassword, salt);
-  const now = new Date().toISOString();
-
-  if (newEmail) {
-    db.run(
-      `UPDATE auth_owner SET email = ?, password_hash = ?, salt = ?, updated_at = ? WHERE id = 'owner-1'`,
-      [newEmail, hash, salt, now]
-    );
-  } else {
-    db.run(
-      `UPDATE auth_owner SET password_hash = ?, salt = ?, updated_at = ? WHERE id = 'owner-1'`,
-      [hash, salt, now]
-    );
-  }
-  persistDb();
-  return true;
-}
-
 export async function isOwnerPasswordConfigured(): Promise<boolean> {
   const db = await getDb();
   const confRes = db.exec("SELECT value FROM settings WHERE key = 'owner_configured'");
   return confRes[0]?.values[0]?.[0] === 'true';
 }
 
+/**
+ * Marks the initial owner setup as complete and reconciles the primary OWNER
+ * account in the `users` table (the single source of truth for credentials).
+ */
 export async function setupInitialPassword(password: string, email?: string): Promise<boolean> {
-  await updateOwnerPassword(password, email);
   const db = await getDb();
+  const owners = (await getAllUsers()).filter((u) => u.role === 'OWNER');
+  if (owners.length > 0) {
+    await updateUserCredentials(owners[0].id, email || owners[0].email, password);
+  } else {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = hashPasswordWithSalt(password, salt);
+    const now = new Date().toISOString();
+    db.run(
+      `INSERT INTO users (id, email, display_name, role, password_hash, salt, active, created_at, updated_at)
+       VALUES (?, ?, ?, 'OWNER', ?, ?, 1, ?, ?)`,
+      [
+        'usr-owner-1',
+        email || process.env.OWNER_EMAIL || 'owner@local',
+        'Site Owner',
+        hash,
+        salt,
+        now,
+        now
+      ]
+    );
+  }
+
   db.run(
     "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('owner_configured', 'true', ?)",
     [new Date().toISOString()]
@@ -515,11 +507,11 @@ export async function setupInitialPassword(password: string, email?: string): Pr
 }
 
 export async function getOwnerInfo(): Promise<{ email: string; isConfigured: boolean } | null> {
-  const db = await getDb();
-  const res = db.exec('SELECT email FROM auth_owner LIMIT 1');
-  if (!res[0] || !res[0].values[0]) return null;
+  const owners = (await getAllUsers()).filter((u) => u.role === 'OWNER');
+  const email = owners[0]?.email || process.env.OWNER_EMAIL || null;
+  if (!email) return null;
   const isConfigured = await isOwnerPasswordConfigured();
-  return { email: res[0].values[0][0] as string, isConfigured };
+  return { email, isConfigured };
 }
 
 // Locations
