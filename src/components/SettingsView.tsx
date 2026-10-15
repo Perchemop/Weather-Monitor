@@ -18,14 +18,39 @@ import {
   Download,
   Archive,
   RefreshCw,
-  HardHat
+  HardHat,
+  LogOut,
+  Monitor
 } from 'lucide-react';
-import { OwnerSettings, RiskThresholds, SecretsStatus } from '../types';
+import { OwnerSettings, RiskThresholds, SecretsStatus, SessionInfo } from '../types';
 import { useToast } from './ToastProvider';
 import { apiFetch } from '../utils/api';
 
 interface SettingsViewProps {
   onSettingsSaved?: () => void;
+}
+
+/**
+ * Derives a short, human-friendly device label from a User-Agent string. This
+ * is presentation-only; the raw UA is never used for any security decision.
+ */
+function describeUserAgent(ua: string | null): string {
+  if (!ua) return 'Unknown device';
+  const browser =
+    /Edg\//.test(ua) ? 'Edge'
+    : /OPR\/|Opera/.test(ua) ? 'Opera'
+    : /Firefox\//.test(ua) ? 'Firefox'
+    : /Chrome\//.test(ua) ? 'Chrome'
+    : /Safari\//.test(ua) ? 'Safari'
+    : 'Browser';
+  const os =
+    /Windows/.test(ua) ? 'Windows'
+    : /Android/.test(ua) ? 'Android'
+    : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
+    : /Mac OS X/.test(ua) ? 'macOS'
+    : /Linux/.test(ua) ? 'Linux'
+    : '';
+  return os ? `${browser} on ${os}` : browser;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) => {
@@ -75,12 +100,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
   const [pushBusy, setPushBusy] = useState(false);
   const [pushConfigured, setPushConfigured] = useState(false);
 
+  // Active session (device) management state
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [sessionsBusy, setSessionsBusy] = useState(false);
+
   // Authorized API helper (cookie auth + CSRF handled centrally)
   useEffect(() => {
     fetchSettings();
     fetchBackups();
     fetchMfaStatus();
     detectPushState();
+    fetchSessions();
   }, []);
   const fetchSettings = async () => {
     try {
@@ -307,6 +337,72 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
         setPushSubscribed(Boolean(sub));
       } catch {}
     }
+  };
+
+  // ---- Active session (device) management ----
+  const fetchSessions = async () => {
+    try {
+      const res = await apiFetch('/api/auth/sessions');
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(Array.isArray(data.sessions) ? data.sessions : []);
+      }
+    } catch {}
+  };
+
+  const handleRevokeSession = (session: SessionInfo) => {
+    if (session.current) {
+      toast.error('Use “Sign out” to end the current session.');
+      return;
+    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Revoke This Device?',
+      message:
+        'The selected device will be signed out immediately and must authenticate again to regain access.',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        setSessionsBusy(true);
+        try {
+          const res = await apiFetch(`/api/auth/sessions/${session.id}`, { method: 'DELETE' });
+          if (res.ok) {
+            toast.success('Device session revoked.');
+            await fetchSessions();
+          } else {
+            toast.error('Failed to revoke session.');
+          }
+        } catch {
+          toast.error('Connection error revoking session.');
+        } finally {
+          setSessionsBusy(false);
+        }
+      }
+    });
+  };
+
+  const handleRevokeAllSessions = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Sign Out All Devices?',
+      message:
+        'Every session for your account — including this one — will be revoked. You will need to sign in again.',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        setSessionsBusy(true);
+        try {
+          const res = await apiFetch('/api/auth/logout-all', { method: 'POST' });
+          if (res.ok) {
+            window.location.reload();
+          } else {
+            toast.error('Failed to revoke sessions.');
+          }
+        } catch {
+          toast.error('Connection error revoking sessions.');
+        } finally {
+          setSessionsBusy(false);
+        }
+      }
+    });
   };
 
   // ---- Multi-factor authentication handlers ----
@@ -1346,6 +1442,70 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
                   </>
                 )}
               </div>
+            )}
+          </div>
+
+          {/* Active Sessions / Devices */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Monitor className="w-4 h-4 text-sky-400" />
+                <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
+                  Active Sessions
+                </h4>
+              </div>
+              {sessions.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleRevokeAllSessions}
+                  disabled={sessionsBusy}
+                  className="px-3 py-1.5 rounded-lg bg-red-500/90 hover:bg-red-500 text-white font-bold text-[10px] font-mono uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  Sign Out All
+                </button>
+              )}
+            </div>
+            <p className="text-xs font-mono text-slate-400 leading-relaxed">
+              Devices currently signed in to your account. Revoking a session signs that device out
+              immediately.
+            </p>
+
+            {sessions.length === 0 ? (
+              <p className="text-xs font-mono text-slate-500">No active sessions found.</p>
+            ) : (
+              <ul className="space-y-2">
+                {sessions.map((s) => (
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-950 border border-slate-800"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-slate-200 truncate">
+                          {describeUserAgent(s.userAgent)}
+                        </span>
+                        {s.current && (
+                          <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                            This device
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-mono text-slate-500 mt-1">
+                        {s.ip ? `IP ${s.ip} · ` : ''}Last active {new Date(s.lastSeenAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRevokeSession(s)}
+                      disabled={sessionsBusy || s.current}
+                      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-[10px] font-mono uppercase tracking-wider transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <LogOut className="w-3 h-3" />
+                      Revoke
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </div>

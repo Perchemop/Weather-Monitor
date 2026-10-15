@@ -99,6 +99,9 @@ class Client {
   putCsrf(p: string, body?: unknown) {
     return this.request('PUT', p, body, { 'x-csrf-token': this.cookie('cwm_csrf') || '' });
   }
+  deleteCsrf(p: string) {
+    return this.request('DELETE', p, undefined, { 'x-csrf-token': this.cookie('cwm_csrf') || '' });
+  }
 }
 
 const OWNER_PASSWORD = 'Integration0wner';
@@ -278,6 +281,59 @@ async function main(): Promise<void> {
   await test('RBAC: unauthenticated mutation is rejected with 401', async () => {
     const res = await new Client(base).post('/api/settings/restore-defaults');
     assert.equal(res.status, 401);
+  });
+
+  await test('Sessions: list, revoke a device, and cross-user isolation', async () => {
+    // Open a second owner session to act as "another device".
+    const second = new Client(base);
+    const login2 = await second.post('/api/auth/login', {
+      password: OWNER_PASSWORD,
+      email: 'owner@site.local'
+    });
+    assert.equal(login2.status, 200);
+
+    const list = await anon.get('/api/auth/sessions');
+    assert.equal(list.status, 200);
+    assert.ok(list.body.sessions.length >= 2, 'expected at least two owner sessions');
+    assert.equal(
+      list.body.sessions.filter((s: any) => s.current).length,
+      1,
+      'exactly one session should be marked current'
+    );
+    // Tokens must never be exposed — only opaque digests.
+    for (const s of list.body.sessions) {
+      assert.equal(s.token, undefined);
+      assert.ok(s.id && s.id.length === 64, 'expected a sha256 digest id');
+    }
+    const current = list.body.sessions.find((s: any) => s.current);
+    const otherId = list.body.sessions.find((s: any) => !s.current).id as string;
+
+    // The viewer cannot see or revoke the owner's sessions.
+    const viewerList = await viewerClient.get('/api/auth/sessions');
+    assert.equal(viewerList.status, 200);
+    assert.ok(
+      viewerList.body.sessions.every((s: any) => s.id !== otherId),
+      'viewer must not see other users sessions'
+    );
+    assert.equal((await viewerClient.deleteCsrf(`/api/auth/sessions/${otherId}`)).status, 404);
+
+    // Cookie-authenticated DELETE without the CSRF header is rejected.
+    assert.equal((await anon.request('DELETE', `/api/auth/sessions/${otherId}`)).status, 403);
+
+    // Revoke the other owner session.
+    const revoke = await anon.deleteCsrf(`/api/auth/sessions/${otherId}`);
+    assert.equal(revoke.status, 200);
+    assert.equal(revoke.body.revokedCurrent, false);
+
+    // The revoked device is signed out immediately.
+    assert.equal((await second.get('/api/users')).status, 401);
+
+    // Unknown ids are a 404, not a silent success.
+    assert.equal((await anon.deleteCsrf('/api/auth/sessions/' + 'f'.repeat(64))).status, 404);
+
+    // The current session remains valid.
+    assert.equal((await anon.get('/api/auth/sessions')).status, 200);
+    assert.ok(current);
   });
 
   await test('Validation: settings reject an out-of-range retention window', async () => {

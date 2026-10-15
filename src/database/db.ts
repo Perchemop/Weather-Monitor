@@ -318,6 +318,17 @@ const MIGRATIONS: Migration[] = [
         );
       `);
     }
+  },
+  {
+    version: 9,
+    name: '009_session_metadata',
+    up: (db: Database) => {
+      // Capture device/last-seen metadata so the owner can review and revoke
+      // individual active sessions. Added via ALTER for existing installs.
+      db.run(`ALTER TABLE sessions ADD COLUMN user_agent TEXT;`);
+      db.run(`ALTER TABLE sessions ADD COLUMN ip TEXT;`);
+      db.run(`ALTER TABLE sessions ADD COLUMN last_seen_at INTEGER;`);
+    }
   }
 ];
 
@@ -791,13 +802,17 @@ export interface StoredSession {
   displayName?: string;
   createdAt: string;
   expiresAt: number;
+  userAgent?: string;
+  ip?: string;
+  lastSeenAt?: number;
 }
 
 export async function saveSession(session: StoredSession): Promise<void> {
   const db = await getDb();
   db.run(
-    `INSERT OR REPLACE INTO sessions (token, user_id, email, role, display_name, created_at, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO sessions
+       (token, user_id, email, role, display_name, created_at, expires_at, user_agent, ip, last_seen_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       session.token,
       session.userId,
@@ -805,9 +820,18 @@ export async function saveSession(session: StoredSession): Promise<void> {
       session.role,
       session.displayName || null,
       session.createdAt,
-      session.expiresAt
+      session.expiresAt,
+      session.userAgent || null,
+      session.ip || null,
+      session.lastSeenAt ?? null
     ]
   );
+  persistDb();
+}
+
+export async function touchSession(token: string, lastSeenAt: number): Promise<void> {
+  const db = await getDb();
+  db.run('UPDATE sessions SET last_seen_at = ? WHERE token = ?', [lastSeenAt, token]);
   persistDb();
 }
 
@@ -829,7 +853,7 @@ export async function deleteSessionsForUser(userId: string): Promise<number> {
 export async function loadActiveSessions(): Promise<StoredSession[]> {
   const db = await getDb();
   const res = db.exec(
-    `SELECT token, user_id, email, role, display_name, created_at, expires_at
+    `SELECT token, user_id, email, role, display_name, created_at, expires_at, user_agent, ip, last_seen_at
      FROM sessions WHERE expires_at > ? ORDER BY created_at DESC`,
     [Date.now()]
   );
@@ -841,7 +865,10 @@ export async function loadActiveSessions(): Promise<StoredSession[]> {
     role: v[3] as UserRole,
     displayName: (v[4] as string) || undefined,
     createdAt: v[5] as string,
-    expiresAt: v[6] as number
+    expiresAt: v[6] as number,
+    userAgent: (v[7] as string) || undefined,
+    ip: (v[8] as string) || undefined,
+    lastSeenAt: v[9] === null || v[9] === undefined ? undefined : (v[9] as number)
   }));
 }
 
