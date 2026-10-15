@@ -265,7 +265,26 @@ const aiBriefingCache = new TtlCache<unknown>(10 * 60 * 1000, 200);
 const aiHistoryCache = new TtlCache<unknown>(10 * 60 * 1000, 200);
 
 
-async function startServer() {
+export type StaticMode = 'vite' | 'static' | 'none';
+
+export interface CreateAppOptions {
+  /**
+   * How to serve the frontend. Defaults to the Vite dev middleware outside
+   * production and the built `dist/` assets in production. Tests pass 'none'.
+   */
+  staticMode?: StaticMode;
+  /** Start the periodic monitoring poller (default true). */
+  startMonitoring?: boolean;
+  /** Schedule the 30-minute backup snapshot timer (default true). */
+  scheduleBackups?: boolean;
+}
+
+async function createApp(options: CreateAppOptions = {}): Promise<express.Express> {
+  const staticMode: StaticMode =
+    options.staticMode ?? (process.env.NODE_ENV === 'production' ? 'static' : 'vite');
+  const startMonitoring = options.startMonitoring ?? true;
+  const scheduleBackups = options.scheduleBackups ?? true;
+
   const app = express();
 
   // Disable fingerprinting and trust the first proxy hop for accurate client IPs.
@@ -286,20 +305,20 @@ async function startServer() {
   // Brute-force protection for the unauthenticated auth endpoints.
   const authLimiter = createRateLimiter({
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    max: Math.max(1, Number(process.env.AUTH_RATE_LIMIT_MAX) || 10),
     message: 'Too many authentication attempts. Please wait before trying again.'
   });
 
   // Broad safety net for the authenticated API surface.
   const apiLimiter = createRateLimiter({
     windowMs: 60 * 1000,
-    max: 300
+    max: Math.max(1, Number(process.env.API_RATE_LIMIT_MAX) || 300)
   });
 
   // Dedicated limiter for cost-bearing AI endpoints.
   const aiLimiter = createRateLimiter({
     windowMs: 60 * 1000,
-    max: 20,
+    max: Math.max(1, Number(process.env.AI_RATE_LIMIT_MAX) || 20),
     message: 'Too many AI requests. Please wait a moment before retrying.'
   });
 
@@ -335,13 +354,17 @@ async function startServer() {
   initPush();
 
   // Start background monitoring service
-  await monitoringService.start();
-  logger.info('monitoring_started');
+  if (startMonitoring) {
+    await monitoringService.start();
+    logger.info('monitoring_started');
+  }
 
   // Background automated backup snapshot every 30 minutes
-  setInterval(() => {
-    createDatabaseBackup().catch((e) => logger.error('backup_snapshot_failed', { error: String(e) }));
-  }, 30 * 60 * 1000);
+  if (scheduleBackups) {
+    setInterval(() => {
+      createDatabaseBackup().catch((e) => logger.error('backup_snapshot_failed', { error: String(e) }));
+    }, 30 * 60 * 1000);
+  }
 
   // ----------------- LIVENESS (UNAUTHENTICATED) -----------------
   // Deliberately minimal and unauthenticated so container orchestrators and
@@ -1308,13 +1331,13 @@ async function startServer() {
   });
 
   // ----------------- VITE MIDDLEWARE (DEV) / STATIC (PROD) -----------------
-  if (process.env.NODE_ENV !== 'production') {
+  if (staticMode === 'vite') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (staticMode === 'static') {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (_req: Request, res: Response) => {
@@ -1322,11 +1345,19 @@ async function startServer() {
     });
   }
 
+  return app;
+}
+
+/**
+ * Builds the application and begins listening. Kept separate from `createApp`
+ * so the HTTP surface can be exercised in-process by the integration tests
+ * without binding a fixed port or starting background pollers.
+ */
+async function startServer(): Promise<void> {
+  const app = await createApp();
   app.listen(PORT, '0.0.0.0', () => {
     logger.info('server_listening', { url: `http://localhost:${PORT}`, port: PORT });
   });
 }
 
-startServer().catch((err) => {
-  logger.error('server_startup_failed', { error: err?.message || String(err) });
-});
+export { createApp, startServer };

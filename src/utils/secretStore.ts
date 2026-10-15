@@ -7,7 +7,11 @@ import crypto from 'crypto';
  * local data directory so they survive restarts. Environment variables always
  * take precedence, enabling fully externalised secret management in containers.
  */
-const DATA_DIR = path.join(process.cwd(), 'data');
+// DATA_DIR mirrors the database location so secrets written by tests land in
+// their isolated temp directory rather than the developer's real data folder.
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(process.cwd(), 'data');
 
 function readSecretFile(fileName: string): string | null {
   try {
