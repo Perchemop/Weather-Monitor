@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run lint
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          test -f dist/server.cjs
+          test -f dist/index.html
+          test -f dist/sw.js
+
+      - name: Static build (GitHub Pages variant)
+        env:
+          VITE_APP_MODE: static
+        run: npm run build:static
+
+      - name: Verify static build output
+        run: |
+          test -f dist-static/index.html
+          test -d dist-static/assets
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build container image
+        run: docker build -t construction-weather-monitor:ci .
