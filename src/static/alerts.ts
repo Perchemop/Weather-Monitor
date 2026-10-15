@@ -1,0 +1,250 @@
+/**
+ * Browser alert evaluation for the static build.
+ *
+ * This is a direct port of `src/services/alertEngine.ts`; the only difference is
+ * that it reads/writes the IndexedDB-backed `store` instead of the SQLite db.
+ * The candidate/severity/dedup/cooldown logic is identical so that alert
+ * behaviour matches the server build.
+ */
+
+import {
+  AlertItem,
+  AlertSeverity,
+  AlertType,
+  CurrentWeather,
+  HourlyForecastItem,
+  RiskThresholds
+} from '../types.js';
+import { store } from './store.js';
+
+export interface EvaluatedCandidateAlert {
+  alertType: AlertType;
+  severity: AlertSeverity;
+  title: string;
+  message: string;
+  triggerCondition: string;
+  observedValue: string;
+  thresholdValue: string;
+  startTime: string;
+  expectedDuration: string;
+}
+
+export function evaluateCandidateAlerts(
+  current: CurrentWeather,
+  hourly: HourlyForecastItem[],
+  thresholds: RiskThresholds
+): EvaluatedCandidateAlert[] {
+  const candidateAlerts: EvaluatedCandidateAlert[] = [];
+
+  const next6 = hourly.slice(0, 6);
+  let maxGustNext6 = current.windGusts;
+  let maxRainProbNext6 = current.rainProbability;
+  let maxRainAmountNext6 = current.rainAmount;
+  let peakGustHour: HourlyForecastItem | null = null;
+
+  for (const h of next6) {
+    if (h.windGusts > maxGustNext6) {
+      maxGustNext6 = h.windGusts;
+      peakGustHour = h;
+    }
+    if (h.rainProbability > maxRainProbNext6) maxRainProbNext6 = h.rainProbability;
+    if (h.precipitation > maxRainAmountNext6) maxRainAmountNext6 = h.precipitation;
+  }
+
+  if (maxGustNext6 >= thresholds.gustCritical) {
+    candidateAlerts.push({
+      alertType: 'EXTREME WIND',
+      severity: 'CRITICAL',
+      title: 'CRITICAL WIND GUST ALERT',
+      message: `Dangerous wind gusts up to ${Math.round(maxGustNext6)} km/h are impacting or forecast in the area. Extreme crane deflection and fall hazard.`,
+      triggerCondition: `Wind gusts >= ${thresholds.gustCritical} km/h`,
+      observedValue: `${Math.round(maxGustNext6)} km/h`,
+      thresholdValue: `${thresholds.gustCritical} km/h`,
+      startTime: peakGustHour ? peakGustHour.time : current.timestamp,
+      expectedDuration: '2–3 hours'
+    });
+  } else if (maxGustNext6 >= thresholds.gustHigh) {
+    candidateAlerts.push({
+      alertType: 'HIGH WIND',
+      severity: 'HIGH',
+      title: 'HIGH WIND ALERT',
+      message: `Strong wind gusts up to ${Math.round(maxGustNext6)} km/h expected. Approaching crane, scaffolding and roofing operational thresholds.`,
+      triggerCondition: `Wind gusts >= ${thresholds.gustHigh} km/h`,
+      observedValue: `${Math.round(maxGustNext6)} km/h`,
+      thresholdValue: `${thresholds.gustHigh} km/h`,
+      startTime: peakGustHour ? peakGustHour.time : current.timestamp,
+      expectedDuration: '2–4 hours'
+    });
+  }
+
+  if (maxRainAmountNext6 >= thresholds.rainAmountHigh) {
+    candidateAlerts.push({
+      alertType: 'HEAVY RAIN',
+      severity: 'HIGH',
+      title: 'HEAVY RAINFALL ALERT',
+      message: `Intense precipitation rate (${maxRainAmountNext6.toFixed(1)} mm/h) expected. High risk of trench flooding, runoff and concrete wash-out.`,
+      triggerCondition: `Rainfall >= ${thresholds.rainAmountHigh} mm/h`,
+      observedValue: `${maxRainAmountNext6.toFixed(1)} mm/h`,
+      thresholdValue: `${thresholds.rainAmountHigh} mm/h`,
+      startTime: current.timestamp,
+      expectedDuration: '1–3 hours'
+    });
+  } else if (maxRainProbNext6 >= thresholds.rainProbHigh && maxRainAmountNext6 >= thresholds.rainAmountWarning) {
+    candidateAlerts.push({
+      alertType: 'HIGH RAIN PROBABILITY',
+      severity: 'MODERATE',
+      title: 'RAIN HAZARD ALERT',
+      message: `High rain probability (${Math.round(maxRainProbNext6)}%) with active rainfall forecasted.`,
+      triggerCondition: `Rain probability >= ${thresholds.rainProbHigh}% and rainfall >= ${thresholds.rainAmountWarning} mm/h`,
+      observedValue: `${Math.round(maxRainProbNext6)}% / ${maxRainAmountNext6.toFixed(1)} mm/h`,
+      thresholdValue: `${thresholds.rainProbHigh}% / ${thresholds.rainAmountWarning} mm/h`,
+      startTime: current.timestamp,
+      expectedDuration: '2–4 hours'
+    });
+  }
+
+  if (current.temperature >= thresholds.heatCritical) {
+    candidateAlerts.push({
+      alertType: 'EXTREME HEAT',
+      severity: 'CRITICAL',
+      title: 'CRITICAL HEAT ALERT',
+      message: `Ambient temperatures reaching ${Math.round(current.temperature)}°C. Acute heat-illness risk and severe concrete hydration impairment.`,
+      triggerCondition: `Temperature >= ${thresholds.heatCritical}°C`,
+      observedValue: `${Math.round(current.temperature)}°C`,
+      thresholdValue: `${thresholds.heatCritical}°C`,
+      startTime: current.timestamp,
+      expectedDuration: '3–5 hours'
+    });
+  } else if (current.temperature >= thresholds.heatWarning) {
+    candidateAlerts.push({
+      alertType: 'EXTREME HEAT',
+      severity: 'HIGH',
+      title: 'HIGH HEAT ADVISORY',
+      message: `Elevated temperatures (${Math.round(current.temperature)}°C). Enforce worker hydration and shade breaks.`,
+      triggerCondition: `Temperature >= ${thresholds.heatWarning}°C`,
+      observedValue: `${Math.round(current.temperature)}°C`,
+      thresholdValue: `${thresholds.heatWarning}°C`,
+      startTime: current.timestamp,
+      expectedDuration: '3–4 hours'
+    });
+  }
+
+  if (current.weatherCode >= 95) {
+    candidateAlerts.push({
+      alertType: 'STORM',
+      severity: 'CRITICAL',
+      title: 'THUNDERSTORM & LIGHTNING ALERT',
+      message: `Active thunderstorm conditions detected (WMO code ${current.weatherCode}: ${current.weatherDescription}). Suspend all crane booms and open elevated work immediately.`,
+      triggerCondition: 'WMO code >= 95',
+      observedValue: current.weatherDescription,
+      thresholdValue: 'Thunderstorm detected',
+      startTime: current.timestamp,
+      expectedDuration: '1–2 hours'
+    });
+  }
+
+  if (current.uvIndex >= thresholds.uvHigh) {
+    candidateAlerts.push({
+      alertType: 'HIGH UV',
+      severity: 'HIGH',
+      title: 'EXTREME UV RADIATION ALERT',
+      message: `Solar UV radiation index at ${current.uvIndex.toFixed(1)} (Extreme). Mandate broad-brim hard hat shades and sunscreen.`,
+      triggerCondition: `UV index >= ${thresholds.uvHigh}`,
+      observedValue: current.uvIndex.toFixed(1),
+      thresholdValue: `${thresholds.uvHigh}`,
+      startTime: current.timestamp,
+      expectedDuration: '2–3 hours'
+    });
+  }
+
+  return candidateAlerts;
+}
+
+/**
+ * Evaluates and persists alerts with deduplication, escalation and cooldown —
+ * matching `evaluateAndProcessAlerts` in the server alert engine.
+ */
+export function evaluateAndProcessAlerts(
+  locationId: string,
+  locationName: string,
+  current: CurrentWeather,
+  hourly: HourlyForecastItem[],
+  thresholds: RiskThresholds,
+  cooldownMinutes = 60
+): { newAlerts: AlertItem[]; clearedAlerts: AlertItem[] } {
+  const candidateAlerts = evaluateCandidateAlerts(current, hourly, thresholds);
+
+  const activeAlerts = store.getActiveAlerts(locationId);
+  const recentAlerts = store.getAlertHistory(20);
+  const nowMs = Date.now();
+  const cooldownMs = cooldownMinutes * 60 * 1000;
+
+  const newAlerts: AlertItem[] = [];
+  const candidateTypes = new Set(candidateAlerts.map((c) => c.alertType));
+
+  const clearedAlerts: AlertItem[] = [];
+  for (const active of activeAlerts) {
+    if (!candidateTypes.has(active.alertType)) {
+      store.updateAlertStatus(active.id, 'CLEARED');
+      clearedAlerts.push({ ...active, status: 'CLEARED', clearedAt: new Date().toISOString() });
+    }
+  }
+
+  for (const candidate of candidateAlerts) {
+    const existingActive = activeAlerts.find((a) => a.alertType === candidate.alertType);
+
+    if (existingActive) {
+      const isEscalation =
+        (existingActive.severity === 'MODERATE' && (candidate.severity === 'HIGH' || candidate.severity === 'CRITICAL')) ||
+        (existingActive.severity === 'HIGH' && candidate.severity === 'CRITICAL');
+
+      if (isEscalation) {
+        store.updateAlertStatus(existingActive.id, 'CLEARED');
+        newAlerts.push(
+          store.saveAlert({
+            locationId,
+            locationName,
+            alertType: candidate.alertType,
+            severity: candidate.severity,
+            title: candidate.title + ' [ESCALATION]',
+            message: candidate.message,
+            triggerCondition: candidate.triggerCondition,
+            observedValue: candidate.observedValue,
+            thresholdValue: candidate.thresholdValue,
+            startTime: candidate.startTime,
+            expectedDuration: candidate.expectedDuration,
+            status: 'ACTIVE'
+          })
+        );
+      }
+      continue;
+    }
+
+    const lastMatching = recentAlerts.find((a) => a.alertType === candidate.alertType);
+    if (lastMatching) {
+      const timeSinceLast = nowMs - new Date(lastMatching.createdAt).getTime();
+      if (timeSinceLast < cooldownMs && candidate.severity !== 'CRITICAL') {
+        continue;
+      }
+    }
+
+    newAlerts.push(
+      store.saveAlert({
+        locationId,
+        locationName,
+        alertType: candidate.alertType,
+        severity: candidate.severity,
+        title: candidate.title,
+        message: candidate.message,
+        triggerCondition: candidate.triggerCondition,
+        observedValue: candidate.observedValue,
+        thresholdValue: candidate.thresholdValue,
+        startTime: candidate.startTime,
+        expectedDuration: candidate.expectedDuration,
+        status: 'ACTIVE'
+      })
+    );
+  }
+
+  return { newAlerts, clearedAlerts };
+}

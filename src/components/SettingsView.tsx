@@ -25,6 +25,8 @@ import {
 import { OwnerSettings, RiskThresholds, SecretsStatus, SessionInfo } from '../types';
 import { useToast } from './ToastProvider';
 import { apiFetch } from '../utils/api';
+import { STATIC_MODE } from '../static/mode';
+import { requestNotificationPermission } from '../static/notifications';
 
 interface SettingsViewProps {
   onSettingsSaved?: () => void;
@@ -99,6 +101,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushConfigured, setPushConfigured] = useState(false);
+
+  // Native browser notification permission (the static build's alert channel).
+  const [notifPermission, setNotifPermission] = useState<string>(() =>
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
+  );
 
   // Active session (device) management state
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -586,6 +593,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
     });
   };
 
+  // SMTP, storage/backup and account security are server concerns; the static
+  // browser build has no such backend, so those tabs are omitted there.
+  const serverOnlyTabs = new Set(['smtp', 'storage', 'security']);
   const tabs = [
     { id: 'general', label: 'General & Units', icon: Sliders },
     { id: 'thresholds', label: 'Safety Thresholds', icon: Shield },
@@ -593,7 +603,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
     { id: 'smtp', label: 'Email Gateway', icon: Mail },
     { id: 'storage', label: 'Storage & Backup', icon: Database },
     { id: 'security', label: 'Security & Auth', icon: Lock }
-  ];
+  ].filter((tab) => !STATIC_MODE || !serverOnlyTabs.has(tab.id));
 
   return (
     <div className="space-y-6 pb-20">
@@ -931,17 +941,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
             </div>
 
             <div className="pt-3 border-t border-slate-800 space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.emailAlertsEnabled}
-                  onChange={(e) => setSettings({ ...settings, emailAlertsEnabled: e.target.checked })}
-                  className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-amber-500"
-                />
-                <span className="text-xs font-mono text-slate-200">
-                  Enable Automated Email Dispatches when Thresholds are Breached
-                </span>
-              </label>
+              {!STATIC_MODE && (
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.emailAlertsEnabled}
+                    onChange={(e) => setSettings({ ...settings, emailAlertsEnabled: e.target.checked })}
+                    className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-amber-500"
+                  />
+                  <span className="text-xs font-mono text-slate-200">
+                    Enable Automated Email Dispatches when Thresholds are Breached
+                  </span>
+                </label>
+              )}
 
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -956,6 +968,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
               </label>
             </div>
           </div>
+
+          {/* Native notification opt-in (static build only — no mail/push backend) */}
+          {STATIC_MODE && (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+              <h4 className="text-xs font-mono font-bold uppercase text-slate-300 border-b border-slate-800 pb-3">
+                BROWSER ALERTS
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                The static build raises safety alerts as native browser notifications while this page is open.
+                Notification delivery only works while the app is running in a tab.
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  const granted = await requestNotificationPermission();
+                  setNotifPermission(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
+                  if (granted) toast.success('Browser alerts enabled.');
+                  else toast.error('Notification permission was not granted.');
+                }}
+                disabled={notifPermission === 'granted' || notifPermission === 'unsupported'}
+                className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed text-slate-950 font-bold text-xs transition-all"
+              >
+                {notifPermission === 'granted'
+                  ? 'Browser alerts enabled'
+                  : notifPermission === 'unsupported'
+                    ? 'Notifications not supported'
+                    : notifPermission === 'denied'
+                      ? 'Blocked — allow notifications in site settings'
+                      : 'Enable browser alerts'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

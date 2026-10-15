@@ -14,6 +14,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { SystemHealth } from '../types';
+import { STATIC_MODE } from '../static/mode';
 
 interface SystemHealthViewProps {
   health: any;
@@ -50,7 +51,26 @@ export const SystemHealthView: React.FC<SystemHealthViewProps> = ({
     }
   };
 
-  const handleDownloadBackup = () => {
+  const handleDownloadBackup = async () => {
+    // The server build streams a SQLite file; the static build exports the
+    // browser-stored state as JSON instead.
+    if (STATIC_MODE) {
+      try {
+        const { store } = await import('../static/store');
+        const blob = new Blob([JSON.stringify(store.exportState(), null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `weather-monitor-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setActionMessage('Local backup exported.');
+        setTimeout(() => setActionMessage(null), 4000);
+      } catch {
+        setActionMessage('Failed to export local data.');
+      }
+      return;
+    }
     window.location.href = '/api/data/backup';
   };
 
@@ -260,7 +280,7 @@ export const SystemHealthView: React.FC<SystemHealthViewProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono font-bold text-slate-200 border border-slate-700 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Download SQLite Backup</span>
+            <span>{STATIC_MODE ? 'Export Local Backup (JSON)' : 'Download SQLite Backup'}</span>
           </button>
 
           <button

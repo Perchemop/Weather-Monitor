@@ -20,6 +20,7 @@ import {
   Eye
 } from 'lucide-react';
 import { LocationItem, UserRole } from '../types';
+import { STATIC_MODE } from '../static/mode';
 
 interface NavbarProps {
   currentLocation: LocationItem | null;
@@ -80,7 +81,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'reports', label: 'Reports', icon: FileText, visible: true },
     { id: 'system', label: 'Health', icon: Layers, visible: canOperate },
     { id: 'settings', label: 'Settings', icon: Settings, visible: isOwner },
-    { id: 'users', label: 'Users', icon: Users, visible: isOwner }
+    // User/account management only applies to the server build.
+    { id: 'users', label: 'Users', icon: Users, visible: isOwner && !STATIC_MODE }
   ];
   const navItems = allNavItems.filter((item) => item.visible);
 
@@ -180,8 +182,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Lock / Logout Button */}
-          {onLogout && (
+          {/* Lock / Logout Button (server build only — the static build has no auth) */}
+          {onLogout && !STATIC_MODE && (
             <button
               type="button"
               id="logout-btn"
