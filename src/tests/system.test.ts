@@ -11,8 +11,19 @@ import { CurrentWeather, HourlyForecastItem, RiskThresholds } from '../types.js'
 import { generateAiWeatherBriefing } from '../services/aiWeatherService.js';
 import { convertTemperature, convertWind, formatTemperature, formatWind } from '../utils/units.js';
 import { createDatabaseBackup, getDatabaseBackupsList, hashPasswordWithSalt } from '../database/db.js';
+import {
+  createUserAccount,
+  verifyUserCredentials,
+  getAllUsers,
+  getUserById,
+  updateUserRole,
+  deleteUserAccount,
+  setUserActive,
+  countActiveOwners
+} from '../database/db.js';
 import { createRateLimiter, defaultKeyGenerator } from '../utils/rateLimiter.js';
 import { securityHeaders } from '../utils/securityHeaders.js';
+import { hasMinimumRole, canOperate, canAdminister } from '../utils/roles.js';
 
 const mockThresholds: RiskThresholds = {
   windWarning: 38,
@@ -306,6 +317,87 @@ async function runTests() {
     securityHeaders({ enableHsts: true })({} as any, res, () => {});
     assert.ok(headers['Strict-Transport-Security']?.includes('max-age=31536000'));
   });
+
+  // 9. Access Control Role Helpers
+  test('Access Control: Role hierarchy ranks privileges correctly', () => {
+    assert.ok(hasMinimumRole('OWNER', 'VIEWER'));
+    assert.ok(hasMinimumRole('OWNER', 'MANAGER'));
+    assert.ok(hasMinimumRole('OWNER', 'OWNER'));
+    assert.ok(hasMinimumRole('MANAGER', 'MANAGER'));
+    assert.ok(hasMinimumRole('VIEWER', 'VIEWER'));
+    assert.ok(!hasMinimumRole('VIEWER', 'MANAGER'));
+    assert.ok(!hasMinimumRole('MANAGER', 'OWNER'));
+  });
+
+  test('Access Control: Capability gates match role semantics', () => {
+    assert.ok(canOperate('OWNER') && canOperate('MANAGER'));
+    assert.ok(!canOperate('VIEWER'));
+    assert.ok(canAdminister('OWNER'));
+    assert.ok(!canAdminister('MANAGER'));
+    assert.ok(!canAdminister('VIEWER'));
+  });
+
+  // 10. Multi-User Account Lifecycle (uses local SQLite)
+  await (async () => {
+    const email = `test-viewer-${Date.now()}@site.local`;
+    let createdId: string | null = null;
+    try {
+      const created = await createUserAccount({
+        email,
+        password: 'ViewerPass123',
+        role: 'VIEWER',
+        displayName: 'Test Viewer'
+      });
+      createdId = created.id;
+      assert.equal(created.role, 'VIEWER');
+
+      // Password verification succeeds with the correct password...
+      const good = await verifyUserCredentials('ViewerPass123', email);
+      assert.ok(good.valid && good.user?.role === 'VIEWER', 'Correct credentials must verify');
+      // ...and fails with the wrong password.
+      const bad = await verifyUserCredentials('WrongPassword', email);
+      assert.ok(!bad.valid, 'Incorrect password must be rejected');
+
+      // Role promotion persists.
+      assert.ok(await updateUserRole(created.id, 'MANAGER'));
+      const promoted = await getUserById(created.id);
+      assert.equal(promoted?.role, 'MANAGER');
+
+      // Deactivation persists.
+      assert.ok(await setUserActive(created.id, false));
+      const deactivated = await getUserById(created.id);
+      assert.equal(deactivated?.active, false);
+
+      console.log(`  [PASS] Multi-User Lifecycle: created, verified, promoted and disabled ${email}`);
+      passed++;
+    } catch (err: any) {
+      console.error('  [FAIL] Multi-User Lifecycle:', err.message);
+      failed++;
+    } finally {
+      if (createdId) await deleteUserAccount(createdId);
+    }
+  })();
+
+  await (async () => {
+    try {
+      const users = await getAllUsers();
+      const owners = users.filter((u) => u.role === 'OWNER' && u.active);
+      const ownerCount = await countActiveOwners();
+      assert.equal(ownerCount, owners.length, 'countActiveOwners must match the roster');
+
+      if (ownerCount === 1 && owners[0]) {
+        const soleOwner = owners[0];
+        assert.equal(await updateUserRole(soleOwner.id, 'VIEWER'), false, 'Last owner cannot be demoted');
+        assert.equal(await setUserActive(soleOwner.id, false), false, 'Last owner cannot be deactivated');
+        assert.equal(await deleteUserAccount(soleOwner.id), false, 'Last owner cannot be deleted');
+      }
+      console.log(`  [PASS] Multi-User Guardrails: last-owner protections enforced (owners=${ownerCount})`);
+      passed++;
+    } catch (err: any) {
+      console.error('  [FAIL] Multi-User Guardrails:', err.message);
+      failed++;
+    }
+  })();
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {
