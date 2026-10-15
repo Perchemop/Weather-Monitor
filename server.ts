@@ -59,6 +59,7 @@ import {
   deleteSessionsForUser,
   loadActiveSessions,
   pruneExpiredSessions,
+  touchSession,
   // Web push
   countPushSubscriptions
 } from './src/database/db.js';
@@ -111,15 +112,32 @@ interface SessionEntry {
   displayName?: string;
   createdAt: string;
   expiresAt: number;
+  userAgent?: string;
+  ip?: string;
+  lastSeenAt: number;
 }
 const activeSessions = new Map<string, SessionEntry>();
+
+// How long a session may go before its "last seen" timestamp is flushed to
+// SQLite. Keeps the per-request cost to a best-effort write every minute.
+const SESSION_TOUCH_INTERVAL_MS = 60 * 1000;
+
+// A non-reversible public identifier for a session token. The raw token is the
+// bearer credential and must never be exposed to the client; this digest lets
+// the UI reference (and revoke) a session without revealing it.
+function sessionPublicId(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 // Augments the Express request with the resolved session for downstream handlers.
 interface AuthedRequest extends Request {
   session?: SessionEntry;
 }
 
-function createSession(user: UserAccount): string {
+function createSession(
+  user: UserAccount,
+  meta: { userAgent?: string; ip?: string } = {}
+): string {
   const token = crypto.randomBytes(32).toString('hex');
   const entry: SessionEntry = {
     userId: user.id,
@@ -127,7 +145,10 @@ function createSession(user: UserAccount): string {
     role: user.role,
     displayName: user.displayName,
     createdAt: new Date().toISOString(),
-    expiresAt: Date.now() + SESSION_TTL_MS
+    expiresAt: Date.now() + SESSION_TTL_MS,
+    userAgent: meta.userAgent,
+    ip: meta.ip,
+    lastSeenAt: Date.now()
   };
   activeSessions.set(token, entry);
   // Write-through persistence (best-effort; a failure must not block login).
@@ -135,6 +156,16 @@ function createSession(user: UserAccount): string {
     logger.warn('session_persist_failed', { error: String(err) })
   );
   return token;
+}
+
+// Extracts display metadata for the connecting device, used by the active
+// sessions view. Best-effort and truncated to keep stored values bounded.
+function extractClientMeta(req: Request): { userAgent?: string; ip?: string } {
+  const ua = req.headers['user-agent'];
+  return {
+    userAgent: typeof ua === 'string' ? ua.slice(0, 400) : undefined,
+    ip: req.ip
+  };
 }
 
 function extractSessionToken(req: Request): string | undefined {
@@ -157,6 +188,12 @@ function getSession(token?: string): SessionEntry | undefined {
     activeSessions.delete(token);
     deleteSession(token).catch(() => {});
     return undefined;
+  }
+  // Record activity at most once per interval to avoid a write on every request.
+  const now = Date.now();
+  if (now - entry.lastSeenAt > SESSION_TOUCH_INTERVAL_MS) {
+    entry.lastSeenAt = now;
+    touchSession(token, now).catch(() => {});
   }
   return entry;
 }
@@ -342,7 +379,10 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         role: s.role,
         displayName: s.displayName,
         createdAt: s.createdAt,
-        expiresAt: s.expiresAt
+        expiresAt: s.expiresAt,
+        userAgent: s.userAgent,
+        ip: s.ip,
+        lastSeenAt: s.lastSeenAt ?? Date.parse(s.createdAt)
       });
     }
     logger.info('sessions_restored', { count: stored.length });
@@ -419,7 +459,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         updatedAt: new Date().toISOString()
       };
 
-    const token = createSession(sessionUser);
+    const token = createSession(sessionUser, extractClientMeta(req));
     res.cookie('cwm_session', token, {
       httpOnly: true,
       sameSite: 'lax',
@@ -474,7 +514,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     }
 
     clearLoginFailures(lockKey);
-    const token = createSession(user);
+    const token = createSession(user, extractClientMeta(req));
     res.cookie('cwm_session', token, {
       httpOnly: true,
       sameSite: 'lax',
@@ -515,6 +555,63 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.clearCookie('cwm_csrf');
     await addAuditLog('AUTH_LOGOUT_ALL', `All sessions revoked for ${session.email}`);
     res.json({ success: true, message: 'All sessions have been revoked.' });
+  });
+
+  // Lists the caller's own active sessions/devices for review. Tokens are
+  // represented by a non-reversible digest so the credential never leaves the
+  // server, even to its owner.
+  app.get('/api/auth/sessions', requireAuth, (req: Request, res: Response) => {
+    const session = (req as AuthedRequest).session!;
+    const currentToken = extractSessionToken(req);
+    const sessions = [];
+    for (const [token, entry] of activeSessions) {
+      if (entry.userId !== session.userId) continue;
+      sessions.push({
+        id: sessionPublicId(token),
+        current: token === currentToken,
+        userAgent: entry.userAgent || null,
+        ip: entry.ip || null,
+        createdAt: entry.createdAt,
+        lastSeenAt: new Date(entry.lastSeenAt).toISOString(),
+        expiresAt: new Date(entry.expiresAt).toISOString()
+      });
+    }
+    // Current session first, then most-recently active.
+    sessions.sort((a, b) => {
+      if (a.current !== b.current) return a.current ? -1 : 1;
+      return Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt);
+    });
+    res.json({ sessions });
+  });
+
+  // Revokes a single session belonging to the caller, identified by its public
+  // digest. Sessions belonging to other users can never be targeted.
+  app.delete('/api/auth/sessions/:id', requireAuth, async (req: Request, res: Response) => {
+    const session = (req as AuthedRequest).session!;
+    const targetId = req.params.id;
+    const currentToken = extractSessionToken(req);
+
+    let targetToken: string | undefined;
+    for (const [token, entry] of activeSessions) {
+      if (entry.userId === session.userId && sessionPublicId(token) === targetId) {
+        targetToken = token;
+        break;
+      }
+    }
+    if (!targetToken) {
+      res.status(404).json({ error: 'Session not found.' });
+      return;
+    }
+
+    activeSessions.delete(targetToken);
+    await deleteSession(targetToken).catch(() => {});
+    const wasCurrent = targetToken === currentToken;
+    if (wasCurrent) {
+      res.clearCookie('cwm_session');
+      res.clearCookie('cwm_csrf');
+    }
+    await addAuditLog('AUTH_SESSION_REVOKED', `Session revoked for ${session.email}`);
+    res.json({ success: true, revokedCurrent: wasCurrent });
   });
 
   app.post('/api/auth/change-password', requireAuth, async (req: Request, res: Response) => {
