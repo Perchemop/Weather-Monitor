@@ -61,7 +61,15 @@ import {
   pruneExpiredSessions,
   touchSession,
   // Web push
-  countPushSubscriptions
+  countPushSubscriptions,
+  // Metrics aggregates
+  countObservations,
+  countAlertDeliveries,
+  countMonitorRunsByStatus,
+  countUsers,
+  // Per-user push preferences
+  getPushPreferences,
+  savePushPreferences
 } from './src/database/db.js';
 import { DEFAULT_THRESHOLDS } from './src/services/riskEngine.js';
 import { searchGeocodingLocations } from './src/services/weatherService.js';
@@ -411,6 +419,114 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   // load balancers can probe the process without credentials.
   app.get('/healthz', (_req: Request, res: Response) => {
     res.json({ status: 'ok', uptimeSeconds: Math.floor(process.uptime()) });
+  });
+
+  // ----------------- METRICS (PROMETHEUS) -----------------
+  // Operational metrics in the Prometheus text exposition format. Scrapers may
+  // authenticate with a shared bearer token (`METRICS_TOKEN`); otherwise the
+  // caller must hold a valid session so metrics are never exposed by default.
+  app.get('/metrics', async (req: Request, res: Response) => {
+    const metricsToken = process.env.METRICS_TOKEN;
+    const authHeader = req.headers.authorization || '';
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    const queryToken = typeof req.query.token === 'string' ? req.query.token : '';
+    const tokenOk = Boolean(metricsToken) && (bearer === metricsToken || queryToken === metricsToken);
+
+    if (!tokenOk && !getSession(extractSessionToken(req))) {
+      res.status(401).json({ error: 'Authentication required.' });
+      return;
+    }
+
+    try {
+      const monitor = monitoringService.getStatus();
+      const smtpConfigured = await isSmtpConfigured();
+      const [
+        locations,
+        activeAlerts,
+        deliveries,
+        sessions,
+        users,
+        observations,
+        runsByStatus,
+        pushSubscriptions,
+        settings
+      ] = await Promise.all([
+        getAllLocations(),
+        getActiveAlerts(),
+        countAlertDeliveries(),
+        loadActiveSessions(),
+        countUsers(),
+        countObservations(),
+        countMonitorRunsByStatus(),
+        countPushSubscriptions(),
+        getOwnerSettings()
+      ]);
+
+      const mem = process.memoryUsage();
+      const lastCheckSeconds = monitor.lastCheckTime
+        ? Math.floor(new Date(monitor.lastCheckTime).getTime() / 1000)
+        : 0;
+      const weatherApiConfigured = Boolean(process.env.WEATHER_API_KEY) && !LOCAL_ONLY;
+
+      const lines: string[] = [];
+      const gauge = (name: string, help: string, value: number | string) => {
+        lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} gauge`, `${name} ${value}`);
+      };
+      const counter = (name: string, help: string) => {
+        lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} counter`);
+      };
+
+      gauge('cwm_uptime_seconds', 'Process uptime in seconds.', Math.floor(process.uptime()));
+      gauge('cwm_memory_rss_bytes', 'Resident set size in bytes.', mem.rss);
+      gauge('cwm_memory_heap_used_bytes', 'V8 heap used in bytes.', mem.heapUsed);
+      gauge('cwm_monitor_running', '1 when the monitoring loop is running, else 0.', monitor.isRunning ? 1 : 0);
+      gauge(
+        'cwm_monitor_consecutive_failures',
+        'Consecutive failed monitoring cycles.',
+        monitor.consecutiveFailures
+      );
+      gauge(
+        'cwm_monitor_last_check_timestamp_seconds',
+        'Unix timestamp of the last completed monitoring cycle (0 if never).',
+        lastCheckSeconds
+      );
+      gauge('cwm_locations_total', 'Configured monitoring locations.', locations.length);
+      gauge('cwm_observations_total', 'Stored weather observations.', observations);
+      gauge('cwm_active_alerts', 'Currently active alerts.', activeAlerts.length);
+      gauge('cwm_sessions_active', 'Active login sessions.', sessions.length);
+      gauge('cwm_users_total', 'User accounts.', users);
+      gauge('cwm_push_subscriptions_total', 'Stored Web Push subscriptions.', pushSubscriptions);
+      gauge(
+        'cwm_weather_api_configured',
+        '1 when a primary WeatherAPI key is configured, else 0.',
+        weatherApiConfigured ? 1 : 0
+      );
+      gauge('cwm_smtp_configured', '1 when SMTP delivery is configured, else 0.', smtpConfigured ? 1 : 0);
+      gauge(
+        'cwm_settings_monitor_interval_minutes',
+        'Configured monitoring interval in minutes.',
+        settings.monitorIntervalMinutes
+      );
+      gauge(
+        'cwm_settings_data_retention_days',
+        'Configured data retention window in days.',
+        settings.dataRetentionDays
+      );
+
+      counter('cwm_alert_deliveries_total', 'Total alert delivery records.');
+      lines.push(`cwm_alert_deliveries_total ${deliveries}`);
+
+      counter('cwm_monitor_runs_total', 'Completed monitoring cycles by outcome.');
+      for (const status of ['SUCCESS', 'FAILED', 'RUNNING']) {
+        lines.push(`cwm_monitor_runs_total{status="${status}"} ${runsByStatus[status] || 0}`);
+      }
+
+      res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+      res.send(lines.join('\n') + '\n');
+    } catch (err) {
+      logger.error('metrics_failed', { error: String(err) });
+      res.status(500).send('# metrics collection failed\n');
+    }
   });
 
   // ----------------- AUTHENTICATION ROUTES -----------------
@@ -1390,6 +1506,38 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   app.get('/api/push/status', requireAuth, async (_req: Request, res: Response) => {
     const count = await countPushSubscriptions();
     res.json({ configured: isPushConfigured(), subscriptions: count });
+  });
+
+  // Per-user push notification preferences. Applies to every device the user
+  // has subscribed, letting them mute, set a severity floor, or opt out of
+  // recovery notifications without unsubscribing.
+  app.get('/api/push/preferences', requireAuth, async (req: Request, res: Response) => {
+    const session = (req as AuthedRequest).session!;
+    const preferences = await getPushPreferences(session.userId);
+    res.json({ preferences });
+  });
+
+  app.put('/api/push/preferences', requireAuth, async (req: Request, res: Response) => {
+    const session = (req as AuthedRequest).session!;
+    const { enabled, minSeverity, notifyRecovery } = req.body || {};
+
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      res.status(400).json({ error: '`enabled` must be a boolean.' });
+      return;
+    }
+    if (notifyRecovery !== undefined && typeof notifyRecovery !== 'boolean') {
+      res.status(400).json({ error: '`notifyRecovery` must be a boolean.' });
+      return;
+    }
+    const allowedSeverities = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
+    if (minSeverity !== undefined && !allowedSeverities.includes(minSeverity)) {
+      res.status(400).json({ error: '`minSeverity` must be one of LOW, MODERATE, HIGH, CRITICAL.' });
+      return;
+    }
+
+    const preferences = await savePushPreferences(session.userId, { enabled, minSeverity, notifyRecovery });
+    await addAuditLog('PUSH_PREFERENCES_UPDATED', `Push preferences updated for ${session.email}`);
+    res.json({ success: true, preferences });
   });
 
   app.post('/api/push/subscribe', requireAuth, async (req: Request, res: Response) => {

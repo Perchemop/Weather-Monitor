@@ -107,6 +107,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
   );
 
+  // Per-user push delivery preferences (server build).
+  const [pushPrefs, setPushPrefs] = useState<{
+    enabled: boolean;
+    minSeverity: string;
+    notifyRecovery: boolean;
+  } | null>(null);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+
   // Active session (device) management state
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [sessionsBusy, setSessionsBusy] = useState(false);
@@ -117,6 +125,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
     fetchBackups();
     fetchMfaStatus();
     detectPushState();
+    fetchPushPreferences();
     fetchSessions();
   }, []);
   const fetchSettings = async () => {
@@ -343,6 +352,51 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
         const sub = await reg.pushManager.getSubscription();
         setPushSubscribed(Boolean(sub));
       } catch {}
+    }
+  };
+
+  // ---- Per-user push preferences ----
+  const fetchPushPreferences = async () => {
+    try {
+      const res = await apiFetch('/api/push/preferences');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.preferences) {
+          setPushPrefs({
+            enabled: Boolean(data.preferences.enabled),
+            minSeverity: data.preferences.minSeverity || 'LOW',
+            notifyRecovery: Boolean(data.preferences.notifyRecovery)
+          });
+        }
+      }
+    } catch {}
+  };
+
+  const handleSavePushPreferences = async (next: {
+    enabled: boolean;
+    minSeverity: string;
+    notifyRecovery: boolean;
+  }) => {
+    const previous = pushPrefs;
+    setPushPrefs(next);
+    setPrefsSaving(true);
+    try {
+      const res = await apiFetch('/api/push/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next)
+      });
+      if (res.ok) {
+        toast.success('Notification preferences saved.');
+      } else {
+        setPushPrefs(previous);
+        toast.error('Failed to save notification preferences.');
+      }
+    } catch {
+      setPushPrefs(previous);
+      toast.error('Failed to save notification preferences.');
+    } finally {
+      setPrefsSaving(false);
     }
   };
 
@@ -1485,6 +1539,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
                     </button>
                   </>
                 )}
+              </div>
+            )}
+
+            {/* Per-user delivery preferences (apply to every subscribed device). */}
+            {pushConfigured && pushPrefs && (
+              <div className="pt-3 border-t border-slate-800 space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pushPrefs.enabled}
+                    disabled={prefsSaving}
+                    onChange={(e) => handleSavePushPreferences({ ...pushPrefs, enabled: e.target.checked })}
+                    className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-cyan-500 focus:ring-cyan-500"
+                  />
+                  <span className="text-xs font-mono text-slate-200">
+                    Receive push alerts on my devices
+                  </span>
+                </label>
+
+                <label className="flex items-center justify-between gap-3 text-xs font-mono text-slate-300">
+                  <span>Minimum alert severity</span>
+                  <select
+                    value={pushPrefs.minSeverity}
+                    disabled={prefsSaving || !pushPrefs.enabled}
+                    onChange={(e) => handleSavePushPreferences({ ...pushPrefs, minSeverity: e.target.value })}
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono disabled:opacity-50"
+                  >
+                    <option value="LOW">All alerts (Low and above)</option>
+                    <option value="MODERATE">Moderate and above</option>
+                    <option value="HIGH">High and above</option>
+                    <option value="CRITICAL">Critical only</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pushPrefs.notifyRecovery}
+                    disabled={prefsSaving || !pushPrefs.enabled}
+                    onChange={(e) => handleSavePushPreferences({ ...pushPrefs, notifyRecovery: e.target.checked })}
+                    className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-cyan-500 focus:ring-cyan-500"
+                  />
+                  <span className="text-xs font-mono text-slate-200">
+                    Notify me when conditions return to safe limits
+                  </span>
+                </label>
               </div>
             )}
           </div>

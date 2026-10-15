@@ -40,6 +40,9 @@ import {
   getPushSubscriptions,
   countPushSubscriptions,
   deletePushSubscription,
+  getPushPreferences,
+  savePushPreferences,
+  getAllPushPreferences,
   enforceDataRetention,
   SNAPSHOT_RETENTION_DAYS,
   ALERT_RETENTION_DAYS,
@@ -568,6 +571,44 @@ async function runTests() {
       console.error('  [FAIL] Web Push:', err.message);
       failed++;
       await deletePushSubscription(endpoint).catch(() => {});
+    }
+  })();
+
+  // 16b. Per-user push preferences
+  await (async () => {
+    const userId = `pref-user-${Date.now()}`;
+    try {
+      const defaults = await getPushPreferences(userId);
+      assert.equal(defaults.enabled, true, 'Defaults enable notifications');
+      assert.equal(defaults.minSeverity, 'LOW', 'Defaults deliver all severities');
+      assert.equal(defaults.notifyRecovery, true, 'Defaults include recovery notifications');
+
+      const saved = await savePushPreferences(userId, {
+        enabled: false,
+        minSeverity: 'HIGH',
+        notifyRecovery: false
+      });
+      assert.equal(saved.minSeverity, 'HIGH');
+      assert.ok(saved.updatedAt, 'updatedAt must be stamped');
+
+      const reread = await getPushPreferences(userId);
+      assert.equal(reread.enabled, false);
+      assert.equal(reread.minSeverity, 'HIGH');
+      assert.equal(reread.notifyRecovery, false);
+
+      const all = await getAllPushPreferences();
+      assert.equal(all.get(userId)?.minSeverity, 'HIGH', 'Preference must appear in the aggregate map');
+
+      // Partial update preserves untouched fields.
+      const partial = await savePushPreferences(userId, { notifyRecovery: true });
+      assert.equal(partial.enabled, false, 'Unspecified fields are preserved');
+      assert.equal(partial.notifyRecovery, true);
+
+      console.log('  [PASS] Push Preferences: defaults, upsert, partial update and aggregation');
+      passed++;
+    } catch (err: any) {
+      console.error('  [FAIL] Push Preferences:', err.message);
+      failed++;
     }
   })();
 
