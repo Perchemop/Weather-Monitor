@@ -75,6 +75,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   // Tabs are gated by role: everyone monitors, only owners configure.
   const allNavItems = [
     { id: 'dashboard', label: 'Monitor', icon: Activity, visible: true },
+    { id: 'activity', label: 'Activities', icon: HardHat, visible: true },
     { id: 'forecast', label: 'Forecast', icon: Calendar, visible: true },
     { id: 'alerts', label: 'Alerts', icon: ShieldAlert, visible: true },
     { id: 'history', label: 'History', icon: Clock, visible: true },
