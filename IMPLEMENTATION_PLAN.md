@@ -210,3 +210,22 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
     labels, IP, last-active time, a per-device Revoke action, and a guarded
     "Sign Out All" (reuses the existing confirmation modal).
 
+### Phase 9 — Serverless Pages, Observability & Delivery ✅
+- **Step 9.1: Static / serverless build (GitHub Pages)**
+  - `VITE_APP_MODE=static` selects a client-side backend (`src/static/*`): an
+    IndexedDB store mirroring `db.ts`, the shared deterministic risk/alert engine,
+    an Open-Meteo fetcher, a browser notification channel, and a `window.fetch`
+    interceptor that serves the existing `/api/*` contract. `npm run build:static`
+    emits `dist-static/`; `VITE_BASE` sets the project base path. Server-only UI
+    (users, MFA, SMTP, storage, security) is hidden and degrades gracefully.
+- **Step 9.2: Prometheus metrics**
+  - `GET /metrics` exposes gauge/counter families (uptime, memory, monitor state,
+    aggregate counts, runs by status) in the text exposition format. Access is
+    session-gated by default, or via a shared `METRICS_TOKEN` bearer for scrapers.
+- **Step 9.3: Per-user push preferences** (migration `010_push_preferences`)
+  - A per-user `push_preferences` row (master switch, minimum severity, recovery
+    opt-in) filters `sendPushToAll`; the API is `GET`/`PUT /api/push/preferences`.
+- **Step 9.4: Legacy `auth_owner` retirement** (migration `011_drop_legacy_auth_owner`)
+  - Credentials are preserved into `users` if still needed, then the redundant
+    single-owner table is dropped; owner bootstrap/setup now use `users` directly.
+
