@@ -3,6 +3,7 @@
  * Tests deterministic risk engine, secret protection, timezone compliance,
  * data freshness, and AI isolation.
  */
+import './setup.js';
 import assert from 'node:assert/strict';
 import { calculateDeterministicRisk, SAFETY_DISCLAIMER } from '../services/riskEngine.js';
 import { redactSecretsInError, maskSecret } from '../utils/security.js';

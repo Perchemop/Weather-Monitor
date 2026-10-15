@@ -118,7 +118,7 @@ LOCAL_ONLY=false
 - **Security Headers**: Every response carries a strict `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, cross-origin isolation headers, and a restrictive `Permissions-Policy`. `X-Powered-By` fingerprinting is removed. HSTS is opt-in via `ENABLE_HSTS=true`.
 - **Cookie-only Sessions**: The session lives solely in an `HttpOnly` cookie — no token is ever written to `localStorage`, so script injection cannot exfiltrate it. Set `SECURE_COOKIES=true` when serving over HTTPS.
 - **CSRF Protection**: Cookie-authenticated state changes must echo the readable `cwm_csrf` cookie in the `x-csrf-token` header (double-submit pattern). Token-header clients are exempt.
-- **Rate Limiting**: Authentication endpoints (`/api/auth/login`, `/api/auth/setup`) are limited to 10 attempts per 15 minutes per client IP, the broader `/api` surface to 300 requests per minute, and the cost-bearing `/api/ai/*` endpoints to 20 requests per minute. Limited responses return HTTP `429` with `RateLimit-*` headers.
+- **Rate Limiting**: Authentication endpoints (`/api/auth/login`, `/api/auth/setup`) are limited to 10 attempts per 15 minutes per client IP, the broader `/api` surface to 300 requests per minute, and the cost-bearing `/api/ai/*` endpoints to 20 requests per minute. All three limits are tunable via `AUTH_RATE_LIMIT_MAX`, `API_RATE_LIMIT_MAX`, and `AI_RATE_LIMIT_MAX`. Limited responses return HTTP `429` with `RateLimit-*` headers.
 - **Account Lockout**: After `LOGIN_MAX_ATTEMPTS` failed attempts, an account is locked for `LOGIN_LOCKOUT_MINUTES` minutes.
 - **Password Policy**: Passwords must meet `PASSWORD_MIN_LENGTH` (default 10) and contain a letter and a number.
 - **Two-Factor Authentication**: Optional RFC 6238 TOTP for any account, verifiable with Google Authenticator, Authy, or 1Password.
@@ -183,16 +183,28 @@ npm run dev
 ```
 The server will start on port 3000 (`http://localhost:3000`).
 
-### Running the System Test Suite
+### Running the Test Suites
 ```bash
-npm test
+npm test              # both suites
+npm run test:unit     # deterministic engine + utilities (33 checks)
+npm run test:api      # HTTP integration surface (19 checks)
 ```
-Executes the automated **33-point** verification suite covering deterministic risk
-calculation, secret redaction, daylight savings timezone alignment, data freshness
-semantics, Scrypt password hashing, database snapshot backups, security headers,
-rate limiting, role hierarchy, the multi-user account lifecycle, password policy,
-TOTP two-factor authentication, persistent sessions, Web Push subscriptions, the
-TTL cache, and configurable data retention.
+The suite is now a **52-point** verification run split across two layers:
+
+- **Unit suite** — deterministic risk calculation, secret redaction, daylight
+  savings timezone alignment, data freshness, Scrypt hashing, snapshot backups,
+  security headers, rate limiting, role hierarchy, the multi-user lifecycle,
+  password policy, TOTP, persistent sessions, the TTL cache, and data retention.
+- **HTTP integration suite** — boots the real Express app in-process against an
+  isolated temporary data directory and exercises the security surface over
+  real HTTP: `/healthz`, account-enumeration resistance, cookie-only sessions,
+  CSRF double-submit enforcement, header-token CSRF exemption, per-account
+  lockout, the full TOTP login flow, RBAC 401/403 gates, settings validation,
+  the Web Push subscription lifecycle, traversal-safe backup restore, and
+  retention.
+
+Tests never touch your working `./data` directory — they run in a fresh temp
+directory via the `DATA_DIR` override.
 
 ### Building for Production
 ```bash

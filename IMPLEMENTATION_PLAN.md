@@ -170,3 +170,24 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
   - Repo standardised on npm (`package-lock.json`, `engines`, `.nvmrc`); package
     renamed from `react-example` to `construction-weather-monitor`.
 
+### Phase 7 — Test Depth & Testability ✅
+- **Step 7.1: Importable application**
+  - `server.ts` now exports `createApp(options)` (no port binding on import) and
+    `startServer()`; the process bootstrap moved to `server-entry.ts`, which the
+    production bundle targets. `createApp` accepts `staticMode` / `startMonitoring`
+    / `scheduleBackups` so tests run without pollers or a Vite dev server.
+- **Step 7.2: HTTP integration suite** (`src/tests/api.test.ts`, 19 checks)
+  - Boots the real app in-process on an ephemeral port and drives it over HTTP:
+    `/healthz`, account-enumeration resistance, cookie-only sessions, CSRF
+    double-submit (missing / wrong / correct header), header-token CSRF exemption,
+    per-account lockout, TOTP enrol→enable→login→disable, RBAC 401/403 gates,
+    settings validation, Web Push subscription lifecycle, traversal-safe backup
+    restore, and retention.
+- **Step 7.3: Isolation & tunability**
+  - `DATA_DIR` env override relocates the SQLite database, backups, and generated
+    secrets (used by tests via a shared `src/tests/setup.ts` bootstrap, so the
+    developer's real `./data` is never touched).
+  - Rate-limit caps are now env-configurable (`AUTH_RATE_LIMIT_MAX`,
+    `API_RATE_LIMIT_MAX`, `AI_RATE_LIMIT_MAX`).
+  - Test total: 33 unit + 19 integration = **52 checks**.
+

@@ -24,7 +24,11 @@ import { DEFAULT_THRESHOLDS } from '../services/riskEngine.js';
 import { generateSecureBootstrapPassword } from '../utils/security.js';
 
 let dbInstance: Database | null = null;
-const DB_DIR = path.join(process.cwd(), 'data');
+// DATA_DIR allows tests (and advanced deployments) to relocate the SQLite
+// database and its backups away from the default `./data` directory.
+const DB_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DB_DIR, 'weather-monitor.sqlite');
 
 export async function getDb(): Promise<Database> {
