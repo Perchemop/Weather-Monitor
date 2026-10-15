@@ -38,6 +38,7 @@ import { calculateDeterministicRisk } from './services/riskEngine';
 import { CrossReferenceCard } from './components/CrossReferenceCard';
 import { AiBriefingCard } from './components/AiBriefingCard';
 import { apiFetch } from './utils/api';
+import { STATIC_MODE } from './static/mode';
 import { ShieldCheck, Database, HardHat, CheckCircle2, ArrowRightLeft, WifiOff } from 'lucide-react';
 
 const FALLBACK_SITE: LocationItem = {
@@ -511,12 +512,13 @@ export default function App() {
                 <span>•</span>
                 <span className="flex items-center gap-1.5 text-slate-300">
                   <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
-                  Cross-Ref & Fallback: <strong className="text-cyan-300">Open-Meteo Ready</strong>
+                  Cross-Ref & Fallback:{' '}
+                  <strong className="text-cyan-300">{STATIC_MODE ? 'Single provider (Open-Meteo)' : 'Open-Meteo Ready'}</strong>
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1.5 text-slate-300">
                   <Database className="w-4 h-4 text-emerald-400" />
-                  DB: <strong className="text-emerald-300">SQLite Local</strong>
+                  DB: <strong className="text-emerald-300">{STATIC_MODE ? 'IndexedDB (Browser)' : 'SQLite Local'}</strong>
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1.5 text-slate-300">
@@ -594,10 +596,14 @@ export default function App() {
             <span>PRIVATE LOCAL SYSTEM</span>
           </div>
           <p className="text-slate-500">
-            Weather telemetry retrieved from WeatherAPI (primary reference) with Open-Meteo cross-reference and fallback.
+            {STATIC_MODE
+              ? 'Weather telemetry retrieved directly from the open Open-Meteo service in your browser.'
+              : 'Weather telemetry retrieved from WeatherAPI (primary reference) with Open-Meteo cross-reference and fallback.'}
           </p>
           <p className="text-slate-500">
-            Application data is stored locally in SQLite with automated backup rotation. No advertising, no analytics, no tracking.
+            {STATIC_MODE
+              ? 'Application data is stored locally in your browser (IndexedDB). No server, no advertising, no analytics, no tracking.'
+              : 'Application data is stored locally in SQLite with automated backup rotation. No advertising, no analytics, no tracking.'}
           </p>
           <div className="pt-2 text-[11px] text-slate-600">
             Construction Weather Monitor · Role-Based Secure Installation

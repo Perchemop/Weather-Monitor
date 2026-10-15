@@ -9,17 +9,22 @@
  *  - Mutations, auth, and backup endpoints are never cached or served stale.
  */
 
-const SW_VERSION = 'cwm-v2';
+const SW_VERSION = 'cwm-v3';
 const SHELL_CACHE = `${SW_VERSION}-shell`;
 const ASSET_CACHE = `${SW_VERSION}-assets`;
 const API_CACHE = `${SW_VERSION}-api`;
 
+// Derive the app base path from the worker's own location so the same worker
+// works when served from the site root ('/') or a project subpath
+// (e.g. GitHub Pages '/<repo>/').
+const BASE = new URL('./', self.location).pathname;
+
 const SHELL_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/icon.svg',
-  '/icon-maskable.svg'
+  BASE,
+  `${BASE}index.html`,
+  `${BASE}manifest.webmanifest`,
+  `${BASE}icon.svg`,
+  `${BASE}icon-maskable.svg`
 ];
 
 self.addEventListener('install', (event) => {
@@ -105,7 +110,7 @@ async function networkFirstNavigation(request) {
     return response;
   } catch (err) {
     const shell = await caches.open(SHELL_CACHE);
-    const cached = (await shell.match('/index.html')) || (await shell.match('/'));
+    const cached = (await shell.match(`${BASE}index.html`)) || (await shell.match(BASE));
     if (cached) return cached;
     return new Response('<h1>Offline</h1><p>The monitoring enclave is unreachable.</p>', {
       status: 503,
@@ -136,8 +141,8 @@ self.addEventListener('fetch', (event) => {
 
   // Same-origin static assets: JS/CSS bundles, icons, fonts, images.
   if (
-    pathname.startsWith('/assets/') ||
-    pathname === '/' ||
+    pathname.startsWith(`${BASE}assets/`) ||
+    pathname === BASE ||
     /\.(?:js|mjs|css|svg|png|jpg|jpeg|gif|webp|ico|woff2?|ttf|json|webmanifest)$/.test(pathname)
   ) {
     event.respondWith(cacheFirstAsset(request));
@@ -154,7 +159,7 @@ self.addEventListener('push', (event) => {
     title: 'Weather Monitor alert',
     body: 'A new safety condition requires attention.',
     tag: 'cwm-alert',
-    url: '/'
+    url: BASE
   };
 
   if (event.data) {
@@ -169,8 +174,8 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(payload.title, {
       body: payload.body,
       tag: payload.tag,
-      icon: '/icon.svg',
-      badge: '/icon.svg',
+      icon: `${BASE}icon.svg`,
+      badge: `${BASE}icon.svg`,
       data: { url: payload.url || '/' },
       requireInteraction: payload.severity === 'CRITICAL' || payload.severity === 'HIGH'
     })
@@ -180,7 +185,7 @@ self.addEventListener('push', (event) => {
 /** Focuses an existing tab (or opens one) when a notification is clicked. */
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+  const targetUrl = (event.notification.data && event.notification.data.url) || BASE;
 
   event.waitUntil(
     (async () => {

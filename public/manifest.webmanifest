@@ -2,8 +2,8 @@
   "name": "Construction Weather Monitor",
   "short_name": "Site Weather",
   "description": "Private, local-first construction microclimate risk monitoring and automated safety alerting.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#020617",
@@ -11,13 +11,13 @@
   "categories": ["weather", "productivity", "utilities"],
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icon-maskable.svg",
+      "src": "icon-maskable.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"
