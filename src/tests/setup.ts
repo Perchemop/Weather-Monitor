@@ -22,4 +22,3 @@ process.env.LOG_LEVEL ||= 'error';
 // (The per-account lockout path is exercised explicitly and is unaffected.)
 process.env.AUTH_RATE_LIMIT_MAX ||= '1000';
 process.env.API_RATE_LIMIT_MAX ||= '100000';
-process.env.AI_RATE_LIMIT_MAX ||= '1000';

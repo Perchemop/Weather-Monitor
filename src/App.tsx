@@ -36,7 +36,6 @@ import {
 import { fetchRealWeatherData } from './services/weatherService';
 import { calculateDeterministicRisk } from './services/riskEngine';
 import { CrossReferenceCard } from './components/CrossReferenceCard';
-import { AiBriefingCard } from './components/AiBriefingCard';
 import { apiFetch } from './utils/api';
 import { STATIC_MODE } from './static/mode';
 import { ShieldCheck, Database, HardHat, CheckCircle2, ArrowRightLeft, WifiOff } from 'lucide-react';
@@ -458,13 +457,6 @@ export default function App() {
               risk={riskAssessment}
               locationName={currentLocation ? currentLocation.name : 'Monitored Site'}
               isLoading={isDashboardLoading}
-            />
-
-            {/* AI Superintendent Weather Briefing */}
-            <AiBriefingCard
-              locationId={currentLocation?.id}
-              locationName={currentLocation ? currentLocation.name : 'Monitored Site'}
-              deterministicRiskLevel={riskAssessment?.level || 'LOW'}
             />
 
             {/* 2. Active Alerts Warning Box */}

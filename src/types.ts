@@ -166,10 +166,6 @@ export interface RiskAssessment {
   };
   safetyDisclaimer: string;
   calculatedAt: string;
-  // Supplementary AI commentary (strictly non-authoritative; CANNOT override deterministic level/score)
-  aiBriefing?: string;
-  aiExplanation?: string;
-  aiGeneratedAt?: string;
 }
 
 export type AlertType =
@@ -201,8 +197,6 @@ export interface AlertItem {
   status: 'ACTIVE' | 'CLEARED' | 'DISMISSED';
   createdAt: string;
   clearedAt?: string | null;
-  // Supplementary AI alert guidance (strictly advisory)
-  aiExplanation?: string;
 }
 
 export interface AlertDelivery {
@@ -301,44 +295,10 @@ export interface SchemaMigration {
   appliedAt: string;
 }
 
-export interface AiBriefingResponse {
-  briefing: string;
-  generatedAt: string;
-  source: 'GEMINI_AI' | 'DETERMINISTIC_RULES';
-  authoritativeRiskLevel?: RiskLevel;
-  disclaimer?: string;
-  modelUsed?: string;
-}
-
-export interface AiAlertExplanationResponse {
-  alertId: string;
-  title?: string;
-  explanation: string;
-  safetyRecommendations?: string[];
-  recommendedActions?: string[];
-  authoritativeSeverity?: AlertSeverity;
-  swmsReference?: string;
-  source: 'GEMINI_AI' | 'DETERMINISTIC_RULES';
-  modelUsed?: string;
-  generatedAt?: string;
-}
-
-export interface AiHistoricalSummaryResponse {
-  locationName: string;
-  timeframe: string;
-  summary: string;
-  peakGustObserved: string;
-  highestRiskLevel: RiskLevel;
-  source: 'GEMINI_AI' | 'DETERMINISTIC_RULES';
-  modelUsed?: string;
-  generatedAt: string;
-}
-
 export interface SecretsStatus {
   weatherApiKeyConfigured: boolean;
   weatherApiKeyMasked: string;
   smtpConfigured: boolean;
   smtpHost: string;
-  geminiKeyConfigured: boolean;
 }
 

@@ -8,7 +8,6 @@ Autonomous, local-first microclimate risk evaluation and automated safety alerti
 
 - **Deterministic Safety Engine (AS 2550.1)**: Rule-based calculations evaluate sustained winds, peak gusts, rainfall rate, lightning proximity, thermal stress, and solar UV against strict SWMS envelopes.
 - **Dual-Provider Atmospheric Cross-Reference**: Real-time concordance scoring comparing WeatherAPI (primary reference) with Open-Meteo (independent physical model).
-- **Resilient AI Superintendent Briefings**: Context-aware daily site briefings powered by Google Gemini (@google/genai) with automated multi-model failover (`gemini-3.8-flash` $\rightarrow$ `gemini-3.1-flash-lite` $\rightarrow$ `gemini-flash-latest`). Non-authoritative AI commentary can never downgrade deterministic risk scores.
 - **Private Local Enclave (SQLite / sql.js)**: Runs entirely on-premise or in private containers. Zero telemetry, zero analytics, zero external tracking.
 - **Role-Based Access Control**: Owner / Manager / Viewer roles with least-privilege route gating, per-account Scrypt credentials, and last-owner protections.
 - **Hardened Authentication**: Cookie-only sessions (no tokens in `localStorage`), CSRF double-submit protection, per-account login lockout, a configurable password policy, optional TOTP two-factor authentication for every account, and self-service **active session management** (review and revoke individual signed-in devices).
@@ -31,7 +30,6 @@ Autonomous, local-first microclimate risk evaluation and automated safety alerti
    ├── Auth Middleware (Scrypt Verification + Role Gates + TOTP MFA)
    ├── Monitoring Service (Autonomous Polling Cycle)
    ├── Risk & Alert Engine (Deterministic Decision Logic)
-   ├── AI Reasoning Service (Multi-Model Gemini Cascade)
    ├── Web Push Service (VAPID device notifications)
    └── Storage Engine (SQLite via sql.js with Snapshots)
          │
@@ -73,9 +71,6 @@ Configure credentials in `.env` (refer to `.env.example`):
 ```env
 # Optional WeatherAPI Key (auto-falls back to Open-Meteo if omitted)
 WEATHER_API_KEY=
-
-# Optional Gemini API Key for AI Superintendent Briefings
-GEMINI_API_KEY=
 
 # Optional SMTP Gateway for Automated Alert Dispatches
 SMTP_HOST=
@@ -127,11 +122,10 @@ LOCAL_ONLY=false
 - **Cookie-only Sessions**: The session lives solely in an `HttpOnly` cookie — no token is ever written to `localStorage`, so script injection cannot exfiltrate it. Set `SECURE_COOKIES=true` when serving over HTTPS.
 - **Active Session Management**: Each account can review every signed-in device (derived browser/OS label, IP, last-active time) and revoke individual sessions or all sessions at once. Sessions are keyed by a non-reversible digest, so the bearer token is never exposed — even to its owner.
 - **CSRF Protection**: Cookie-authenticated state changes must echo the readable `cwm_csrf` cookie in the `x-csrf-token` header (double-submit pattern). Token-header clients are exempt.
-- **Rate Limiting**: Authentication endpoints (`/api/auth/login`, `/api/auth/setup`) are limited to 10 attempts per 15 minutes per client IP, the broader `/api` surface to 300 requests per minute, and the cost-bearing `/api/ai/*` endpoints to 20 requests per minute. All three limits are tunable via `AUTH_RATE_LIMIT_MAX`, `API_RATE_LIMIT_MAX`, and `AI_RATE_LIMIT_MAX`. Limited responses return HTTP `429` with `RateLimit-*` headers.
+- **Rate Limiting**: Authentication endpoints (`/api/auth/login`, `/api/auth/setup`) are limited to 10 attempts per 15 minutes per client IP, and the broader `/api` surface to 300 requests per minute. Both limits are tunable via `AUTH_RATE_LIMIT_MAX` and `API_RATE_LIMIT_MAX`. Limited responses return HTTP `429` with `RateLimit-*` headers.
 - **Account Lockout**: After `LOGIN_MAX_ATTEMPTS` failed attempts, an account is locked for `LOGIN_LOCKOUT_MINUTES` minutes.
 - **Password Policy**: Passwords must meet `PASSWORD_MIN_LENGTH` (default 10) and contain a letter and a number.
 - **Two-Factor Authentication**: Optional RFC 6238 TOTP for any account, verifiable with Google Authenticator, Authy, or 1Password.
-- **AI Cost Controls**: Gemini responses are cached for 10 minutes and rate-limited, so briefings are not re-billed on every page view.
 - **Body Size Cap**: JSON request bodies are capped at 1 MB.
 
 ---
