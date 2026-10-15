@@ -329,6 +329,23 @@ const MIGRATIONS: Migration[] = [
       db.run(`ALTER TABLE sessions ADD COLUMN ip TEXT;`);
       db.run(`ALTER TABLE sessions ADD COLUMN last_seen_at INTEGER;`);
     }
+  },
+  {
+    version: 10,
+    name: '010_push_preferences',
+    up: (db: Database) => {
+      // Per-user push delivery preferences. Absence of a row means "defaults"
+      // (all alerts enabled), so existing subscriptions need no backfill.
+      db.run(`
+        CREATE TABLE IF NOT EXISTS push_preferences (
+          user_id TEXT PRIMARY KEY,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          min_severity TEXT NOT NULL DEFAULT 'LOW',
+          notify_recovery INTEGER NOT NULL DEFAULT 1,
+          updated_at TEXT NOT NULL
+        );
+      `);
+    }
   }
 ];
 
@@ -939,6 +956,91 @@ export async function countPushSubscriptions(): Promise<number> {
   const res = db.exec('SELECT COUNT(*) FROM push_subscriptions');
   return (res[0]?.values[0]?.[0] as number) || 0;
 }
+
+// ---------------------------------------------------------------------------
+// Per-user push preferences
+// ---------------------------------------------------------------------------
+
+export type PushSeverityFloor = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+
+export interface PushPreferenceRecord {
+  userId: string;
+  enabled: boolean;
+  minSeverity: PushSeverityFloor;
+  notifyRecovery: boolean;
+  updatedAt: string;
+}
+
+/** Defaults applied when a user has never customised their push preferences. */
+export const DEFAULT_PUSH_PREFERENCES: Omit<PushPreferenceRecord, 'userId' | 'updatedAt'> = {
+  enabled: true,
+  minSeverity: 'LOW',
+  notifyRecovery: true
+};
+
+export async function getPushPreferences(userId: string): Promise<PushPreferenceRecord> {
+  const db = await getDb();
+  const res = db.exec(
+    'SELECT user_id, enabled, min_severity, notify_recovery, updated_at FROM push_preferences WHERE user_id = ?',
+    [userId]
+  );
+  const row = res[0]?.values[0];
+  if (!row) return { userId, ...DEFAULT_PUSH_PREFERENCES, updatedAt: '' };
+  return {
+    userId: row[0] as string,
+    enabled: (row[1] as number) === 1,
+    minSeverity: (row[2] as PushSeverityFloor) || 'LOW',
+    notifyRecovery: (row[3] as number) === 1,
+    updatedAt: (row[4] as string) || ''
+  };
+}
+
+export async function getAllPushPreferences(): Promise<Map<string, PushPreferenceRecord>> {
+  const db = await getDb();
+  const res = db.exec(
+    'SELECT user_id, enabled, min_severity, notify_recovery, updated_at FROM push_preferences'
+  );
+  const map = new Map<string, PushPreferenceRecord>();
+  if (!res[0]) return map;
+  for (const row of res[0].values) {
+    const rec: PushPreferenceRecord = {
+      userId: row[0] as string,
+      enabled: (row[1] as number) === 1,
+      minSeverity: (row[2] as PushSeverityFloor) || 'LOW',
+      notifyRecovery: (row[3] as number) === 1,
+      updatedAt: (row[4] as string) || ''
+    };
+    map.set(rec.userId, rec);
+  }
+  return map;
+}
+
+export async function savePushPreferences(
+  userId: string,
+  updates: Partial<Omit<PushPreferenceRecord, 'userId' | 'updatedAt'>>
+): Promise<PushPreferenceRecord> {
+  const db = await getDb();
+  const current = await getPushPreferences(userId);
+  const next: PushPreferenceRecord = {
+    userId,
+    enabled: updates.enabled ?? current.enabled,
+    minSeverity: updates.minSeverity ?? current.minSeverity,
+    notifyRecovery: updates.notifyRecovery ?? current.notifyRecovery,
+    updatedAt: new Date().toISOString()
+  };
+  db.run(
+    `INSERT INTO push_preferences (user_id, enabled, min_severity, notify_recovery, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET
+       enabled = excluded.enabled,
+       min_severity = excluded.min_severity,
+       notify_recovery = excluded.notify_recovery,
+       updated_at = excluded.updated_at`,
+    [next.userId, next.enabled ? 1 : 0, next.minSeverity, next.notifyRecovery ? 1 : 0, next.updatedAt]
+  );
+  persistDb();
+  return next;
+}
 export async function getAllLocations(): Promise<LocationItem[]> {
   const db = await getDb();
   const res = db.exec('SELECT id, name, latitude, longitude, timezone, is_default, created_at, last_checked_at, status, current_risk_level FROM locations ORDER BY is_default DESC, name ASC');
@@ -1528,6 +1630,34 @@ export async function getRecentMonitorRuns(limit = 10): Promise<MonitorRun[]> {
     itemsProcessed: v[4] as number,
     errorMessage: (v[5] as string) || undefined
   }));
+}
+
+// ----------------- Metrics aggregates -----------------
+// Lightweight COUNT() helpers used by the /metrics endpoint. Kept separate from
+// the record loaders so scraping never materialises large result sets.
+
+export async function countObservations(): Promise<number> {
+  const db = await getDb();
+  const res = db.exec('SELECT COUNT(*) FROM weather_observations');
+  return (res[0]?.values[0]?.[0] as number) || 0;
+}
+
+export async function countAlertDeliveries(): Promise<number> {
+  const db = await getDb();
+  const res = db.exec('SELECT COUNT(*) FROM alert_deliveries');
+  return (res[0]?.values[0]?.[0] as number) || 0;
+}
+
+export async function countMonitorRunsByStatus(): Promise<Record<string, number>> {
+  const db = await getDb();
+  const res = db.exec('SELECT status, COUNT(*) FROM monitor_runs GROUP BY status');
+  const counts: Record<string, number> = {};
+  if (res[0]) {
+    for (const row of res[0].values) {
+      counts[String(row[0])] = Number(row[1]) || 0;
+    }
+  }
+  return counts;
 }
 
 // Settings

@@ -10,6 +10,7 @@
  *   - password policy, per-account lockout and TOTP two-factor login
  *   - Web Push subscription lifecycle
  *   - backup create / traversal-safe restore, and data retention
+ *   - Prometheus /metrics access control and exposition
  */
 
 import './setup.js';
@@ -369,6 +370,38 @@ async function main(): Promise<void> {
     assert.equal(final.body.subscriptions, before.body.subscriptions);
   });
 
+  await test('Push: per-user preferences default, validate and persist', async () => {
+    const owner = new Client(base);
+    assert.equal(
+      (await owner.post('/api/auth/login', { password: OWNER_PASSWORD, email: 'owner@site.local' })).status,
+      200
+    );
+
+    // Defaults apply before any customisation.
+    const initial = await owner.get('/api/push/preferences');
+    assert.equal(initial.status, 200);
+    assert.equal(initial.body.preferences.enabled, true);
+    assert.equal(initial.body.preferences.minSeverity, 'LOW');
+    assert.equal(initial.body.preferences.notifyRecovery, true);
+
+    // Invalid severity values are rejected.
+    assert.equal((await owner.putCsrf('/api/push/preferences', { minSeverity: 'EXTREME' })).status, 400);
+    assert.equal((await owner.putCsrf('/api/push/preferences', { enabled: 'yes' })).status, 400);
+
+    const updated = await owner.putCsrf('/api/push/preferences', {
+      enabled: false,
+      minSeverity: 'HIGH',
+      notifyRecovery: false
+    });
+    assert.equal(updated.status, 200);
+    assert.equal(updated.body.preferences.minSeverity, 'HIGH');
+
+    const reread = await owner.get('/api/push/preferences');
+    assert.equal(reread.body.preferences.enabled, false);
+    assert.equal(reread.body.preferences.notifyRecovery, false);
+    assert.equal(reread.body.preferences.minSeverity, 'HIGH');
+  });
+
   await test('Backup: create, list, reject traversal, and restore a valid snapshot', async () => {
     const created = await anon.postCsrf('/api/data/backup/create');
     assert.equal(created.status, 200);
@@ -400,6 +433,47 @@ async function main(): Promise<void> {
     assert.equal(typeof res.body.result.observationsDeleted, 'number');
     assert.equal(typeof res.body.result.snapshotsDeleted, 'number');
     assert.equal(typeof res.body.result.alertsPruned, 'number');
+  });
+
+  await test('Metrics: /metrics requires auth and exposes Prometheus metrics', async () => {
+    // By default (no METRICS_TOKEN) scrapers must hold a session.
+    const anonClient = new Client(base);
+    assert.equal((await anonClient.get('/metrics')).status, 401);
+
+    const owner = new Client(base);
+    assert.equal(
+      (await owner.post('/api/auth/login', { password: OWNER_PASSWORD, email: 'owner@site.local' })).status,
+      200
+    );
+
+    const res = await owner.get('/metrics');
+    assert.equal(res.status, 200);
+    const text = String(res.body);
+    assert.match(text, /cwm_uptime_seconds \d+/);
+    assert.match(text, /cwm_memory_rss_bytes \d+/);
+    assert.match(text, /cwm_monitor_running [01]/);
+    assert.match(text, /cwm_locations_total \d+/);
+    assert.match(text, /cwm_observations_total \d+/);
+    assert.match(text, /cwm_alert_deliveries_total \d+/);
+    assert.match(text, /cwm_monitor_runs_total\{status="SUCCESS"\} \d+/);
+    assert.match(text, /cwm_settings_monitor_interval_minutes \d+/);
+
+    // A shared bearer token authorises token-based scraping.
+    process.env.METRICS_TOKEN = 'integration-metrics-token';
+    try {
+      const scraper = new Client(base);
+      assert.equal((await scraper.get('/metrics')).status, 401);
+      assert.equal(
+        (
+          await scraper.request('GET', '/metrics', undefined, {
+            Authorization: 'Bearer integration-metrics-token'
+          })
+        ).status,
+        200
+      );
+    } finally {
+      delete process.env.METRICS_TOKEN;
+    }
   });
 
   await new Promise<void>((resolve) => server.close(() => resolve()));
