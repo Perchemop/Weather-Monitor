@@ -13,9 +13,13 @@ import {
   ChevronDown,
   LogOut,
   Menu,
-  X
+  X,
+  Users,
+  Crown,
+  Shield,
+  Eye
 } from 'lucide-react';
-import { LocationItem } from '../types';
+import { LocationItem, UserRole } from '../types';
 
 interface NavbarProps {
   currentLocation: LocationItem | null;
@@ -28,7 +32,15 @@ interface NavbarProps {
   monitorStatus: 'ACTIVE' | 'STOPPED' | 'ERROR';
   dataStatus: 'LIVE' | 'CACHED' | 'OFFLINE' | 'UNAVAILABLE';
   lastCheckTime: string | null;
+  userRole?: UserRole;
+  userEmail?: string;
 }
+
+const ROLE_BADGE: Record<UserRole, { label: string; icon: React.ComponentType<{ className?: string }>; className: string }> = {
+  OWNER: { label: 'Owner', icon: Crown, className: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
+  MANAGER: { label: 'Manager', icon: Shield, className: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30' },
+  VIEWER: { label: 'Viewer', icon: Eye, className: 'bg-slate-700/40 text-slate-300 border-slate-600' }
+};
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentLocation,
@@ -40,9 +52,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   isChecking,
   monitorStatus,
   dataStatus,
-  lastCheckTime
+  lastCheckTime,
+  userRole = 'VIEWER',
+  userEmail
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const canOperate = userRole === 'OWNER' || userRole === 'MANAGER';
+  const isOwner = userRole === 'OWNER';
+  const roleBadge = ROLE_BADGE[userRole];
+  const RoleIcon = roleBadge.icon;
 
   const getRelativeTime = (iso: string | null) => {
     if (!iso) return 'Pending check';
@@ -53,15 +71,18 @@ export const Navbar: React.FC<NavbarProps> = ({
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const navItems = [
-    { id: 'dashboard', label: 'Monitor', icon: Activity },
-    { id: 'forecast', label: 'Forecast', icon: Calendar },
-    { id: 'alerts', label: 'Alerts', icon: ShieldAlert },
-    { id: 'history', label: 'History', icon: Clock },
-    { id: 'reports', label: 'Reports', icon: FileText },
-    { id: 'system', label: 'Health', icon: Layers },
-    { id: 'settings', label: 'Settings', icon: Settings }
+  // Tabs are gated by role: everyone monitors, only owners configure.
+  const allNavItems = [
+    { id: 'dashboard', label: 'Monitor', icon: Activity, visible: true },
+    { id: 'forecast', label: 'Forecast', icon: Calendar, visible: true },
+    { id: 'alerts', label: 'Alerts', icon: ShieldAlert, visible: true },
+    { id: 'history', label: 'History', icon: Clock, visible: true },
+    { id: 'reports', label: 'Reports', icon: FileText, visible: true },
+    { id: 'system', label: 'Health', icon: Layers, visible: canOperate },
+    { id: 'settings', label: 'Settings', icon: Settings, visible: isOwner },
+    { id: 'users', label: 'Users', icon: Users, visible: isOwner }
   ];
+  const navItems = allNavItems.filter((item) => item.visible);
 
   return (
     <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white select-none">
@@ -77,8 +98,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="font-mono text-2xs font-semibold uppercase tracking-widest text-amber-500">
                 Safety Enclave
               </span>
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-600" />
-              <span className="text-2xs text-slate-400 font-mono">Autonomous</span>
+              <span
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-mono font-bold uppercase border ${roleBadge.className}`}
+                title={userEmail ? `Signed in as ${userEmail}` : undefined}
+              >
+                <RoleIcon className="w-2.5 h-2.5" />
+                <span>{roleBadge.label}</span>
+              </span>
             </div>
             <h1 className="text-sm sm:text-base font-bold text-slate-100 tracking-tight leading-none mt-0.5">
               CONSTRUCTION WEATHER MONITOR
@@ -139,18 +165,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </div>
 
-          {/* Manual Run Check Button */}
-          <button
-            type="button"
-            id="manual-check-btn"
-            onClick={onRunCheck}
-            disabled={isChecking}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
-            title="Execute immediate weather check cycle"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-            <span className="hidden md:inline">Check Now</span>
-          </button>
+          {/* Manual Run Check Button (operators only) */}
+          {canOperate && (
+            <button
+              type="button"
+              id="manual-check-btn"
+              onClick={onRunCheck}
+              disabled={isChecking}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+              title="Execute immediate weather check cycle"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
+              <span className="hidden md:inline">Check Now</span>
+            </button>
+          )}
 
           {/* Lock / Logout Button */}
           {onLogout && (

@@ -7,8 +7,6 @@ import { createServer as createViteServer } from 'vite';
 
 import {
   getDb,
-  verifyOwnerPassword,
-  updateOwnerPassword,
   getOwnerInfo,
   getAllLocations,
   getDefaultLocation,
@@ -37,7 +35,19 @@ import {
   setupInitialPassword,
   addAuditLog,
   enforceDataRetention,
-  getDataRetentionLogs
+  getDataRetentionLogs,
+  // Multi-user account management
+  countUsers,
+  getAllUsers,
+  getUserById,
+  createUserAccount,
+  updateUserRole,
+  updateUserPassword,
+  updateUserCredentials,
+  setUserActive,
+  deleteUserAccount,
+  recordUserLogin,
+  verifyUserCredentials
 } from './src/database/db.js';
 import { DEFAULT_THRESHOLDS } from './src/services/riskEngine.js';
 import { searchGeocodingLocations } from './src/services/weatherService.js';
@@ -47,6 +57,7 @@ import { evaluateDataFreshness } from './src/utils/time.js';
 import { maskSecret } from './src/utils/security.js';
 import { securityHeaders } from './src/utils/securityHeaders.js';
 import { createRateLimiter } from './src/utils/rateLimiter.js';
+import { UserAccount, UserRole } from './src/types.js';
 import {
   generateAiWeatherBriefing,
   generateAiAlertExplanation,
@@ -57,12 +68,35 @@ dotenv.config();
 
 const PORT = 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
-// Simple secure in-memory session tokens store
-const activeSessions = new Set<string>();
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-function generateSessionToken(): string {
+// Simple secure in-memory session store, keyed by token. Each entry is bound
+// to a user account and carries an absolute expiry.
+interface SessionEntry {
+  userId: string;
+  email: string;
+  role: UserRole;
+  displayName?: string;
+  createdAt: string;
+  expiresAt: number;
+}
+const activeSessions = new Map<string, SessionEntry>();
+
+// Augments the Express request with the resolved session for downstream handlers.
+interface AuthedRequest extends Request {
+  session?: SessionEntry;
+}
+
+function createSession(user: UserAccount): string {
   const token = crypto.randomBytes(32).toString('hex');
-  activeSessions.add(token);
+  activeSessions.set(token, {
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    displayName: user.displayName,
+    createdAt: new Date().toISOString(),
+    expiresAt: Date.now() + SESSION_TTL_MS
+  });
   return token;
 }
 
@@ -78,19 +112,46 @@ function extractSessionToken(req: Request): string | undefined {
   return undefined;
 }
 
-function isValidSession(token?: string): boolean {
-  if (!token) return false;
-  return activeSessions.has(token);
+function getSession(token?: string): SessionEntry | undefined {
+  if (!token) return undefined;
+  const entry = activeSessions.get(token);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= Date.now()) {
+    activeSessions.delete(token);
+    return undefined;
+  }
+  return entry;
 }
 
 // Authentication middleware - verifies signed session cookie, x-session-token, or Bearer auth
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const token = extractSessionToken(req);
-  if (!isValidSession(token)) {
+  const session = getSession(extractSessionToken(req));
+  if (!session) {
     res.status(401).json({ error: 'Authentication required. Safety enclave locked.' });
     return;
   }
-  return next();
+  (req as AuthedRequest).session = session;
+  next();
+}
+
+/**
+ * Role-gating middleware. The OWNER role always satisfies any gate; otherwise
+ * the session role must be one of `roles`. Must run after `requireAuth`.
+ */
+function requireRole(...roles: UserRole[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const session = (req as AuthedRequest).session || getSession(extractSessionToken(req));
+    if (!session) {
+      res.status(401).json({ error: 'Authentication required. Safety enclave locked.' });
+      return;
+    }
+    (req as AuthedRequest).session = session;
+    if (session.role !== 'OWNER' && !roles.includes(session.role)) {
+      res.status(403).json({ error: 'Insufficient permissions for this action.' });
+      return;
+    }
+    next();
+  };
 }
 
 async function startServer() {
@@ -140,12 +201,15 @@ async function startServer() {
 
   // ----------------- AUTHENTICATION ROUTES -----------------
   app.get('/api/auth/status', async (req: Request, res: Response) => {
-    const token = extractSessionToken(req);
-    const authenticated = isValidSession(token);
+    const session = getSession(extractSessionToken(req));
+    const authenticated = Boolean(session);
     const owner = await getOwnerInfo();
     res.json({
       authenticated,
       isFirstRun: !owner?.isConfigured,
+      email: session?.email || owner?.email || process.env.OWNER_EMAIL || 'owner@local',
+      displayName: session?.displayName || 'Site Owner',
+      role: session?.role,
       ownerEmail: owner?.email || process.env.OWNER_EMAIL || 'owner@local',
       ownerName: 'Site Owner'
     });
@@ -158,44 +222,65 @@ async function startServer() {
       return;
     }
     await setupInitialPassword(password, email);
-    const token = generateSessionToken();
+
+    // Synchronize the primary OWNER user account with the new credentials.
+    const ownerUser = (await getAllUsers()).find((u) => u.role === 'OWNER');
+    if (ownerUser) {
+      await updateUserCredentials(ownerUser.id, email || ownerUser.email, password);
+    }
+    const refreshed = ownerUser ? await getUserById(ownerUser.id) : null;
+    const sessionUser: UserAccount =
+      refreshed || {
+        id: 'usr-owner-1',
+        email: email || 'owner@local',
+        displayName: 'Site Owner',
+        role: 'OWNER',
+        active: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+    const token = createSession(sessionUser);
     res.cookie('cwm_session', token, {
       httpOnly: true,
       sameSite: 'lax',
       secure: false, // Local environment
-      maxAge: 7 * 24 * 60 * 60 * 1000
+      maxAge: SESSION_TTL_MS
     });
     await addAuditLog('AUTH_SETUP', `Initial master password set for ${email || 'owner'}`);
-    res.json({ success: true, token, email: email || 'owner@local' });
+    res.json({ success: true, token, email: sessionUser.email, role: sessionUser.role });
   });
 
   app.post('/api/auth/login', authLimiter, async (req: Request, res: Response) => {
-    const { password } = req.body;
+    const { password, email } = req.body;
     if (!password) {
       res.status(400).json({ error: 'Password is required' });
       return;
     }
 
-    const { valid, email } = await verifyOwnerPassword(password);
-    if (!valid) {
-      await addAuditLog('AUTH_FAILED', 'Failed login attempt');
-      res.status(401).json({ error: 'Invalid password. Please try again.' });
+    const { valid, user } = await verifyUserCredentials(password, email);
+    if (!valid || !user) {
+      await addAuditLog('AUTH_FAILED', `Failed login attempt for ${email || 'owner'}`);
+      res.status(401).json({ error: 'Invalid credentials. Please try again.' });
       return;
     }
 
-    const token = generateSessionToken();
+    const token = createSession(user);
     res.cookie('cwm_session', token, {
       httpOnly: true,
       sameSite: 'lax',
       secure: false, // Local environment
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: SESSION_TTL_MS // 7 days
     });
 
-    await addAuditLog('AUTH_SUCCESS', `Successful login for ${email}`);
+    await recordUserLogin(user.id);
+    await addAuditLog('AUTH_SUCCESS', `Successful login for ${user.email} (${user.role})`);
     res.json({
       success: true,
       token,
-      email
+      email: user.email,
+      displayName: user.displayName,
+      role: user.role
     });
   });
 
@@ -208,12 +293,13 @@ async function startServer() {
 
   app.post('/api/auth/change-password', requireAuth, async (req: Request, res: Response) => {
     const { currentPassword, newPassword, newEmail } = req.body;
+    const session = (req as AuthedRequest).session!;
     if (!currentPassword || !newPassword) {
       res.status(400).json({ error: 'Current and new password are required.' });
       return;
     }
 
-    const { valid } = await verifyOwnerPassword(currentPassword);
+    const { valid } = await verifyUserCredentials(currentPassword, session.email);
     if (!valid) {
       res.status(403).json({ error: 'Current password does not match.' });
       return;
@@ -224,9 +310,143 @@ async function startServer() {
       return;
     }
 
-    await updateOwnerPassword(newPassword, newEmail);
-    await addAuditLog('PASSWORD_CHANGED', 'Owner password updated');
+    await updateUserCredentials(session.userId, newEmail || session.email, newPassword);
+    // Keep the live session in sync with the new email.
+    const token = extractSessionToken(req);
+    const entry = token ? activeSessions.get(token) : undefined;
+    if (entry && newEmail) entry.email = newEmail;
+
+    await addAuditLog('PASSWORD_CHANGED', `Password updated for ${session.email}`);
     res.json({ success: true, message: 'Password updated successfully.' });
+  });
+
+  // ----------------- USER & ACCESS MANAGEMENT (OWNER ONLY) -----------------
+  app.get('/api/users', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
+    const users = await getAllUsers();
+    res.json({ users });
+  });
+
+  app.post('/api/users', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+    const { email, password, role, displayName } = req.body;
+
+    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      res.status(400).json({ error: 'A valid email address is required.' });
+      return;
+    }
+    if (!password || password.length < 6) {
+      res.status(400).json({ error: 'Password must be at least 6 characters.' });
+      return;
+    }
+    if (!['OWNER', 'MANAGER', 'VIEWER'].includes(role)) {
+      res.status(400).json({ error: 'Role must be OWNER, MANAGER, or VIEWER.' });
+      return;
+    }
+
+    const existing = (await getAllUsers()).find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
+    if (existing) {
+      res.status(409).json({ error: 'A user with that email already exists.' });
+      return;
+    }
+
+    const created = await createUserAccount({
+      email: email.trim(),
+      password,
+      role: role as UserRole,
+      displayName: typeof displayName === 'string' && displayName.trim() ? displayName.trim() : undefined
+    });
+    const actor = (req as AuthedRequest).session!;
+    await addAuditLog('USER_CREATED', `${actor.email} created ${created.email} as ${created.role}`);
+    res.json({ success: true, user: created });
+  });
+
+  app.put('/api/users/:id', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { role, active, displayName } = req.body;
+    const target = await getUserById(id);
+    if (!target) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+
+    const actor = (req as AuthedRequest).session!;
+
+    if (role !== undefined) {
+      if (!['OWNER', 'MANAGER', 'VIEWER'].includes(role)) {
+        res.status(400).json({ error: 'Role must be OWNER, MANAGER, or VIEWER.' });
+        return;
+      }
+      const ok = await updateUserRole(id, role as UserRole);
+      if (!ok) {
+        res.status(409).json({ error: 'Cannot demote the last remaining OWNER account.' });
+        return;
+      }
+      await addAuditLog('USER_ROLE_CHANGED', `${actor.email} set ${target.email} role to ${role}`);
+    }
+
+    if (active !== undefined) {
+      if (id === actor.userId && active === false) {
+        res.status(409).json({ error: 'You cannot deactivate your own account.' });
+        return;
+      }
+      const ok = await setUserActive(id, Boolean(active));
+      if (!ok) {
+        res.status(409).json({ error: 'Cannot deactivate the last remaining OWNER account.' });
+        return;
+      }
+      await addAuditLog('USER_STATUS_CHANGED', `${actor.email} set ${target.email} active=${Boolean(active)}`);
+    }
+
+    // displayName updates are cosmetic; handle without dedicated helper.
+    if (displayName !== undefined && typeof displayName === 'string') {
+      const db = await getDb();
+      db.run('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?', [
+        displayName.trim() || null,
+        new Date().toISOString(),
+        id
+      ]);
+    }
+
+    const updated = await getUserById(id);
+    res.json({ success: true, user: updated });
+  });
+
+  app.post('/api/users/:id/password', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) {
+      res.status(400).json({ error: 'New password must be at least 6 characters.' });
+      return;
+    }
+    const target = await getUserById(id);
+    if (!target) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+    await updateUserPassword(id, newPassword);
+    const actor = (req as AuthedRequest).session!;
+    await addAuditLog('USER_PASSWORD_RESET', `${actor.email} reset the password for ${target.email}`);
+    res.json({ success: true, message: `Password reset for ${target.email}.` });
+  });
+
+  app.delete('/api/users/:id', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const actor = (req as AuthedRequest).session!;
+    if (id === actor.userId) {
+      res.status(409).json({ error: 'You cannot delete your own account.' });
+      return;
+    }
+    const target = await getUserById(id);
+    if (!target) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+    const ok = await deleteUserAccount(id);
+    if (!ok) {
+      res.status(409).json({ error: 'Cannot delete the last remaining OWNER account.' });
+      return;
+    }
+    await addAuditLog('USER_DELETED', `${actor.email} deleted ${target.email}`);
+    res.json({ success: true });
   });
 
   // ----------------- WEATHER & MONITOR DATA -----------------
@@ -367,7 +587,7 @@ async function startServer() {
   });
 
   // ----------------- MONITOR CONTROLS -----------------
-  app.post('/api/monitor/check-now', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/monitor/check-now', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     const locId = req.body?.locationId;
     const result = await monitoringService.executeCycle(locId, true);
     if (!result.success) {
@@ -377,7 +597,7 @@ async function startServer() {
     res.json({ success: true, message: 'Weather check completed successfully.' });
   });
 
-  app.post('/api/monitor/toggle', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/monitor/toggle', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     const { enable } = req.body;
     await saveOwnerSettings({ monitoringEnabled: Boolean(enable) });
     if (enable) {
@@ -395,7 +615,7 @@ async function startServer() {
     res.json({ alerts, deliveries });
   });
 
-  app.post('/api/alerts/:id/dismiss', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/alerts/:id/dismiss', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     await updateAlertStatus(req.params.id, 'DISMISSED');
     res.json({ success: true });
   });
@@ -406,7 +626,7 @@ async function startServer() {
     res.json({ locations });
   });
 
-  app.post('/api/locations', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/locations', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     const { name, latitude, longitude, timezone, isDefault } = req.body;
     
     // Strict input validation
@@ -437,12 +657,12 @@ async function startServer() {
     res.json({ success: true, location: created });
   });
 
-  app.post('/api/locations/:id/default', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/locations/:id/default', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     await setDefaultLocation(req.params.id);
     res.json({ success: true });
   });
 
-  app.delete('/api/locations/:id', requireAuth, async (req: Request, res: Response) => {
+  app.delete('/api/locations/:id', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     await deleteLocation(req.params.id);
     res.json({ success: true });
   });
@@ -461,7 +681,7 @@ async function startServer() {
     res.json({ settings, smtpConfigured, smtpStatus });
   });
 
-  app.put('/api/settings', requireAuth, async (req: Request, res: Response) => {
+  app.put('/api/settings', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const updates = req.body;
     
     // Validate monitor interval
@@ -481,7 +701,7 @@ async function startServer() {
     res.json({ success: true, message: 'Settings saved successfully.' });
   });
 
-  app.post('/api/settings/restore-defaults', requireAuth, async (_req: Request, res: Response) => {
+  app.post('/api/settings/restore-defaults', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
     await saveOwnerSettings({
       thresholds: DEFAULT_THRESHOLDS,
       monitorIntervalMinutes: 15,
@@ -493,7 +713,7 @@ async function startServer() {
     res.json({ success: true, message: 'Default thresholds restored.' });
   });
 
-  app.post('/api/email/test', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/email/test', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const settings = await getOwnerSettings();
     const recipient = req.body?.email || settings.ownerEmail;
     const result = await sendTestEmail(recipient);
@@ -616,7 +836,7 @@ async function startServer() {
   });
 
   // ----------------- DATA RETENTION & PRIVACY -----------------
-  app.post('/api/data/retention/run', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/data/retention/run', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     try {
       const days = Number(req.body?.retentionDays) || 30;
       const result = await enforceDataRetention(days);
@@ -626,7 +846,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/data/retention/logs', requireAuth, async (_req: Request, res: Response) => {
+  app.get('/api/data/retention/logs', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
     try {
       const logs = await getDataRetentionLogs();
       res.json({ logs });
@@ -636,7 +856,7 @@ async function startServer() {
   });
 
   // ----------------- SECRETS STATUS (MASKED) -----------------
-  app.get('/api/secrets/status', requireAuth, async (_req: Request, res: Response) => {
+  app.get('/api/secrets/status', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
     try {
       const weatherKey = process.env.WEATHER_API_KEY || '';
       const smtpInfo = getPublicSmtpStatus();
@@ -683,7 +903,7 @@ async function startServer() {
   });
 
   // ----------------- PRIVACY & DATA CONTROLS -----------------
-  app.post('/api/data/clear', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/data/clear', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const { target } = req.body;
     if (target === 'cache') {
       await clearCachedData();
@@ -698,14 +918,14 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  app.get('/api/data/backup', requireAuth, async (_req: Request, res: Response) => {
+  app.get('/api/data/backup', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
     const buffer = await getDatabaseBinary();
     res.setHeader('Content-Type', 'application/x-sqlite3');
     res.setHeader('Content-Disposition', `attachment; filename="weather-monitor-backup-${new Date().toISOString().slice(0, 10)}.sqlite"`);
     res.send(buffer);
   });
 
-  app.post('/api/data/backup/create', requireAuth, async (_req: Request, res: Response) => {
+  app.post('/api/data/backup/create', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
     try {
       const filename = await createDatabaseBackup();
       await addAuditLog('BACKUP_CREATED', `Database snapshot created: ${filename}`);
@@ -715,7 +935,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/data/backup/list', requireAuth, async (_req: Request, res: Response) => {
+  app.get('/api/data/backup/list', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
     try {
       const backups = getDatabaseBackupsList();
       res.json({ backups });

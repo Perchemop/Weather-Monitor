@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { HardHat, Lock, ShieldCheck, Key, Eye, EyeOff, AlertCircle, ArrowRight, ShieldAlert } from 'lucide-react';
+import { UserRole } from '../types';
 
 interface LoginScreenProps {
   isFirstRun?: boolean;
   ownerEmail?: string;
-  onAuthenticated: (token: string, email: string) => void;
+  onAuthenticated: (token: string, email: string, role: UserRole) => void;
 }
 
 export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', onAuthenticated }: LoginScreenProps) {
@@ -39,7 +40,7 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
 
     try {
       const endpoint = isFirstRun ? '/api/auth/setup' : '/api/auth/login';
-      const payload = isFirstRun ? { email, password } : { password };
+      const payload = { email, password };
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -56,7 +57,7 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
       if (data.token) {
         localStorage.setItem('cwm_session_token', data.token);
       }
-      onAuthenticated(data.token, data.email || email);
+      onAuthenticated(data.token, data.email || email, (data.role as UserRole) || 'OWNER');
     } catch (err: any) {
       setErrorMessage(err?.message || 'Connection error. Please try again.');
     } finally {
@@ -110,21 +111,19 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isFirstRun && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase font-mono tracking-wider text-slate-400">
-                Supervisor Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all font-mono"
-                placeholder="supervisor@site.local"
-              />
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase font-mono tracking-wider text-slate-400">
+              {isFirstRun ? 'Supervisor Email' : 'Operator Email'}
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all font-mono"
+              placeholder="supervisor@site.local"
+            />
+          </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
@@ -152,18 +151,6 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {!isFirstRun && (
-              <div className="flex items-center justify-between text-2xs font-mono text-slate-400 pt-1">
-                <span>Default setup key: <code className="text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">MasterPassword123</code></span>
-                <button
-                  type="button"
-                  onClick={() => setPassword('MasterPassword123')}
-                  className="text-amber-400 hover:text-amber-300 hover:underline cursor-pointer font-bold"
-                >
-                  Quick Fill
-                </button>
-              </div>
-            )}
           </div>
 
           {isFirstRun && (
@@ -203,7 +190,7 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
             <span>Encrypted local session (Scrypt KDF)</span>
           </div>
-          <span>Single-user safety enclave</span>
+          <span>Role-based access enclave</span>
         </div>
       </div>
     </div>

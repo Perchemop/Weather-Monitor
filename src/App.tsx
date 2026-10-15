@@ -1,19 +1,25 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroRiskCard } from './components/HeroRiskCard';
 import { CurrentConditions } from './components/CurrentConditions';
 import { HourlyForecastBar } from './components/HourlyForecastBar';
 import { ConstructionImpacts } from './components/ConstructionImpacts';
 import { ActiveAlertsPanel } from './components/ActiveAlertsPanel';
-import { ForecastView } from './components/ForecastView';
-import { AlertHistoryView } from './components/AlertHistoryView';
-import { HistoricalView } from './components/HistoricalView';
-import { ReportsView } from './components/ReportsView';
-import { SystemHealthView } from './components/SystemHealthView';
-import { SettingsView } from './components/SettingsView';
 import { LocationModal } from './components/LocationModal';
 import { LoginScreen } from './components/LoginScreen';
 import { useToast } from './components/ToastProvider';
+import { lazyNamed, ViewLoadingFallback } from './components/LazyBoundary';
+
+// Code-split non-dashboard views. Recharts (used by ForecastView and
+// HistoricalView) and the large settings/report surfaces are only fetched
+// when the operator navigates to them.
+const ForecastView = lazyNamed(() => import('./components/ForecastView'), 'ForecastView');
+const AlertHistoryView = lazyNamed(() => import('./components/AlertHistoryView'), 'AlertHistoryView');
+const HistoricalView = lazyNamed(() => import('./components/HistoricalView'), 'HistoricalView');
+const ReportsView = lazyNamed(() => import('./components/ReportsView'), 'ReportsView');
+const SystemHealthView = lazyNamed(() => import('./components/SystemHealthView'), 'SystemHealthView');
+const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
+const UsersView = lazyNamed(() => import('./components/UsersView'), 'UsersView');
 import {
   CurrentWeather,
   RiskAssessment,
@@ -24,13 +30,14 @@ import {
   LocationItem,
   MonitorStatus,
   ProviderComparison,
-  OwnerSettings
+  OwnerSettings,
+  UserRole
 } from './types';
 import { fetchRealWeatherData } from './services/weatherService';
 import { calculateDeterministicRisk } from './services/riskEngine';
 import { CrossReferenceCard } from './components/CrossReferenceCard';
 import { AiBriefingCard } from './components/AiBriefingCard';
-import { ShieldCheck, Database, HardHat, CheckCircle2, ArrowRightLeft } from 'lucide-react';
+import { ShieldCheck, Database, HardHat, CheckCircle2, ArrowRightLeft, WifiOff } from 'lucide-react';
 
 const FALLBACK_SITE: LocationItem = {
   id: 'loc-default',
@@ -50,6 +57,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isFirstRun, setIsFirstRun] = useState(false);
   const [ownerEmail, setOwnerEmail] = useState('owner@local');
+  const [userRole, setUserRole] = useState<UserRole>('VIEWER');
 
   // App Navigation & Modals
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -82,6 +90,19 @@ export default function App() {
   const [providerComparison, setProviderComparison] = useState<ProviderComparison | null>(null);
   const [hasWeatherApiKey, setHasWeatherApiKey] = useState<boolean>(true);
   const [activeProvider, setActiveProvider] = useState<string>('WeatherAPI (Main Reference)');
+  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+
+  // Track connectivity so operators know when they are viewing cached data.
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
 
   // Authorized API caller with session token & cookie backup
   const apiFetch = useCallback(async (url: string, init?: RequestInit): Promise<Response> => {
@@ -103,7 +124,8 @@ export default function App() {
           const data = await res.json();
           setIsAuthenticated(Boolean(data.authenticated));
           setIsFirstRun(Boolean(data.isFirstRun));
-          if (data.ownerEmail) setOwnerEmail(data.ownerEmail);
+          if (data.email) setOwnerEmail(data.email);
+          if (data.role) setUserRole(data.role);
         } else {
           setIsAuthenticated(false);
         }
@@ -117,11 +139,12 @@ export default function App() {
   }, [apiFetch]);
 
   // Handle successful login or first-run setup
-  const handleAuthenticated = (token: string, email: string) => {
+  const handleAuthenticated = (token: string, email: string, role: UserRole = 'OWNER') => {
     localStorage.setItem('cwm_session_token', token);
     setIsAuthenticated(true);
     setIsFirstRun(false);
     setOwnerEmail(email);
+    setUserRole(role);
     toast.success('Site Safety Enclave unlocked.');
     loadDashboardData();
   };
@@ -133,6 +156,7 @@ export default function App() {
     } catch {}
     localStorage.removeItem('cwm_session_token');
     setIsAuthenticated(false);
+    setUserRole('VIEWER');
     toast.info('Safety Enclave session locked.');
   };
 
@@ -421,10 +445,22 @@ export default function App() {
         monitorStatus={monitorStatus.status}
         dataStatus={dataStatus}
         lastCheckTime={monitorStatus.lastCheckTime}
+        userRole={userRole}
+        userEmail={ownerEmail}
       />
 
       {/* Main View Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        {!isOnline && (
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-950/50 border border-amber-800/60 text-amber-200 text-xs font-mono">
+            <WifiOff className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              Offline mode — showing the last cached microclimate snapshot. Live checks will resume automatically when
+              the connection returns.
+            </span>
+          </div>
+        )}
+        <Suspense fallback={<ViewLoadingFallback label="Loading module" />}>
         {activeTab === 'dashboard' && (
           <div className="space-y-6 animate-fadeIn">
             {/* 1. Hero Risk Card (Dominant Dashboard Element) */}
@@ -545,6 +581,10 @@ export default function App() {
 
         {/* Settings & Threshold Calibration */}
         {activeTab === 'settings' && <SettingsView onSettingsSaved={loadDashboardData} />}
+
+        {/* User & Access Management (Owner only) */}
+        {activeTab === 'users' && <UsersView />}
+        </Suspense>
       </main>
 
       {/* Location Selector Modal */}
@@ -571,7 +611,7 @@ export default function App() {
             Application data is stored locally in SQLite with automated backup rotation. No advertising, no analytics, no tracking.
           </p>
           <div className="pt-2 text-[11px] text-slate-600">
-            Construction Weather Monitor · Single-User Secure Installation
+            Construction Weather Monitor · Role-Based Secure Installation
           </div>
         </div>
       </footer>

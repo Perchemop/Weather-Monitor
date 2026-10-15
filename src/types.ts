@@ -2,6 +2,36 @@ export type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
 
 export type DataFreshnessStatus = 'LIVE' | 'CACHED' | 'STALE' | 'OFFLINE' | 'UNAVAILABLE';
 
+/**
+ * Access control roles, ordered from most to least privileged.
+ * - OWNER: full administrative control (settings, users, data, backups).
+ * - MANAGER: operational control (run checks, manage locations, dismiss alerts).
+ * - VIEWER: read-only observational access.
+ */
+export type UserRole = 'OWNER' | 'MANAGER' | 'VIEWER';
+
+export const USER_ROLES: UserRole[] = ['OWNER', 'MANAGER', 'VIEWER'];
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  displayName?: string;
+  role: UserRole;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string | null;
+}
+
+/** Server-side session record persisted in memory and bound to a user. */
+export interface SessionInfo {
+  userId: string;
+  email: string;
+  role: UserRole;
+  displayName?: string;
+  createdAt: string;
+}
+
 export interface LocationItem {
   id: string;
   name: string;
@@ -252,6 +282,9 @@ export interface OwnerSettings {
 
 export interface AuthStatus {
   authenticated: boolean;
+  email?: string;
+  displayName?: string;
+  role?: UserRole;
   ownerEmail?: string;
   ownerName?: string;
   isFirstRun?: boolean;
