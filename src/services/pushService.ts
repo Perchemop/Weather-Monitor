@@ -2,7 +2,10 @@ import webpush from 'web-push';
 import {
   savePushSubscription,
   deletePushSubscription,
-  getPushSubscriptions
+  getPushSubscriptions,
+  getAllPushPreferences,
+  DEFAULT_PUSH_PREFERENCES,
+  PushSeverityFloor
 } from '../database/db.js';
 import { readJsonSecret, writeJsonSecret } from '../utils/secretStore.js';
 import { logger } from '../utils/logger.js';
@@ -34,6 +37,14 @@ export interface PushPayload {
   tag?: string;
   url?: string;
   severity?: string;
+  /** Distinguishes recovery (all-clear) notifications for preference filtering. */
+  kind?: 'alert' | 'recovery';
+}
+
+const SEVERITY_RANK: Record<string, number> = { LOW: 0, MODERATE: 1, HIGH: 2, CRITICAL: 3 };
+
+function severityRank(severity?: string): number {
+  return SEVERITY_RANK[(severity || '').toUpperCase()] ?? 0;
 }
 
 let initialized = false;
@@ -99,18 +110,45 @@ export async function unsubscribeFromPush(endpoint: string): Promise<void> {
 }
 
 /**
- * Delivers a notification to every stored subscription. Subscriptions that the
- * push service reports as gone (404/410) are pruned automatically.
+ * Delivers a notification to every stored subscription whose owner has opted
+ * in to it. Each user's push preferences are honoured:
+ *   - a master `enabled` switch,
+ *   - a minimum severity floor for alert notifications,
+ *   - an opt-in for recovery (all-clear) notifications.
+ * Subscriptions the push service reports as gone (404/410) are pruned.
  */
-export async function sendPushToAll(payload: PushPayload): Promise<{ sent: number; failed: number }> {
-  if (!isPushConfigured()) return { sent: 0, failed: 0 };
+export async function sendPushToAll(
+  payload: PushPayload
+): Promise<{ sent: number; failed: number; skipped: number }> {
+  if (!isPushConfigured()) return { sent: 0, failed: 0, skipped: 0 };
 
   const subscriptions = await getPushSubscriptions();
+  const preferences = await getAllPushPreferences();
   let sent = 0;
   let failed = 0;
+  let skipped = 0;
+
+  const isRecovery = payload.kind === 'recovery';
+  const alertRank = severityRank(payload.severity);
 
   await Promise.all(
     subscriptions.map(async (sub) => {
+      // Resolve the recipient's preferences (permissive defaults when unset).
+      const prefs = (sub.userId && preferences.get(sub.userId)) || DEFAULT_PUSH_PREFERENCES;
+
+      if (!prefs.enabled) {
+        skipped++;
+        return;
+      }
+      if (isRecovery && !prefs.notifyRecovery) {
+        skipped++;
+        return;
+      }
+      if (!isRecovery && alertRank < severityRank(prefs.minSeverity as PushSeverityFloor)) {
+        skipped++;
+        return;
+      }
+
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
@@ -130,7 +168,7 @@ export async function sendPushToAll(payload: PushPayload): Promise<{ sent: numbe
     })
   );
 
-  return { sent, failed };
+  return { sent, failed, skipped };
 }
 
 export async function sendAlertPush(input: {
@@ -144,7 +182,8 @@ export async function sendAlertPush(input: {
     body: `${input.locationName}: ${input.description || input.title}`,
     tag: `alert-${input.locationName}`,
     url: '/',
-    severity: input.severity
+    severity: input.severity,
+    kind: 'alert'
   });
 }
 
@@ -153,6 +192,7 @@ export async function sendRecoveryPush(input: { title: string; locationName: str
     title: 'Conditions cleared',
     body: `${input.locationName}: ${input.title}`,
     tag: `recovery-${input.locationName}`,
-    url: '/'
+    url: '/',
+    kind: 'recovery'
   });
 }
