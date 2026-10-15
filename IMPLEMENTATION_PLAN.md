@@ -176,18 +176,37 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
     `startServer()`; the process bootstrap moved to `server-entry.ts`, which the
     production bundle targets. `createApp` accepts `staticMode` / `startMonitoring`
     / `scheduleBackups` so tests run without pollers or a Vite dev server.
-- **Step 7.2: HTTP integration suite** (`src/tests/api.test.ts`, 19 checks)
+- **Step 7.2: HTTP integration suite** (`src/tests/api.test.ts`, 20 checks)
   - Boots the real app in-process on an ephemeral port and drives it over HTTP:
     `/healthz`, account-enumeration resistance, cookie-only sessions, CSRF
     double-submit (missing / wrong / correct header), header-token CSRF exemption,
     per-account lockout, TOTP enrol→enable→login→disable, RBAC 401/403 gates,
-    settings validation, Web Push subscription lifecycle, traversal-safe backup
-    restore, and retention.
+    active-session listing/revocation with cross-user isolation, settings
+    validation, Web Push subscription lifecycle, traversal-safe backup restore,
+    and retention.
 - **Step 7.3: Isolation & tunability**
   - `DATA_DIR` env override relocates the SQLite database, backups, and generated
     secrets (used by tests via a shared `src/tests/setup.ts` bootstrap, so the
     developer's real `./data` is never touched).
   - Rate-limit caps are now env-configurable (`AUTH_RATE_LIMIT_MAX`,
     `API_RATE_LIMIT_MAX`, `AI_RATE_LIMIT_MAX`).
-  - Test total: 33 unit + 19 integration = **52 checks**.
+  - Test total: 33 unit + 20 integration = **53 checks**.
+
+### Phase 8 — Active Session Management ✅
+- **Step 8.1: Session metadata** (migration `009_session_metadata`)
+  - The `sessions` table gains `user_agent`, `ip`, and `last_seen_at` columns via
+    `ALTER TABLE` (backward-compatible upgrade verified against a pre-009 schema).
+    `saveSession` persists them; `touchSession` refreshes `last_seen_at` at most
+    once per minute per session to bound write cost.
+- **Step 8.2: Review & revoke endpoints**
+  - `GET /api/auth/sessions` lists the caller's own devices, each tagged with a
+    non-reversible `sha256(token)` digest — the bearer token is never returned,
+    even to its owner. The current session is flagged and sorted first.
+  - `DELETE /api/auth/sessions/:id` revokes a single device; ids are matched only
+    within the caller's own sessions (cross-user revocation returns `404`).
+    Revoking the current session clears the auth cookies.
+- **Step 8.3: Settings UI**
+  - The Security tab renders an **Active Sessions** card: friendly browser/OS
+    labels, IP, last-active time, a per-device Revoke action, and a guarded
+    "Sign Out All" (reuses the existing confirmation modal).
 

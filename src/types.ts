@@ -23,13 +23,17 @@ export interface UserAccount {
   lastLoginAt?: string | null;
 }
 
-/** Server-side session record persisted in memory and bound to a user. */
+/** A single active server-side session (device) belonging to the current user. */
 export interface SessionInfo {
-  userId: string;
-  email: string;
-  role: UserRole;
-  displayName?: string;
+  /** Non-reversible public digest identifying the session (never the token). */
+  id: string;
+  /** True for the session making the request. */
+  current: boolean;
+  userAgent: string | null;
+  ip: string | null;
   createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
 }
 
 export interface LocationItem {

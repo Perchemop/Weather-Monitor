@@ -11,7 +11,7 @@ Autonomous, local-first microclimate risk evaluation and automated safety alerti
 - **Resilient AI Superintendent Briefings**: Context-aware daily site briefings powered by Google Gemini (@google/genai) with automated multi-model failover (`gemini-3.8-flash` $\rightarrow$ `gemini-3.1-flash-lite` $\rightarrow$ `gemini-flash-latest`). Non-authoritative AI commentary can never downgrade deterministic risk scores.
 - **Private Local Enclave (SQLite / sql.js)**: Runs entirely on-premise or in private containers. Zero telemetry, zero analytics, zero external tracking.
 - **Role-Based Access Control**: Owner / Manager / Viewer roles with least-privilege route gating, per-account Scrypt credentials, and last-owner protections.
-- **Hardened Authentication**: Cookie-only sessions (no tokens in `localStorage`), CSRF double-submit protection, per-account login lockout, a configurable password policy, and optional TOTP two-factor authentication for every account.
+- **Hardened Authentication**: Cookie-only sessions (no tokens in `localStorage`), CSRF double-submit protection, per-account login lockout, a configurable password policy, optional TOTP two-factor authentication for every account, and self-service **active session management** (review and revoke individual signed-in devices).
 - **Installable, Offline-Capable & Push-Enabled (PWA)**: A service worker precaches the app shell, caches read-only API responses, and delivers Web Push safety alerts to subscribed devices even when the app is closed.
 - **Master Security & Scrypt Hashing**: Password-protected access with RFC 7914 Scrypt memory-hard key derivation.
 - **Automated Retention & Snapshot Rotation**: 30-minute automated database backups with 10-point rolling history, 24-hour retention pruning with a configurable observation window, and one-click restore-from-backup.
@@ -117,6 +117,7 @@ LOCAL_ONLY=false
 
 - **Security Headers**: Every response carries a strict `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, cross-origin isolation headers, and a restrictive `Permissions-Policy`. `X-Powered-By` fingerprinting is removed. HSTS is opt-in via `ENABLE_HSTS=true`.
 - **Cookie-only Sessions**: The session lives solely in an `HttpOnly` cookie — no token is ever written to `localStorage`, so script injection cannot exfiltrate it. Set `SECURE_COOKIES=true` when serving over HTTPS.
+- **Active Session Management**: Each account can review every signed-in device (derived browser/OS label, IP, last-active time) and revoke individual sessions or all sessions at once. Sessions are keyed by a non-reversible digest, so the bearer token is never exposed — even to its owner.
 - **CSRF Protection**: Cookie-authenticated state changes must echo the readable `cwm_csrf` cookie in the `x-csrf-token` header (double-submit pattern). Token-header clients are exempt.
 - **Rate Limiting**: Authentication endpoints (`/api/auth/login`, `/api/auth/setup`) are limited to 10 attempts per 15 minutes per client IP, the broader `/api` surface to 300 requests per minute, and the cost-bearing `/api/ai/*` endpoints to 20 requests per minute. All three limits are tunable via `AUTH_RATE_LIMIT_MAX`, `API_RATE_LIMIT_MAX`, and `AI_RATE_LIMIT_MAX`. Limited responses return HTTP `429` with `RateLimit-*` headers.
 - **Account Lockout**: After `LOGIN_MAX_ATTEMPTS` failed attempts, an account is locked for `LOGIN_LOCKOUT_MINUTES` minutes.
@@ -187,9 +188,9 @@ The server will start on port 3000 (`http://localhost:3000`).
 ```bash
 npm test              # both suites
 npm run test:unit     # deterministic engine + utilities (33 checks)
-npm run test:api      # HTTP integration surface (19 checks)
+npm run test:api      # HTTP integration surface (20 checks)
 ```
-The suite is now a **52-point** verification run split across two layers:
+The suite is now a **53-point** verification run split across two layers:
 
 - **Unit suite** — deterministic risk calculation, secret redaction, daylight
   savings timezone alignment, data freshness, Scrypt hashing, snapshot backups,
@@ -199,9 +200,9 @@ The suite is now a **52-point** verification run split across two layers:
   isolated temporary data directory and exercises the security surface over
   real HTTP: `/healthz`, account-enumeration resistance, cookie-only sessions,
   CSRF double-submit enforcement, header-token CSRF exemption, per-account
-  lockout, the full TOTP login flow, RBAC 401/403 gates, settings validation,
-  the Web Push subscription lifecycle, traversal-safe backup restore, and
-  retention.
+  lockout, the full TOTP login flow, RBAC 401/403 gates, active-session listing
+  and revocation (including cross-user isolation), settings validation, the Web
+  Push subscription lifecycle, traversal-safe backup restore, and retention.
 
 Tests never touch your working `./data` directory — they run in a fresh temp
 directory via the `DATA_DIR` override.
