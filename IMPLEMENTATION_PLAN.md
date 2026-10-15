@@ -3,7 +3,7 @@
 **Document Version:** 1.0  
 **Date:** 3 October 2026  
 **Application:** Construction Weather Monitor (Weather-Monitor-main)  
-**Stack:** React 19 + Vite 6 + Tailwind CSS 4 + Express + sql.js (SQLite) + Nodemailer + Google Gemini (@google/genai) + Lucide + Recharts + Motion  
+**Stack:** React 19 + Vite 6 + Tailwind CSS 4 + Express + sql.js (SQLite) + Nodemailer + Lucide + Recharts + Motion  
 
 ---
 
@@ -15,7 +15,6 @@ Primary goals:
 - Monitor weather conditions at one or more construction sites.
 - Calculate deterministic risk scores focused on construction activities (crane operations, formwork, concrete pours, roofing, working at heights, etc.).
 - Generate and deliver email alerts when thresholds are breached.
-- Provide AI-generated briefings and explanations that are strictly non-authoritative (they cannot override the deterministic risk level).
 - Store all data locally in SQLite (via sql.js) with no cloud dependency for core functionality.
 - Support dual weather providers (WeatherAPI as primary reference + Open-Meteo as cross-reference / fallback).
 
@@ -51,14 +50,8 @@ Default location shipped with the code: Unconfigured Site (−34.9285, 0, UTC).
 - Default location
 - Per-location status (LIVE / CACHED / STALE / OFFLINE)
 
-### 2.4 AI Features (Gemini)
-- Weather briefing with automatic multi-model failover (`gemini-3.8-flash` -> `gemini-3.1-flash-lite` -> `gemini-flash-latest`)
-- Alert explanation + recommended actions
-- Historical summary
-- Strict isolation: AI output is never allowed to change the deterministic risk level or score
-
-### 2.5 User Interface Views
-- Dashboard (Hero Risk Card, AI Briefing, Active Alerts, Cross-Reference Card, Hourly Bar, Current Conditions, Construction Impacts, compact System Health strip)
+### 2.4 User Interface Views
+- Dashboard (Hero Risk Card, Active Alerts, Cross-Reference Card, Hourly Bar, Current Conditions, compact System Health strip)
 - Forecast View
 - Alert History + Delivery log
 - Historical Observations
@@ -67,7 +60,7 @@ Default location shipped with the code: Unconfigured Site (−34.9285, 0, UTC).
 - Settings (owner details, units, monitoring, thresholds, SMTP, data management)
 - Location Modal
 
-### 2.6 Persistence & System
+### 2.5 Persistence & System
 - Full SQLite schema with migrations
 - Audit logs
 - Data retention enforcement
@@ -189,7 +182,7 @@ Default location shipped with the code: Unconfigured Site (−34.9285, 0, UTC).
     secrets (used by tests via a shared `src/tests/setup.ts` bootstrap, so the
     developer's real `./data` is never touched).
   - Rate-limit caps are now env-configurable (`AUTH_RATE_LIMIT_MAX`,
-    `API_RATE_LIMIT_MAX`, `AI_RATE_LIMIT_MAX`).
+    `API_RATE_LIMIT_MAX`).
   - Test total: 33 unit + 20 integration = **53 checks**.
 
 ### Phase 8 — Active Session Management ✅

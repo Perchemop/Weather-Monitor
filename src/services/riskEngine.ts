@@ -635,24 +635,3 @@ function evaluateOutdoorWork(
     thresholdDetails: 'Comfortable envelope'
   };
 }
-
-/**
- * Invariant Enforcer: Strictly guarantees that no AI summary, narrative commentary,
- * or prompt injection can mutate, downgrade, or override deterministic risk levels or scores.
- */
-export function enforceDeterministicIntegrity(
-  deterministicAssessment: RiskAssessment,
-  aiCommentary?: { briefing?: string; explanation?: string }
-): RiskAssessment {
-  return {
-    ...deterministicAssessment,
-    level: deterministicAssessment.level, // IMMUTABLE
-    score: deterministicAssessment.score, // IMMUTABLE
-    factors: [...deterministicAssessment.factors], // IMMUTABLE
-    affectedActivities: [...deterministicAssessment.affectedActivities], // IMMUTABLE
-    calculatedAt: deterministicAssessment.calculatedAt,
-    aiBriefing: aiCommentary?.briefing,
-    aiExplanation: aiCommentary?.explanation,
-    aiGeneratedAt: aiCommentary ? new Date().toISOString() : undefined
-  };
-}

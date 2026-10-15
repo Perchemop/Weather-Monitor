@@ -12,9 +12,6 @@
  */
 
 import {
-  AiAlertExplanationResponse,
-  AiBriefingResponse,
-  AiHistoricalSummaryResponse,
   CurrentWeather,
   HourlyForecastItem,
   LocationItem,
@@ -22,7 +19,7 @@ import {
   UserAccount
 } from '../types.js';
 import { searchGeocodingLocations } from '../services/weatherService.js';
-import { DEFAULT_THRESHOLDS, SAFETY_DISCLAIMER } from '../services/riskEngine.js';
+import { DEFAULT_THRESHOLDS } from '../services/riskEngine.js';
 import { store } from './store.js';
 import { staticMonitor } from './monitor.js';
 
@@ -79,98 +76,6 @@ function buildHealth(): SystemHealth {
     memoryUsageMb: 0,
     uptimeSeconds: Math.round((Date.now() - APP_STARTED_AT) / 1000),
     databaseSizeBytes: asArrayBufferSize(store.getAllLocations()) + store.countObservations() * 240,
-  };
-}
-
-function deterministicBriefing(locationName: string): AiBriefingResponse {
-  const loc = store.getDefaultLocation();
-  const risk = loc ? store.getLatestRiskAssessment(loc.id) : null;
-  const current = loc ? store.getLatestObservation(loc.id) : null;
-  const level = risk?.level || 'LOW';
-
-  const lines: string[] = [];
-  lines.push(`Rule-based site briefing for ${locationName}. Current deterministic risk is ${level}.`);
-  if (current) {
-    lines.push(
-      `Observed ${current.weatherDescription.toLowerCase()}, ${Math.round(current.temperature)}°C, wind ${Math.round(
-        current.windSpeed
-      )} km/h gusting ${Math.round(current.windGusts)} km/h, rain probability ${Math.round(current.rainProbability)}%.`
-    );
-  }
-  if (risk && risk.factors.length > 0) {
-    lines.push('Active risk factors: ' + risk.factors.map((f) => f.label).join('; ') + '.');
-  }
-  lines.push(
-    'This summary is generated locally from deterministic threshold rules — no external AI service is used.'
-  );
-
-  return {
-    briefing: lines.join(' '),
-    generatedAt: new Date().toISOString(),
-    source: 'DETERMINISTIC_RULES',
-    authoritativeRiskLevel: level,
-    disclaimer: SAFETY_DISCLAIMER
-  };
-}
-
-function deterministicHistorySummary(locationId: string, range: string): AiHistoricalSummaryResponse {
-  const loc = resolveLocation(locationId);
-  const observations = loc
-    ? store.getHistoricalObservations(loc.id, (range as 'today' | 'yesterday' | '7days' | '30days') || 'today')
-    : [];
-
-  if (observations.length === 0) {
-    return {
-      locationName: loc?.name || 'Monitored Site',
-      timeframe: range,
-      summary: 'No observations recorded for this period yet. Live monitoring will populate history automatically.',
-      peakGustObserved: 'n/a',
-      highestRiskLevel: 'LOW',
-      source: 'DETERMINISTIC_RULES',
-      generatedAt: new Date().toISOString()
-    };
-  }
-
-  const peakGust = Math.max(...observations.map((o) => o.windGusts));
-  const avgTemp = observations.reduce((a, o) => a + o.temperature, 0) / observations.length;
-  const totalRain = observations.reduce((a, o) => a + o.rainAmount, 0);
-  const order = { LOW: 0, MODERATE: 1, HIGH: 2, CRITICAL: 3 } as const;
-  const riskLevel = loc ? store.getLatestRiskAssessment(loc.id)?.level || 'LOW' : 'LOW';
-
-  return {
-    locationName: loc?.name || 'Monitored Site',
-    timeframe: range,
-    summary: `Across ${observations.length} recorded observations the average temperature was ${avgTemp.toFixed(
-      1
-    )}°C, peak gust ${Math.round(peakGust)} km/h and total rainfall ${totalRain.toFixed(1)} mm.`,
-    peakGustObserved: `${Math.round(peakGust)} km/h`,
-    highestRiskLevel: riskLevel,
-    source: 'DETERMINISTIC_RULES',
-    generatedAt: new Date().toISOString()
-  };
-}
-
-function deterministicAlertExplanation(alertId: string): AiAlertExplanationResponse | null {
-  const alert = store.getAlert(alertId);
-  if (!alert) return null;
-  return {
-    alertId,
-    title: alert.title,
-    explanation: `${alert.message} This condition was detected because ${alert.triggerCondition} was met (observed ${alert.observedValue}).`,
-    safetyRecommendations: [
-      'Review the current SWMS and task-specific risk controls.',
-      'Brief the crew on the affected activities before continuing work.',
-      'Reassess using the on-site measurement and supervisor judgement.'
-    ],
-    recommendedActions: [
-      'Suspend affected high-risk activities if conditions approach critical thresholds.',
-      'Secure loose materials and temporary structures.',
-      'Monitor the dashboard for escalation or clearance.'
-    ],
-    authoritativeSeverity: alert.severity,
-    swmsReference: `Triggered by ${alert.triggerCondition}`,
-    source: 'DETERMINISTIC_RULES',
-    generatedAt: new Date().toISOString()
   };
 }
 
@@ -279,8 +184,7 @@ export async function handleStaticApi(req: StaticApiRequest): Promise<StaticApiR
         weatherApiKeyConfigured: false,
         weatherApiKeyMasked: '',
         smtpConfigured: false,
-        smtpHost: '',
-        geminiKeyConfigured: false
+        smtpHost: ''
       }
     };
   }
@@ -491,23 +395,6 @@ export async function handleStaticApi(req: StaticApiRequest): Promise<StaticApiR
       store.clearData();
     }
     return { status: 200, body: { success: true } };
-  }
-
-  // ----------------------------- AI (deterministic) -----------------------------
-  if (pathname === '/api/ai/briefing') {
-    const loc = resolveLocation(body?.locationId);
-    return { status: 200, body: deterministicBriefing(loc?.name || 'Monitored Site') };
-  }
-  if (pathname === '/api/ai/history-summary') {
-    return {
-      status: 200,
-      body: deterministicHistorySummary(search.get('locationId') || '', search.get('range') || 'today')
-    };
-  }
-  if (pathname === '/api/ai/alert-explanation') {
-    const explanation = deterministicAlertExplanation(body?.alertId);
-    if (!explanation) return { status: 404, body: { error: 'Alert not found.' } };
-    return { status: 200, body: explanation };
   }
 
   return { status: 404, body: { error: `No static handler for ${method} ${pathname}` } };

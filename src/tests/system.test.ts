@@ -1,7 +1,7 @@
 /**
  * Comprehensive Automated System Test Suite
  * Tests deterministic risk engine, secret protection, timezone compliance,
- * data freshness, and AI isolation.
+ * and data freshness.
  */
 import './setup.js';
 import assert from 'node:assert/strict';
@@ -9,7 +9,6 @@ import { calculateDeterministicRisk, SAFETY_DISCLAIMER } from '../services/riskE
 import { redactSecretsInError, maskSecret } from '../utils/security.js';
 import { evaluateDataFreshness } from '../utils/time.js';
 import { CurrentWeather, HourlyForecastItem, RiskThresholds } from '../types.js';
-import { generateAiWeatherBriefing } from '../services/aiWeatherService.js';
 import { convertTemperature, convertWind, formatTemperature, formatWind } from '../utils/units.js';
 import { createDatabaseBackup, getDatabaseBackupsList, hashPasswordWithSalt } from '../database/db.js';
 import {
@@ -184,28 +183,11 @@ async function runTests() {
     assert.equal(freshness.status, 'OFFLINE');
   });
 
-  // 4. AI Non-Authoritative Isolation & Resilient Generation
-  test('AI Safety Isolation: Safety disclaimer is present in deterministic engine', () => {
+  // 4. Deterministic Safety Isolation
+  test('Safety Isolation: Safety disclaimer is present in deterministic engine', () => {
     assert.ok(SAFETY_DISCLAIMER.includes('SWMS'));
     assert.ok(SAFETY_DISCLAIMER.includes('safety judgement'));
   });
-
-  await (async () => {
-    try {
-      const current = createMockWeather({ windSpeed: 45, windGusts: 65 });
-      const hourly: HourlyForecastItem[] = [];
-      const risk = calculateDeterministicRisk(current, hourly, mockThresholds, 'UTC');
-      const briefing = await generateAiWeatherBriefing('Test Site North', current, risk, hourly);
-      assert.ok(briefing.briefing && briefing.briefing.length > 10, 'Briefing narrative must be non-empty');
-      assert.equal(briefing.authoritativeRiskLevel, risk.level, 'Authoritative risk level must match deterministic risk');
-      assert.ok(briefing.disclaimer?.includes('SWMS'), 'Safety disclaimer must be attached');
-      console.log(`  [PASS] AI Generation & Isolation: Model/Source=${briefing.source} (${briefing.modelUsed || 'Rule-Based'}), RiskLevel=${briefing.authoritativeRiskLevel}`);
-      passed++;
-    } catch (err: any) {
-      console.error(`  [FAIL] AI Generation & Isolation:`, err.message);
-      failed++;
-    }
-  })();
 
   // 5. Unit Conversion & Formatting Tests
   test('Unit Conversion: Celsius to Fahrenheit converts accurately', () => {

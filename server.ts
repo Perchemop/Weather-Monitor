@@ -89,15 +89,9 @@ import { securityHeaders } from './src/utils/securityHeaders.js';
 import { createRateLimiter } from './src/utils/rateLimiter.js';
 import { logger, requestLogger } from './src/utils/logger.js';
 import { validatePasswordStrength, describePasswordPolicy } from './src/utils/password.js';
-import { TtlCache } from './src/utils/ttlCache.js';
 import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from './src/utils/totp.js';
 import { loadOrCreateSessionSecret } from './src/utils/secretStore.js';
 import { UserAccount, UserRole } from './src/types.js';
-import {
-  generateAiWeatherBriefing,
-  generateAiAlertExplanation,
-  generateAiHistoricalSummary
-} from './src/services/aiWeatherService.js';
 
 const PORT = 3000;
 const SESSION_SECRET = loadOrCreateSessionSecret();
@@ -305,10 +299,6 @@ function clearLoginFailures(key: string): void {
   loginAttempts.delete(key);
 }
 
-// Caches AI responses to avoid re-billing Gemini for identical requests.
-const aiBriefingCache = new TtlCache<unknown>(10 * 60 * 1000, 200);
-const aiHistoryCache = new TtlCache<unknown>(10 * 60 * 1000, 200);
-
 
 export type StaticMode = 'vite' | 'static' | 'none';
 
@@ -358,13 +348,6 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   const apiLimiter = createRateLimiter({
     windowMs: 60 * 1000,
     max: Math.max(1, Number(process.env.API_RATE_LIMIT_MAX) || 300)
-  });
-
-  // Dedicated limiter for cost-bearing AI endpoints.
-  const aiLimiter = createRateLimiter({
-    windowMs: 60 * 1000,
-    max: Math.max(1, Number(process.env.AI_RATE_LIMIT_MAX) || 20),
-    message: 'Too many AI requests. Please wait a moment before retrying.'
   });
 
   app.use('/api/', apiLimiter);
@@ -1228,136 +1211,6 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.json({ success: true, message: `Test email sent to ${recipient}` });
   });
 
-  // ----------------- AI WEATHER ADVISORY (GEMINI) -----------------
-  app.post('/api/ai/briefing', requireAuth, aiLimiter, async (req: Request, res: Response) => {
-    try {
-      const locId = (req.body?.locationId as string) || undefined;
-      const locations = await getAllLocations();
-      const targetLoc = locId
-        ? locations.find((l) => l.id === locId) || locations[0]
-        : (await getDefaultLocation()) || locations[0];
-
-      if (!targetLoc) {
-        res.status(404).json({ error: 'No location configured.' });
-        return;
-      }
-
-      let current = await getLatestObservation(targetLoc.id);
-      let risk = await getLatestRiskAssessment(targetLoc.id);
-      const forecast = await getLatestForecastSnapshot(targetLoc.id);
-
-      if (!current || !risk) {
-        await monitoringService.executeCycle(targetLoc.id, true);
-        current = await getLatestObservation(targetLoc.id);
-        risk = await getLatestRiskAssessment(targetLoc.id);
-      }
-
-      if (!current || !risk) {
-        res.status(503).json({ error: 'Weather data not yet available.' });
-        return;
-      }
-
-      // Cache key reflects the inputs that actually change the narrative.
-      const cacheKey = [
-        'briefing',
-        targetLoc.id,
-        risk.level,
-        Math.round(current.temperature),
-        Math.round(current.windGusts),
-        Math.round(current.humidity)
-      ].join(':');
-
-      const briefing = await aiBriefingCache.wrap(cacheKey, () =>
-        generateAiWeatherBriefing(targetLoc.name, current!, risk!, forecast?.hourly || [])
-      );
-
-      res.json(briefing);
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to generate AI weather briefing.' });
-    }
-  });
-
-  app.post('/api/ai/alert-explanation', requireAuth, aiLimiter, async (req: Request, res: Response) => {
-    try {
-      const { alertId } = req.body;
-      if (!alertId) {
-        res.status(400).json({ error: 'alertId is required.' });
-        return;
-      }
-
-      const cacheKey = `alert:${alertId}`;
-      const cached = aiBriefingCache.get(cacheKey);
-      if (cached) {
-        res.json(cached);
-        return;
-      }
-
-      const activeAlerts = await getActiveAlerts();
-      const alert = activeAlerts.find((a) => a.id === alertId);
-
-      if (!alert) {
-        const history = await getAlertHistory(20);
-        const pastAlert = history.find((a) => a.id === alertId);
-        if (!pastAlert) {
-          res.status(404).json({ error: 'Alert not found.' });
-          return;
-        }
-        const risk = (await getLatestRiskAssessment(pastAlert.locationId)) || {
-          level: pastAlert.severity,
-          score: 50,
-          factors: [],
-          affectedActivities: [],
-          summary: pastAlert.message,
-          assessedAt: pastAlert.startTime
-        };
-        const explanation = await generateAiAlertExplanation(pastAlert, risk as any);
-        aiBriefingCache.set(cacheKey, explanation);
-        res.json(explanation);
-        return;
-      }
-
-      const risk = (await getLatestRiskAssessment(alert.locationId)) || {
-        level: alert.severity,
-        score: 50,
-        factors: [],
-        affectedActivities: [],
-        summary: alert.message,
-        assessedAt: alert.startTime
-      };
-
-      const explanation = await generateAiAlertExplanation(alert, risk as any);
-      aiBriefingCache.set(cacheKey, explanation);
-      res.json(explanation);
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to generate AI alert explanation.' });
-    }
-  });
-
-  app.get('/api/ai/history-summary', requireAuth, aiLimiter, async (req: Request, res: Response) => {
-    try {
-      const locId = (req.query.locationId as string) || undefined;
-      const range = (req.query.range as any) || 'today';
-      const locations = await getAllLocations();
-      const targetLoc = locId
-        ? locations.find((l) => l.id === locId) || locations[0]
-        : (await getDefaultLocation()) || locations[0];
-
-      if (!targetLoc) {
-        res.status(404).json({ error: 'Location not found.' });
-        return;
-      }
-
-      const observations = await getHistoricalObservations(targetLoc.id, range);
-      const cacheKey = `history:${targetLoc.id}:${range}:${observations.length}`;
-      const summary = await aiHistoryCache.wrap(cacheKey, () =>
-        generateAiHistoricalSummary(targetLoc.name, observations)
-      );
-      res.json(summary);
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to generate historical summary.' });
-    }
-  });
-
   // ----------------- DATA RETENTION & PRIVACY -----------------
   app.post('/api/data/retention/run', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     try {
@@ -1384,14 +1237,12 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     try {
       const weatherKey = process.env.WEATHER_API_KEY || '';
       const smtpInfo = getPublicSmtpStatus();
-      const geminiKey = process.env.GEMINI_API_KEY || '';
 
       res.json({
         weatherApiKeyConfigured: Boolean(weatherKey.trim()),
         weatherApiKeyMasked: weatherKey ? maskSecret(weatherKey, 4) : 'Not configured',
         smtpConfigured: smtpInfo.configured,
         smtpHost: smtpInfo.host || 'Not configured',
-        geminiKeyConfigured: Boolean(geminiKey.trim()),
         pushConfigured: isPushConfigured()
       });
     } catch (err: any) {
