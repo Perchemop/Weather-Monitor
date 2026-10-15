@@ -45,6 +45,8 @@ import { isSmtpConfigured, sendTestEmail, getPublicSmtpStatus } from './src/serv
 import { monitoringService } from './src/services/monitoringService.js';
 import { evaluateDataFreshness } from './src/utils/time.js';
 import { maskSecret } from './src/utils/security.js';
+import { securityHeaders } from './src/utils/securityHeaders.js';
+import { createRateLimiter } from './src/utils/rateLimiter.js';
 import {
   generateAiWeatherBriefing,
   generateAiAlertExplanation,
@@ -94,8 +96,34 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
 async function startServer() {
   const app = express();
 
-  app.use(express.json());
+  // Disable fingerprinting and trust the first proxy hop for accurate client IPs.
+  app.disable('x-powered-by');
+  app.set('trust proxy', 1);
+
+  // Apply baseline security headers to every response. HSTS is opt-in because
+  // the default deployment is a plain-HTTP local enclave.
+  app.use(securityHeaders({
+    enableHsts: process.env.ENABLE_HSTS === 'true',
+    dev: process.env.NODE_ENV !== 'production'
+  }));
+
+  app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser(SESSION_SECRET));
+
+  // Brute-force protection for the unauthenticated auth endpoints.
+  const authLimiter = createRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: 'Too many authentication attempts. Please wait before trying again.'
+  });
+
+  // Broad safety net for the authenticated API surface.
+  const apiLimiter = createRateLimiter({
+    windowMs: 60 * 1000,
+    max: 300
+  });
+
+  app.use('/api/', apiLimiter);
 
   // Initialize SQLite database
   await getDb();
@@ -123,7 +151,7 @@ async function startServer() {
     });
   });
 
-  app.post('/api/auth/setup', async (req: Request, res: Response) => {
+  app.post('/api/auth/setup', authLimiter, async (req: Request, res: Response) => {
     const { password, email } = req.body;
     if (!password || password.length < 6) {
       res.status(400).json({ error: 'Master password must be at least 6 characters.' });
@@ -141,7 +169,7 @@ async function startServer() {
     res.json({ success: true, token, email: email || 'owner@local' });
   });
 
-  app.post('/api/auth/login', async (req: Request, res: Response) => {
+  app.post('/api/auth/login', authLimiter, async (req: Request, res: Response) => {
     const { password } = req.body;
     if (!password) {
       res.status(400).json({ error: 'Password is required' });

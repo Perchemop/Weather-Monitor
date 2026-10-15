@@ -11,6 +11,8 @@ import { CurrentWeather, HourlyForecastItem, RiskThresholds } from '../types.js'
 import { generateAiWeatherBriefing } from '../services/aiWeatherService.js';
 import { convertTemperature, convertWind, formatTemperature, formatWind } from '../utils/units.js';
 import { createDatabaseBackup, getDatabaseBackupsList, hashPasswordWithSalt } from '../database/db.js';
+import { createRateLimiter, defaultKeyGenerator } from '../utils/rateLimiter.js';
+import { securityHeaders } from '../utils/securityHeaders.js';
 
 const mockThresholds: RiskThresholds = {
   windWarning: 38,
@@ -211,6 +213,99 @@ async function runTests() {
       failed++;
     }
   })();
+
+  // 8. Security Hardening: Rate Limiting & Headers
+  test('Security: Rate limiter blocks requests beyond the configured maximum', () => {
+    const limiter = createRateLimiter({ windowMs: 60000, max: 3 });
+    const makeReq = (ip: string) => ({ ip, socket: { remoteAddress: ip } }) as any;
+    const makeRes = () => {
+      const headers: Record<string, string> = {};
+      return {
+        statusCode: 200,
+        body: undefined as any,
+        setHeader: (k: string, v: string) => { headers[k] = v; },
+        status(code: number) { this.statusCode = code; return this; },
+        json(payload: any) { this.body = payload; return this; },
+        headers
+      } as any;
+    };
+
+    let nextCalls = 0;
+    const next = () => { nextCalls++; };
+
+    for (let i = 0; i < 3; i++) {
+      limiter(makeReq('10.0.0.1'), makeRes(), next);
+    }
+    const blockedRes = makeRes();
+    limiter(makeReq('10.0.0.1'), blockedRes, next);
+
+    assert.equal(nextCalls, 3, 'First three requests should pass through');
+    assert.equal(blockedRes.statusCode, 429, 'Fourth request must be rate limited');
+    assert.ok(blockedRes.body?.error, 'Rate limited response must include an error message');
+
+    // A different client identity must have an independent budget.
+    const otherRes = makeRes();
+    limiter(makeReq('10.0.0.2'), otherRes, next);
+    assert.equal(nextCalls, 4, 'Distinct client IPs must not share a rate limit window');
+  });
+
+  test('Security: Rate limiter reset clears tracked windows', () => {
+    const limiter = createRateLimiter({ windowMs: 60000, max: 1 });
+    const makeReq = () => ({ ip: '10.0.0.9', socket: { remoteAddress: '10.0.0.9' } }) as any;
+    const makeRes = () => ({
+      setHeader: () => {},
+      status(code: number) { return { json: () => code }; },
+      json: () => {}
+    }) as any;
+
+    let nextCalls = 0;
+    limiter(makeReq(), makeRes(), () => { nextCalls++; });
+    limiter(makeReq(), makeRes(), () => { nextCalls++; }); // blocked
+    assert.equal(nextCalls, 1, 'Second request within window must be blocked');
+    limiter.reset();
+    limiter(makeReq(), makeRes(), () => { nextCalls++; });
+    assert.equal(nextCalls, 2, 'After reset the client regains its budget');
+  });
+
+  test('Security: Default key generator derives a client identity from the request', () => {
+    assert.equal(defaultKeyGenerator({ ip: '192.168.1.5' } as any), '192.168.1.5');
+    assert.equal(
+      defaultKeyGenerator({ socket: { remoteAddress: '::1' } } as any),
+      '::1'
+    );
+  });
+
+  test('Security: Security headers are applied and fingerprinting is removed', () => {
+    const middleware = securityHeaders({ dev: false });
+    const headers: Record<string, string> = {};
+    const removed: string[] = [];
+    const res = {
+      setHeader: (k: string, v: string) => { headers[k] = v; },
+      removeHeader: (k: string) => { removed.push(k); }
+    } as any;
+    let nextCalled = false;
+    middleware({} as any, res, () => { nextCalled = true; });
+
+    assert.ok(nextCalled, 'Header middleware must call next()');
+    assert.equal(headers['X-Content-Type-Options'], 'nosniff');
+    assert.equal(headers['X-Frame-Options'], 'DENY');
+    assert.equal(headers['Referrer-Policy'], 'no-referrer');
+    assert.ok(headers['Content-Security-Policy'].includes("default-src 'self'"));
+    assert.ok(headers['Content-Security-Policy'].includes("script-src 'self';"), 'Production CSP must restrict scripts to self');
+    assert.ok(!headers['Content-Security-Policy'].includes("script-src 'self' 'unsafe-inline'"), 'Production CSP must not allow inline scripts');
+    assert.ok(removed.includes('X-Powered-By'), 'X-Powered-By must be removed');
+    assert.equal(headers['Strict-Transport-Security'], undefined, 'HSTS must be off by default');
+  });
+
+  test('Security: HSTS is emitted only when explicitly enabled', () => {
+    const headers: Record<string, string> = {};
+    const res = {
+      setHeader: (k: string, v: string) => { headers[k] = v; },
+      removeHeader: () => {}
+    } as any;
+    securityHeaders({ enableHsts: true })({} as any, res, () => {});
+    assert.ok(headers['Strict-Transport-Security']?.includes('max-age=31536000'));
+  });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {
