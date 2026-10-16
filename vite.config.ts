@@ -40,6 +40,7 @@ export default defineConfig(() => {
           manualChunks(id) {
             if (!id.includes('node_modules')) return undefined;
             if (id.includes('recharts') || id.includes('d3-') || id.includes('victory')) return 'charts';
+            if (id.includes('leaflet')) return 'maps';
             if (id.includes('lucide-react')) return 'icons';
             if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('scheduler')) return 'react';
             return 'vendor';
