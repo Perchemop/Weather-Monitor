@@ -428,7 +428,13 @@ function initializeSchema(db: Database) {
     const envPassword = process.env.INITIAL_OWNER_PASSWORD || process.env.ADMIN_PASSWORD;
     const initialPass = envPassword || generateSecureBootstrapPassword(16);
 
-    if (!envPassword) {
+    // The auto-generated password is only printed when there is no
+    // INITIAL_OWNER_PASSWORD/ADMIN_PASSWORD env var — i.e. exactly when an
+    // operator has no other way to learn it, so this must stay on by default.
+    // SUPPRESS_BOOTSTRAP_PASSWORD_LOG=1 silences it for environments that
+    // capture stdout (set your own password first to avoid being locked out).
+    const suppressBootstrapLog = process.env.SUPPRESS_BOOTSTRAP_PASSWORD_LOG === '1';
+    if (!envPassword && !suppressBootstrapLog) {
       console.log('\n============================================================');
       console.log(' [SECURITY NOTICE] Initial Site Owner Account Provisioned:');
       console.log(` Email:    ${defaultEmail}`);
