@@ -65,6 +65,12 @@ export interface CurrentWeather {
   pressure: number;
   visibility: number;
   isDay: boolean;
+  /** Wind direction in degrees (meteorological, 0 = from north). Optional. */
+  windDirection?: number;
+  /** Convective Available Potential Energy (J/kg) — storm-energy proxy. Optional. */
+  cape?: number;
+  /** Lightning Potential Index (J/kg) — higher means more likely. Optional. */
+  lightningPotential?: number;
 }
 
 export interface HourlyForecastItem {
@@ -78,6 +84,12 @@ export interface HourlyForecastItem {
   weatherDescription: string;
   uvIndex: number;
   riskLevel: RiskLevel;
+  /** Wind direction in degrees (meteorological, 0 = from north). Optional. */
+  windDirection?: number;
+  /** Convective Available Potential Energy (J/kg). Optional. */
+  cape?: number;
+  /** Lightning Potential Index (J/kg). Optional. */
+  lightningPotential?: number;
 }
 
 export interface DailyForecastItem {
