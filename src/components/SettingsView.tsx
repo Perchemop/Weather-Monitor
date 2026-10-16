@@ -721,7 +721,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
 
       {/* 1. General & Units Tab */}
       {activeTab === 'general' && (
-        <div className="space-y-5 animate-in fade-in-50 duration-200">
+        <div className="space-y-5 animate-fade-in duration-200">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
             <h4 className="text-xs font-mono font-bold uppercase text-slate-300 border-b border-slate-800 pb-3">
               SITE OWNER & DISPLAY PREFERENCES
@@ -781,7 +781,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
 
       {/* 2. Safety Thresholds Tab */}
       {activeTab === 'thresholds' && (
-        <div className="space-y-5 animate-in fade-in-50 duration-200">
+        <div className="space-y-5 animate-fade-in duration-200">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-5">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
@@ -957,7 +957,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
 
       {/* 3. Monitoring & Cycles Tab */}
       {activeTab === 'monitoring' && (
-        <div className="space-y-5 animate-in fade-in-50 duration-200">
+        <div className="space-y-5 animate-fade-in duration-200">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
             <h4 className="text-xs font-mono font-bold uppercase text-slate-300 border-b border-slate-800 pb-3">
               AUTONOMOUS MONITORING SERVICE INTERVALS
@@ -1059,7 +1059,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
 
       {/* 4. SMTP Email Gateway Tab */}
       {activeTab === 'smtp' && (
-        <div className="space-y-5 animate-in fade-in-50 duration-200">
+        <div className="space-y-5 animate-fade-in duration-200">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
@@ -1141,7 +1141,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
 
       {/* 5. Storage & Backup Tab */}
       {activeTab === 'storage' && (
-        <div className="space-y-5 animate-in fade-in-50 duration-200">
+        <div className="space-y-5 animate-fade-in duration-200">
           {/* Backup Management Card */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -1286,7 +1286,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
 
       {/* 6. Security & Master Password Tab */}
       {activeTab === 'security' && (
-        <div className="space-y-5 animate-in fade-in-50 duration-200">
+        <div className="space-y-5 animate-fade-in duration-200">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
               <Lock className="w-4 h-4 text-amber-400" />
@@ -1647,7 +1647,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
       {/* In-App Confirmation Modal (safe for iframes) */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in-50 zoom-in-95 duration-150">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 animate-modal-in duration-150">
             <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
               {confirmModal.title}
             </h3>

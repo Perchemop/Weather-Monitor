@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroRiskCard } from './components/HeroRiskCard';
 import { CurrentConditions } from './components/CurrentConditions';
@@ -38,6 +38,7 @@ import { fetchRealWeatherData } from './services/weatherService';
 import { calculateDeterministicRisk } from './services/riskEngine';
 import { CrossReferenceCard } from './components/CrossReferenceCard';
 import { apiFetch } from './utils/api';
+import { deepEqual, setStateIfChanged } from './utils/state';
 import { STATIC_MODE } from './static/mode';
 import { ShieldCheck, Database, HardHat, CheckCircle2, ArrowRightLeft, WifiOff } from 'lucide-react';
 
@@ -106,17 +107,29 @@ export default function App() {
     };
   }, []);
 
-  // Broadcast newly triggered alerts to the operator while the dashboard is open.
-  // The in-browser monitor also raises OS notifications; this keeps severe
-  // alerts visible in-app even when notifications are off or unsupported.
+  // `currentLocationRef` always holds the freshest location so the polling
+  // callback never needs `currentLocation` in its dependency list. Depending on
+  // it previously created a fetch/render feedback loop: every poll replaced the
+  // location object, which changed the callback identity, which re-ran the
+  // effect, which fetched again — the source of the constant flicker.
+  const currentLocationRef = useRef<LocationItem | null>(currentLocation);
+
+  const applyLocation = useCallback((loc: LocationItem) => {
+    currentLocationRef.current = loc;
+    // Keep the previous state object when the payload is unchanged so memoised
+    // children receiving `currentLocation` don't re-render on every poll.
+    setStateIfChanged(setCurrentLocation, loc);
+  }, []);
+
+  // Broadcast newly triggered alerts to the operator while the dashboard is
+  // open. The in-browser monitor also raises OS notifications; this keeps
+  // severe alerts visible in-app even when notifications are off or unsupported.
   const seenAlertIds = useRef<Set<string>>(new Set());
-  const alertsInitialised = useRef(false);
+  const alertsSeeded = useRef(false);
+  const markAlertsSeen = useCallback((list: AlertItem[]) => {
+    for (const alert of list) seenAlertIds.current.add(alert.id);
+  }, []);
   useEffect(() => {
-    if (!alertsInitialised.current) {
-      activeAlerts.forEach((a) => seenAlertIds.current.add(a.id));
-      alertsInitialised.current = true;
-      return;
-    }
     for (const alert of activeAlerts) {
       if (seenAlertIds.current.has(alert.id)) continue;
       seenAlertIds.current.add(alert.id);
@@ -152,159 +165,188 @@ export default function App() {
   }, []);
 
   // Handle successful login or first-run setup
-  const handleAuthenticated = (email: string, role: UserRole = 'OWNER') => {
-    setIsAuthenticated(true);
-    setIsFirstRun(false);
-    setOwnerEmail(email);
-    setUserRole(role);
-    toast.success('Site Safety Enclave unlocked.');
-    loadDashboardData();
-  };
+  const handleAuthenticated = useCallback(
+    (email: string, role: UserRole = 'OWNER') => {
+      setIsAuthenticated(true);
+      setIsFirstRun(false);
+      setOwnerEmail(email);
+      setUserRole(role);
+      toast.success('Site Safety Enclave unlocked.');
+      // `loadDashboardData` is referentially stable; calling it from here keeps
+      // this callback stable too without a TDZ-sensitive dependency entry.
+      void loadDashboardData({ showLoading: true });
+    },
+    [toast]
+  );
 
   // Handle logout / session lock
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' });
     } catch {}
     setIsAuthenticated(false);
     setUserRole('VIEWER');
     toast.info('Safety Enclave session locked.');
-  };
+  }, [toast]);
 
-  // Resiliently load weather data from backend or fallback to direct Open-Meteo client fetching
-  const loadDashboardData = useCallback(async () => {
-    let weatherLoaded = false;
-    let targetLoc = currentLocation || FALLBACK_SITE;
-    setIsDashboardLoading(true);
+  // Resiliently load weather data from backend or fallback to direct Open-Meteo client fetching.
+  // The callback is referentially stable (it reads the location from a ref and
+  // only writes state through `setStateIfChanged`), so the polling effect below
+  // runs once instead of on every render.
+  const loadDashboardData = useCallback(
+    async (options: { showLoading?: boolean } = {}) => {
+      const { showLoading = false } = options;
+      const loc = currentLocationRef.current || FALLBACK_SITE;
+      let weatherLoaded = false;
+      // Only show the skeleton for explicit/initial loads; background polls
+      // refresh silently so the dashboard never flashes.
+      if (showLoading) setIsDashboardLoading(true);
 
-    // 0. Fetch Owner Settings for units and intervals
-    try {
-      const setRes = await apiFetch('/api/settings');
-      if (setRes.ok) {
-        const setData = await setRes.json();
-        if (setData.settings) {
-          setOwnerSettings(setData.settings);
-        }
-      }
-    } catch {}
-
-    // 1. Try to fetch Current Weather & Risk from backend API
-    try {
-      const currentRes = await apiFetch(`/api/weather/current${currentLocation ? `?locationId=${currentLocation.id}` : ''}`);
-      if (currentRes.ok) {
-        const data = await currentRes.json();
-        if (data.location) {
-          targetLoc = data.location;
-          setCurrentLocation(data.location);
-        }
-        if (data.current) {
-          setCurrentWeather(data.current);
-          weatherLoaded = true;
-        }
-        if (data.risk) setRiskAssessment(data.risk);
-        if (data.activeAlerts) setActiveAlerts(data.activeAlerts);
-        if (data.monitorStatus) setMonitorStatus(data.monitorStatus);
-        if (data.dataStatus) setDataStatus(data.dataStatus);
-        if (data.comparison) setProviderComparison(data.comparison);
-        if (typeof data.hasWeatherApiKey === 'boolean') setHasWeatherApiKey(data.hasWeatherApiKey);
-        if (data.activeProvider) setActiveProvider(data.activeProvider);
-      }
-    } catch {
-      // Backend temporarily unavailable / restarting
-    }
-
-    // 2. Fetch Cross-Reference Comparison if not already in current
-    try {
-      const crossRes = await apiFetch(`/api/weather/cross-reference${currentLocation ? `?locationId=${currentLocation.id}` : ''}`);
-      if (crossRes.ok) {
-        const cData = await crossRes.json();
-        if (cData.comparison) setProviderComparison(cData.comparison);
-        if (typeof cData.hasWeatherApiKey === 'boolean') setHasWeatherApiKey(cData.hasWeatherApiKey);
-        if (cData.activeProvider) setActiveProvider(cData.activeProvider);
-      }
-    } catch {}
-
-    // 3. Fetch Locations List from backend
-    try {
-      const locsRes = await apiFetch('/api/locations');
-      if (locsRes.ok) {
-        const locsData = await locsRes.json();
-        if (Array.isArray(locsData.locations) && locsData.locations.length > 0) {
-          setAllLocations(locsData.locations);
-        }
-      }
-    } catch {}
-
-    // 4. Fetch Forecast Details from backend
-    try {
-      const forecastRes = await apiFetch(`/api/weather/forecast${currentLocation ? `?locationId=${currentLocation.id}` : ''}`);
-      if (forecastRes.ok) {
-        const fData = await forecastRes.json();
-        if (Array.isArray(fData.hourly) && fData.hourly.length > 0) setHourlyForecast(fData.hourly);
-        if (Array.isArray(fData.daily) && fData.daily.length > 0) setDailyForecast(fData.daily);
-      }
-    } catch {}
-
-    // 5. Fetch Alerts & Deliveries from backend
-    try {
-      const alertsRes = await apiFetch('/api/alerts');
-      if (alertsRes.ok) {
-        const aData = await alertsRes.json();
-        if (Array.isArray(aData.alerts)) setAllAlerts(aData.alerts);
-        if (Array.isArray(aData.deliveries)) setAlertDeliveries(aData.deliveries);
-      }
-    } catch {}
-
-    // 6. Fetch Health Diagnostics from backend
-    try {
-      const healthRes = await apiFetch('/api/health');
-      if (healthRes.ok) {
-        const hData = await healthRes.json();
-        setSystemHealth(hData);
-      }
-    } catch {}
-
-    // 7. Direct Client Fallback: If backend weather was not fetched, query directly from Open-Meteo
-    if (!weatherLoaded) {
+      // 0. Fetch Owner Settings for units and intervals
       try {
-        const livePayload = await fetchRealWeatherData(
-          targetLoc.latitude,
-          targetLoc.longitude,
-          targetLoc.id,
-          targetLoc.name,
-          targetLoc.timezone
-        );
-        const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly, undefined, targetLoc.timezone);
-        setCurrentWeather(livePayload.current);
-        setRiskAssessment(risk);
-        setHourlyForecast(livePayload.hourly);
-        setDailyForecast(livePayload.daily);
-        if (livePayload.comparison) setProviderComparison(livePayload.comparison);
-        setDataStatus('LIVE');
-        setMonitorStatus((prev) => ({
-          ...prev,
-          status: 'ACTIVE',
-          isRunning: true,
-          lastCheckTime: new Date().toISOString()
-        }));
-      } catch (err) {
-        console.warn('Direct weather query failed:', err);
-      }
-    }
+        const setRes = await apiFetch('/api/settings');
+        if (setRes.ok) {
+          const setData = await setRes.json();
+          if (setData.settings) setStateIfChanged(setOwnerSettings, setData.settings);
+        }
+      } catch {}
 
-    setIsDashboardLoading(false);
-  }, [currentLocation, apiFetch]);
+      // 1. Try to fetch Current Weather & Risk from backend API
+      try {
+        const currentRes = await apiFetch(`/api/weather/current?locationId=${loc.id}`);
+        if (currentRes.ok) {
+          const data = await currentRes.json();
+          if (data.location) applyLocation(data.location);
+          if (data.current) {
+            setStateIfChanged(setCurrentWeather, data.current);
+            weatherLoaded = true;
+          }
+          if (data.risk) setStateIfChanged(setRiskAssessment, data.risk);
+          if (data.activeAlerts) {
+            // Seed the "already notified" set on the first load so pre-existing
+            // alerts don't spam toasts; later polls surface only genuinely new ones.
+            if (!alertsSeeded.current) {
+              markAlertsSeen(data.activeAlerts);
+              alertsSeeded.current = true;
+            }
+            setStateIfChanged(setActiveAlerts, data.activeAlerts);
+          }
+          if (data.monitorStatus) {
+            setMonitorStatus((prev) => {
+              const next = { ...data.monitorStatus, isChecking: prev.isChecking };
+              return deepEqual(prev, next) ? prev : next;
+            });
+          }
+          if (data.dataStatus) setDataStatus(data.dataStatus);
+          if (data.comparison) setStateIfChanged(setProviderComparison, data.comparison);
+          if (typeof data.hasWeatherApiKey === 'boolean') setHasWeatherApiKey(data.hasWeatherApiKey);
+          if (data.activeProvider) setActiveProvider(data.activeProvider);
+        }
+      } catch {
+        // Backend temporarily unavailable / restarting
+      }
+
+      // 2. Fetch Cross-Reference Comparison if not already in current
+      try {
+        const crossRes = await apiFetch(`/api/weather/cross-reference?locationId=${loc.id}`);
+        if (crossRes.ok) {
+          const cData = await crossRes.json();
+          if (cData.comparison) setStateIfChanged(setProviderComparison, cData.comparison);
+          if (typeof cData.hasWeatherApiKey === 'boolean') setHasWeatherApiKey(cData.hasWeatherApiKey);
+          if (cData.activeProvider) setActiveProvider(cData.activeProvider);
+        }
+      } catch {}
+
+      // 3. Fetch Locations List from backend
+      try {
+        const locsRes = await apiFetch('/api/locations');
+        if (locsRes.ok) {
+          const locsData = await locsRes.json();
+          if (Array.isArray(locsData.locations) && locsData.locations.length > 0) {
+            setStateIfChanged(setAllLocations, locsData.locations);
+          }
+        }
+      } catch {}
+
+      // 4. Fetch Forecast Details from backend
+      try {
+        const forecastRes = await apiFetch(`/api/weather/forecast?locationId=${loc.id}`);
+        if (forecastRes.ok) {
+          const fData = await forecastRes.json();
+          if (Array.isArray(fData.hourly) && fData.hourly.length > 0) setStateIfChanged(setHourlyForecast, fData.hourly);
+          if (Array.isArray(fData.daily) && fData.daily.length > 0) setStateIfChanged(setDailyForecast, fData.daily);
+        }
+      } catch {}
+
+      // 5. Fetch Alerts & Deliveries from backend
+      try {
+        const alertsRes = await apiFetch('/api/alerts');
+        if (alertsRes.ok) {
+          const aData = await alertsRes.json();
+          if (Array.isArray(aData.alerts)) setStateIfChanged(setAllAlerts, aData.alerts);
+          if (Array.isArray(aData.deliveries)) setStateIfChanged(setAlertDeliveries, aData.deliveries);
+        }
+      } catch {}
+
+      // 6. Fetch Health Diagnostics from backend
+      try {
+        const healthRes = await apiFetch('/api/health');
+        if (healthRes.ok) {
+          const hData = await healthRes.json();
+          setStateIfChanged(setSystemHealth, hData);
+        }
+      } catch {}
+
+      // 7. Direct Client Fallback: If backend weather was not fetched, query directly from Open-Meteo
+      if (!weatherLoaded) {
+        try {
+          const livePayload = await fetchRealWeatherData(
+            loc.latitude,
+            loc.longitude,
+            loc.id,
+            loc.name,
+            loc.timezone
+          );
+          const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly, undefined, loc.timezone);
+          setStateIfChanged(setCurrentWeather, livePayload.current);
+          setStateIfChanged(setRiskAssessment, risk);
+          setStateIfChanged(setHourlyForecast, livePayload.hourly);
+          setStateIfChanged(setDailyForecast, livePayload.daily);
+          if (livePayload.comparison) setStateIfChanged(setProviderComparison, livePayload.comparison);
+          setDataStatus('LIVE');
+          setMonitorStatus((prev) => ({
+            ...prev,
+            status: 'ACTIVE',
+            isRunning: true,
+            lastCheckTime: new Date().toISOString()
+          }));
+        } catch (err) {
+          console.warn('Direct weather query failed:', err);
+        }
+      }
+
+      setIsDashboardLoading(false);
+    },
+    [applyLocation, markAlertsSeen]
+  );
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    loadDashboardData();
-    // Poll every 30s for fresh monitor status
-    const interval = setInterval(loadDashboardData, 30000);
+    void loadDashboardData({ showLoading: true });
+    // Poll every 30s for fresh monitor status (silent background refresh).
+    const interval = setInterval(() => {
+      void loadDashboardData();
+    }, 30000);
     return () => clearInterval(interval);
   }, [isAuthenticated, loadDashboardData]);
 
+  // Explicit, user-triggered refresh that shows the skeleton.
+  const refreshDashboard = useCallback(() => {
+    void loadDashboardData({ showLoading: true });
+  }, [loadDashboardData]);
+
   // Execute manual weather check
-  const handleRunCheckNow = async () => {
+  const handleRunCheckNow = useCallback(async () => {
     setMonitorStatus((prev) => ({ ...prev, isChecking: true }));
     toast.info('Executing immediate weather observation cycle...');
 
@@ -319,7 +361,7 @@ export default function App() {
 
     // Fallback: direct refresh from Open-Meteo
     try {
-      const loc = currentLocation || FALLBACK_SITE;
+      const loc = currentLocationRef.current || FALLBACK_SITE;
       const livePayload = await fetchRealWeatherData(
         loc.latitude,
         loc.longitude,
@@ -328,10 +370,10 @@ export default function App() {
         loc.timezone
       );
       const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly, undefined, loc.timezone);
-      setCurrentWeather(livePayload.current);
-      setRiskAssessment(risk);
-      setHourlyForecast(livePayload.hourly);
-      setDailyForecast(livePayload.daily);
+      setStateIfChanged(setCurrentWeather, livePayload.current);
+      setStateIfChanged(setRiskAssessment, risk);
+      setStateIfChanged(setHourlyForecast, livePayload.hourly);
+      setStateIfChanged(setDailyForecast, livePayload.daily);
       setDataStatus('LIVE');
       toast.success('Direct observations refreshed.');
     } catch {
@@ -343,75 +385,84 @@ export default function App() {
         lastCheckTime: new Date().toISOString()
       }));
     }
-  };
+  }, [toast]);
 
   // Dismiss / Acknowledge active alert
-  const handleDismissAlert = async (id: string) => {
-    try {
-      const res = await apiFetch(`/api/alerts/${id}/dismiss`, { method: 'POST' });
-      if (res.ok) {
-        setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
-        toast.info('Alert acknowledged and dismissed.');
-      } else {
-        setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
-      }
-    } catch {
+  const handleDismissAlert = useCallback(
+    async (id: string) => {
+      let acknowledged = false;
+      try {
+        const res = await apiFetch(`/api/alerts/${id}/dismiss`, { method: 'POST' });
+        acknowledged = res.ok;
+      } catch {}
       setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
-    }
-  };
+      if (acknowledged) toast.info('Alert acknowledged and dismissed.');
+    },
+    [toast]
+  );
 
   // Switch location with fallback
-  const handleSelectLocation = async (loc: LocationItem) => {
-    setCurrentLocation(loc);
-    setIsDashboardLoading(true);
-    toast.info(`Switching location to ${loc.name}...`);
+  const handleSelectLocation = useCallback(
+    async (loc: LocationItem) => {
+      applyLocation(loc);
+      setIsDashboardLoading(true);
+      toast.info(`Switching location to ${loc.name}...`);
 
-    try {
-      const res = await apiFetch(`/api/weather/current?locationId=${loc.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCurrentWeather(data.current);
-        setRiskAssessment(data.risk);
-        setActiveAlerts(data.activeAlerts || []);
-        if (data.comparison) setProviderComparison(data.comparison);
-      }
-      const forecastRes = await apiFetch(`/api/weather/forecast?locationId=${loc.id}`);
-      if (forecastRes.ok) {
-        const fData = await forecastRes.json();
-        setHourlyForecast(fData.hourly || []);
-        setDailyForecast(fData.daily || []);
-      }
-      const crossRes = await apiFetch(`/api/weather/cross-reference?locationId=${loc.id}`);
-      if (crossRes.ok) {
-        const cData = await crossRes.json();
-        if (cData.comparison) setProviderComparison(cData.comparison);
-      }
-      toast.success(`Active monitoring shifted to ${loc.name}`);
-    } catch {
-      // Direct client fallback for selected location
       try {
-        const livePayload = await fetchRealWeatherData(
-          loc.latitude,
-          loc.longitude,
-          loc.id,
-          loc.name,
-          loc.timezone
-        );
-        const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly, undefined, loc.timezone);
-        setCurrentWeather(livePayload.current);
-        setRiskAssessment(risk);
-        setHourlyForecast(livePayload.hourly);
-        setDailyForecast(livePayload.daily);
-        if (livePayload.comparison) setProviderComparison(livePayload.comparison);
-        setDataStatus('LIVE');
+        const res = await apiFetch(`/api/weather/current?locationId=${loc.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setStateIfChanged(setCurrentWeather, data.current);
+          setStateIfChanged(setRiskAssessment, data.risk);
+          const nextAlerts: AlertItem[] = data.activeAlerts || [];
+          // Mark the destination's existing alerts as seen so switching sites
+          // doesn't replay their toasts.
+          markAlertsSeen(nextAlerts);
+          setStateIfChanged(setActiveAlerts, nextAlerts);
+          if (data.comparison) setStateIfChanged(setProviderComparison, data.comparison);
+        }
+        const forecastRes = await apiFetch(`/api/weather/forecast?locationId=${loc.id}`);
+        if (forecastRes.ok) {
+          const fData = await forecastRes.json();
+          setStateIfChanged(setHourlyForecast, fData.hourly || []);
+          setStateIfChanged(setDailyForecast, fData.daily || []);
+        }
+        const crossRes = await apiFetch(`/api/weather/cross-reference?locationId=${loc.id}`);
+        if (crossRes.ok) {
+          const cData = await crossRes.json();
+          if (cData.comparison) setStateIfChanged(setProviderComparison, cData.comparison);
+        }
         toast.success(`Active monitoring shifted to ${loc.name}`);
       } catch {
-        toast.error(`Failed to load weather for ${loc.name}`);
+        // Direct client fallback for selected location
+        try {
+          const livePayload = await fetchRealWeatherData(
+            loc.latitude,
+            loc.longitude,
+            loc.id,
+            loc.name,
+            loc.timezone
+          );
+          const risk = calculateDeterministicRisk(livePayload.current, livePayload.hourly, undefined, loc.timezone);
+          setStateIfChanged(setCurrentWeather, livePayload.current);
+          setStateIfChanged(setRiskAssessment, risk);
+          setStateIfChanged(setHourlyForecast, livePayload.hourly);
+          setStateIfChanged(setDailyForecast, livePayload.daily);
+          if (livePayload.comparison) setStateIfChanged(setProviderComparison, livePayload.comparison);
+          setDataStatus('LIVE');
+          toast.success(`Active monitoring shifted to ${loc.name}`);
+        } catch {
+          toast.error(`Failed to load weather for ${loc.name}`);
+        }
+      } finally {
+        setIsDashboardLoading(false);
       }
-    } finally {
-      setIsDashboardLoading(false);
-    }
-  };
+    },
+    [applyLocation, markAlertsSeen, toast]
+  );
+
+  const openLocationModal = useCallback(() => setIsLocationModalOpen(true), []);
+  const closeLocationModal = useCallback(() => setIsLocationModalOpen(false), []);
 
   // Loading state while checking authentication
   if (authChecking) {
@@ -441,7 +492,13 @@ export default function App() {
   const tempUnit = ownerSettings?.temperatureUnit || 'C';
   const windUnit = ownerSettings?.windUnit || 'km/h';
   const monitorInterval = ownerSettings?.monitorIntervalMinutes || 15;
-  const elevatedActivities = riskAssessment?.affectedActivities.filter((a) => a.riskLevel === 'HIGH' || a.riskLevel === 'CRITICAL') || [];
+  const elevatedActivities = useMemo(
+    () =>
+      riskAssessment?.affectedActivities.filter(
+        (a) => a.riskLevel === 'HIGH' || a.riskLevel === 'CRITICAL'
+      ) || [],
+    [riskAssessment]
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
@@ -450,7 +507,7 @@ export default function App() {
         currentLocation={currentLocation}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onOpenLocations={() => setIsLocationModalOpen(true)}
+        onOpenLocations={openLocationModal}
         onRunCheck={handleRunCheckNow}
         onLogout={handleLogout}
         isChecking={monitorStatus.isChecking}
@@ -616,11 +673,11 @@ export default function App() {
 
         {/* System Health Diagnostics */}
         {activeTab === 'system' && (
-          <SystemHealthView health={systemHealth} onRefreshHealth={loadDashboardData} />
+          <SystemHealthView health={systemHealth} onRefreshHealth={refreshDashboard} />
         )}
 
         {/* Settings & Threshold Calibration */}
-        {activeTab === 'settings' && <SettingsView onSettingsSaved={loadDashboardData} />}
+        {activeTab === 'settings' && <SettingsView onSettingsSaved={refreshDashboard} />}
 
         {/* User & Access Management (Owner only) */}
         {activeTab === 'users' && <UsersView />}
@@ -630,11 +687,11 @@ export default function App() {
       {/* Location Selector Modal */}
       <LocationModal
         isOpen={isLocationModalOpen}
-        onClose={() => setIsLocationModalOpen(false)}
+        onClose={closeLocationModal}
         locations={allLocations}
         currentLocation={currentLocation}
         onSelectLocation={handleSelectLocation}
-        onLocationAdded={loadDashboardData}
+        onLocationAdded={refreshDashboard}
       />
 
       {/* Mandatory Section 93 Privacy Footer */}
