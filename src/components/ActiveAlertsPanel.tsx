@@ -14,7 +14,7 @@ const ActiveAlertsPanelComponent: React.FC<ActiveAlertsPanelProps> = ({
   onViewAllAlerts
 }) => {
   return (
-    <div id="active-alerts-panel" className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+    <div id="active-alerts-panel" className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
         <div className="flex items-center gap-2">
@@ -55,12 +55,12 @@ const ActiveAlertsPanelComponent: React.FC<ActiveAlertsPanelProps> = ({
               <div
                 key={alert.id}
                 id={`alert-card-${alert.id}`}
-                className={`p-4 rounded-lg border transition-all ${
+                className={`p-4 rounded-xl border transition-all ${
                   isCritical
-                    ? 'bg-red-950/40 border-red-800 text-red-200'
+                    ? 'bg-red-950/40 border-red-800/80 text-red-200 shadow-sm'
                     : isHigh
-                    ? 'bg-orange-950/40 border-orange-800 text-orange-200'
-                    : 'bg-amber-950/30 border-amber-800 text-amber-200'
+                    ? 'bg-orange-950/40 border-orange-800/80 text-orange-200 shadow-sm'
+                    : 'bg-amber-950/30 border-amber-800/80 text-amber-200 shadow-sm'
                 }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

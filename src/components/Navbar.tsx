@@ -125,7 +125,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
             type="button"
             id="location-selector-btn"
             onClick={onOpenLocations}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-xs sm:text-sm font-medium text-slate-200 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 text-xs sm:text-sm font-medium text-slate-200 transition-all shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
             title="Change monitored site location"
           >
             <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />

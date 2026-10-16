@@ -64,10 +64,10 @@ export const KeepAwakeToggle: React.FC<KeepAwakeToggleProps> = ({ fullWidth = fa
       type="button"
       onClick={toggle}
       aria-pressed={enabled}
-      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer ${
+      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-all shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer ${
         active
-          ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
-          : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-slate-100'
+          ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
+          : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:text-slate-100 hover:border-slate-600/80'
       }`}
       title={active ? 'Screen is being kept awake — tap to stop' : 'Keep this screen awake while monitoring'}
       aria-label="Toggle keep screen awake"
