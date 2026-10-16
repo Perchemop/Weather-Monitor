@@ -48,7 +48,7 @@ const CrossReferenceCardComponent: React.FC<CrossReferenceCardProps> = ({
             <button
               onClick={onRefresh}
               disabled={isChecking}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
               Cross-Check Now
@@ -115,7 +115,7 @@ const CrossReferenceCardComponent: React.FC<CrossReferenceCardProps> = ({
               onClick={onRefresh}
               disabled={isChecking}
               title="Trigger immediate dual-model sync"
-              className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-slate-800 hover:bg-slate-700 active:bg-slate-800 text-slate-200 rounded-md border border-slate-700 transition disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-slate-800 hover:bg-slate-700 active:bg-slate-800 text-slate-200 rounded-md border border-slate-700 transition disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
             >
               <RefreshCw className={`w-3 h-3 ${isChecking ? 'animate-spin text-blue-400' : ''}`} />
               <span className="hidden sm:inline">Sync Models</span>

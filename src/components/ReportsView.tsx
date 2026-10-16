@@ -70,7 +70,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-200 border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-200 border border-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
@@ -78,7 +78,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-xs font-bold text-slate-950 transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-xs font-bold text-slate-950 transition-colors shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Print Report</span>

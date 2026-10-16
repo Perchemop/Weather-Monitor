@@ -119,7 +119,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ location }) =>
         <button
           type="button"
           onClick={fetchSummary}
-          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium border border-slate-700"
+          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium border border-slate-700 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
         >
           Retry
         </button>
@@ -156,7 +156,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ location }) =>
           <button
             type="button"
             onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
           >
             {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? 'Copied' : 'Copy'}
@@ -164,7 +164,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ location }) =>
           <button
             type="button"
             onClick={handleDownload}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             Download
@@ -173,7 +173,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ location }) =>
             type="button"
             onClick={fetchSummary}
             disabled={isLoading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
