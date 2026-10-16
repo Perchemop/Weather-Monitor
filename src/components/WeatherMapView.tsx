@@ -8,17 +8,24 @@ import {
   Radar,
   Play,
   Pause,
+  SkipBack,
+  SkipForward,
   RefreshCw,
   Layers,
-  MapPin
+  MapPin,
+  Gauge
 } from 'lucide-react';
 import { CurrentWeather, LocationItem } from '../types';
 
-type MapLayer = 'radar' | 'rain' | 'wind' | 'lightning';
+export type MapLayer = 'radar' | 'rain' | 'wind' | 'lightning';
+
+type RainMode = 'now' | '1h' | '3h' | '6h' | '24h';
 
 interface WeatherMapViewProps {
   location: LocationItem | null;
   current: CurrentWeather | null;
+  /** Layers to enable on first render (e.g. ['radar','lightning'] from the storm card). */
+  initialLayers?: MapLayer[];
 }
 
 interface RadarFrame {
@@ -34,6 +41,8 @@ interface GridPoint {
   windDirection: number;
   lightningPotential: number;
   cape: number;
+  /** Hourly precipitation (mm) starting from the current hour. */
+  precipHourly: number[];
 }
 
 const OPEN_METEO = 'https://api.open-meteo.com/v1/forecast';
@@ -41,6 +50,29 @@ const RAINVIEWER_INDEX = 'https://api.rainviewer.com/public/weather-maps.json';
 const GRID_RADIUS = 2; // 5x5 sample grid centred on the site
 const GRID_SPAN_LAT = 0.35; // degrees
 const GRID_SPAN_LON = 0.45; // degrees
+const RADAR_SPEEDS = [
+  { label: '0.5x', ms: 900 },
+  { label: '1x', ms: 600 },
+  { label: '2x', ms: 300 }
+];
+const RAIN_WINDOW_HOURS: Record<Exclude<RainMode, 'now'>, number> = { '1h': 1, '3h': 3, '6h': 6, '24h': 24 };
+
+/** Colour ramp for instantaneous rain intensity (mm/h). */
+function intensityColor(mmh: number): string {
+  if (mmh >= 15) return '#7c3aed';
+  if (mmh >= 6) return '#2563eb';
+  if (mmh >= 2) return '#0ea5e9';
+  return '#7dd3fc';
+}
+
+/** Colour ramp for accumulated rain (mm over the selected window). */
+function accumulationColor(mm: number): string {
+  if (mm >= 30) return '#7c3aed';
+  if (mm >= 15) return '#2563eb';
+  if (mm >= 5) return '#0ea5e9';
+  if (mm >= 1) return '#38bdf8';
+  return '#7dd3fc';
+}
 
 /** Colour ramp for wind speed (km/h). */
 function windColor(kmh: number): string {
@@ -59,7 +91,7 @@ function lightningColor(lpi: number): string {
   return '#6366f1';
 }
 
-export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, current }) => {
+export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, current, initialLayers }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const radarTileRef = useRef<L.TileLayer | null>(null);
@@ -67,15 +99,21 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
   const windLayerRef = useRef<L.LayerGroup | null>(null);
   const rainLayerRef = useRef<L.LayerGroup | null>(null);
   const lightningLayerRef = useRef<L.LayerGroup | null>(null);
+  const preloadBoundRef = useRef(false);
 
-  const [activeLayers, setActiveLayers] = useState<Set<MapLayer>>(() => new Set<MapLayer>(['radar', 'wind']));
+  const [activeLayers, setActiveLayers] = useState<Set<MapLayer>>(
+    () => new Set<MapLayer>(initialLayers && initialLayers.length > 0 ? initialLayers : ['radar', 'wind'])
+  );
+  const [rainMode, setRainMode] = useState<RainMode>('now');
   const [radarFrames, setRadarFrames] = useState<RadarFrame[]>([]);
   const [radarHost, setRadarHost] = useState<string>('');
   const [frameIndex, setFrameIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [speedIdx, setSpeedIdx] = useState(1);
   const [radarStatus, setRadarStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [gridStatus, setGridStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [grid, setGrid] = useState<GridPoint[]>([]);
+  const [timeAxis, setTimeAxis] = useState<string[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const lat = location?.latitude ?? -34.9285;
@@ -109,17 +147,6 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Site marker (canvas-based, so no default-icon asset issues under bundlers).
-    siteMarkerRef.current = L.circleMarker([lat, lon], {
-      radius: 6,
-      color: '#f59e0b',
-      weight: 2,
-      fillColor: '#f59e0b',
-      fillOpacity: 0.35
-    })
-      .bindTooltip(place, { direction: 'top' })
-      .addTo(map);
-
     windLayerRef.current = L.layerGroup().addTo(map);
     rainLayerRef.current = L.layerGroup();
     lightningLayerRef.current = L.layerGroup();
@@ -140,12 +167,13 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
       windLayerRef.current = null;
       rainLayerRef.current = null;
       lightningLayerRef.current = null;
+      preloadBoundRef.current = false;
     };
     // Map is created once; recentring happens in the effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Recentre when the monitored location changes.
+  // Recentre + keep the site marker in sync when the monitored location changes.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -179,7 +207,6 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
       if (frames.length === 0) throw new Error('No radar frames');
       setRadarHost(data.host || 'https://tilecache.rainviewer.com');
       setRadarFrames(frames);
-      // Start on the most recent observed frame (index of last "past" frame).
       setFrameIndex(Math.max(0, past.length - 1));
       setRadarStatus('ready');
       setLastUpdated(new Date().toISOString());
@@ -194,7 +221,13 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
     return () => clearInterval(interval);
   }, [loadRadar]);
 
-  // Apply the selected radar frame as a tile layer.
+  /** Builds the a single frame's tile URL. */
+  const frameTileUrl = useCallback(
+    (frame: RadarFrame) => `${radarHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`,
+    [radarHost]
+  );
+
+  // Apply the selected radar frame as the (single) active tile layer.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -208,24 +241,84 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
     }
 
     const frame = radarFrames[Math.min(frameIndex, radarFrames.length - 1)];
-    const url = `${radarHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
     if (radarTileRef.current) map.removeLayer(radarTileRef.current);
-    radarTileRef.current = L.tileLayer(url, {
-      opacity: 0.7,
+    radarTileRef.current = L.tileLayer(frameTileUrl(frame), {
+      opacity: 0.72,
       tileSize: 256,
       attribution: 'Radar &copy; RainViewer',
-      zIndex: 5
+      zIndex: 5,
+      keepBuffer: 4,
+      updateWhenZooming: false
     }).addTo(map);
-  }, [activeLayers, radarFrames, radarHost, frameIndex]);
+  }, [activeLayers, radarFrames, radarHost, frameIndex, frameTileUrl]);
 
-  // Animate frames while playing.
+  /**
+   * Warms the browser image cache for every radar frame across the current
+   * viewport so the animation loop plays smoothly (no per-frame stutter). Bounded
+   * and best-effort; runs once per viewport.
+   */
+  const preloadRadarFrames = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || radarFrames.length < 2 || !radarHost) return;
+
+    try {
+      const bounds = map.getPixelBounds();
+      const zoom = Math.round(map.getZoom());
+      if (zoom < 6) return; // too many tiles when zoomed far out
+      const min = bounds.min.divideBy(256).floor();
+      const max = bounds.max.divideBy(256).floor();
+      const tilesX = Math.min(4, Math.max(1, max.x - min.x + 1));
+      const tilesY = Math.min(4, Math.max(1, max.y - min.y + 1));
+      const cap = 140;
+      let count = 0;
+      for (let x = min.x; x < min.x + tilesX; x++) {
+        for (let y = min.y; y < min.y + tilesY; y++) {
+          for (const frame of radarFrames) {
+            const url = `${radarHost}${frame.path}/256/${zoom}/${x}/${y}/2/1_1.png`;
+            const img = new Image();
+            img.decoding = 'async';
+            img.src = url;
+            if (++count >= cap) return;
+          }
+        }
+      }
+    } catch {
+      /* preloading is purely an optimisation */
+    }
+  }, [radarFrames, radarHost]);
+
+  // Kick off preloading shortly after full frames land, and refresh on pan/zoom.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || radarFrames.length < 2) return;
+
+    const timer = setTimeout(preloadRadarFrames, 700);
+
+    if (!preloadBoundRef.current) {
+      preloadBoundRef.current = true;
+      let moveTimer: ReturnType<typeof setTimeout> | null = null;
+      const onMove = () => {
+        if (moveTimer) clearTimeout(moveTimer);
+        moveTimer = setTimeout(preloadRadarFrames, 600);
+      };
+      map.on('moveend', onMove);
+      map.on('zoomend', onMove);
+    } else {
+      // Subsequent frame refreshes still re-warm the current viewport.
+      preloadRadarFrames();
+    }
+
+    return () => clearTimeout(timer);
+  }, [radarFrames, preloadRadarFrames]);
+
+  // Animate frames while playing (speed controlled by the operator).
   useEffect(() => {
     if (!playing || radarFrames.length === 0) return;
     const id = setInterval(() => {
       setFrameIndex((i) => (i + 1) % radarFrames.length);
-    }, 600);
+    }, RADAR_SPEEDS[speedIdx].ms);
     return () => clearInterval(id);
-  }, [playing, radarFrames.length]);
+  }, [playing, radarFrames.length, speedIdx]);
 
   // ------------------------------------------------------------- Grid sampling
   const loadGrid = useCallback(async () => {
@@ -246,11 +339,14 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
         'current',
         'precipitation,wind_speed_10m,wind_direction_10m,lightning_potential,cape,weather_code'
       );
+      url.searchParams.set('hourly', 'precipitation');
+      url.searchParams.set('forecast_hours', '24');
       url.searchParams.set('timezone', 'auto');
       const res = await fetch(url.toString());
       if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
       const json = await res.json();
       const arr: any[] = Array.isArray(json) ? json : [json];
+      if (arr[0]?.hourly?.time) setTimeAxis(arr[0].hourly.time as string[]);
       const points: GridPoint[] = arr.map((entry: any, idx: number) => ({
         lat: Number(entry?.latitude ?? lats[idx]),
         lon: Number(entry?.longitude ?? lons[idx]),
@@ -258,7 +354,10 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
         windSpeed: Math.max(0, Number(entry?.current?.wind_speed_10m ?? 0)),
         windDirection: Number(entry?.current?.wind_direction_10m ?? 0),
         lightningPotential: Math.max(0, Number(entry?.current?.lightning_potential ?? 0)),
-        cape: Math.max(0, Number(entry?.current?.cape ?? 0))
+        cape: Math.max(0, Number(entry?.current?.cape ?? 0)),
+        precipHourly: Array.isArray(entry?.hourly?.precipitation)
+          ? entry.hourly.precipitation.map((v: unknown) => Math.max(0, Number(v) || 0))
+          : []
       }));
       setGrid(points);
       setGridStatus('ready');
@@ -272,6 +371,29 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
     const interval = setInterval(() => void loadGrid(), 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [loadGrid]);
+
+  // Index of the current hour in the hourly axis (start of accumulation windows).
+  const startHourIdx = useMemo(() => {
+    if (timeAxis.length === 0) return 0;
+    const now = Date.now();
+    let idx = 0;
+    for (let i = 0; i < timeAxis.length; i++) {
+      if (new Date(timeAxis[i]).getTime() <= now) idx = i;
+      else break;
+    }
+    return idx;
+  }, [timeAxis]);
+
+  const accumulation = useCallback(
+    (p: GridPoint, hours: number): number => {
+      let sum = 0;
+      for (let i = startHourIdx; i < Math.min(p.precipHourly.length, startHourIdx + hours); i++) {
+        sum += p.precipHourly[i] || 0;
+      }
+      return sum;
+    },
+    [startHourIdx]
+  );
 
   // Render wind arrows from the sampled grid.
   useEffect(() => {
@@ -306,7 +428,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
     }
   }, [grid, activeLayers]);
 
-  // Render rain-intensity circles from the sampled grid.
+  // Render the rain layer: instantaneous intensity, or accumulated mm over a window.
   useEffect(() => {
     const map = mapRef.current;
     const layer = rainLayerRef.current;
@@ -318,20 +440,37 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
     }
     if (!map.hasLayer(layer)) layer.addTo(map);
 
+    const hours = rainMode === 'now' ? 0 : RAIN_WINDOW_HOURS[rainMode];
+
     for (const p of grid) {
-      if (p.precipitation <= 0.05) continue;
-      const radius = Math.min(26, 6 + p.precipitation * 3);
-      L.circleMarker([p.lat, p.lon], {
-        radius,
-        color: '#38bdf8',
-        weight: 1,
-        fillColor: '#0ea5e9',
-        fillOpacity: Math.min(0.6, 0.2 + p.precipitation * 0.05)
-      })
-        .bindTooltip(`${p.precipitation.toFixed(1)} mm/h rain`, { direction: 'top' })
-        .addTo(layer);
+      if (rainMode === 'now') {
+        if (p.precipitation <= 0.05) continue;
+        const color = intensityColor(p.precipitation);
+        L.circleMarker([p.lat, p.lon], {
+          radius: Math.min(26, 6 + p.precipitation * 3),
+          color,
+          weight: 1,
+          fillColor: color,
+          fillOpacity: Math.min(0.6, 0.2 + p.precipitation * 0.05)
+        })
+          .bindTooltip(`${p.precipitation.toFixed(1)} mm/h now`, { direction: 'top' })
+          .addTo(layer);
+      } else {
+        const total = accumulation(p, hours);
+        if (total <= 0.05) continue;
+        const color = accumulationColor(total);
+        L.circleMarker([p.lat, p.lon], {
+          radius: Math.min(28, 6 + Math.sqrt(total) * 3.2),
+          color,
+          weight: 1.5,
+          fillColor: color,
+          fillOpacity: Math.min(0.62, 0.22 + total * 0.02)
+        })
+          .bindTooltip(`${total.toFixed(1)} mm in next ${hours}h`, { direction: 'top' })
+          .addTo(layer);
+      }
     }
-  }, [grid, activeLayers]);
+  }, [grid, activeLayers, rainMode, accumulation]);
 
   // Render lightning-potential circles from the sampled grid.
   useEffect(() => {
@@ -348,18 +487,17 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
     for (const p of grid) {
       const score = Math.max(p.lightningPotential, p.cape);
       if (score <= 0) continue;
-      const radius = Math.min(30, 5 + Math.sqrt(score) * 0.6);
+      const color = lightningColor(p.lightningPotential || p.cape);
       L.circleMarker([p.lat, p.lon], {
-        radius,
-        color: lightningColor(p.lightningPotential || p.cape),
+        radius: Math.min(30, 5 + Math.sqrt(score) * 0.6),
+        color,
         weight: 1.5,
-        fillColor: lightningColor(p.lightningPotential || p.cape),
+        fillColor: color,
         fillOpacity: 0.3
       })
-        .bindTooltip(
-          `LPI ${Math.round(p.lightningPotential)} J/kg · CAPE ${Math.round(p.cape)} J/kg`,
-          { direction: 'top' }
-        )
+        .bindTooltip(`LPI ${Math.round(p.lightningPotential)} J/kg · CAPE ${Math.round(p.cape)} J/kg`, {
+          direction: 'top'
+        })
         .addTo(layer);
     }
   }, [grid, activeLayers]);
@@ -376,6 +514,12 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
     { id: 'wind', label: 'Wind', icon: Wind },
     { id: 'lightning', label: 'Lightning', icon: CloudLightning }
   ];
+
+  const step = (delta: number) => {
+    if (radarFrames.length === 0) return;
+    setPlaying(false);
+    setFrameIndex((i) => (i + delta + radarFrames.length) % radarFrames.length);
+  };
 
   return (
     <div className="space-y-4 animate-fadeIn">
@@ -415,40 +559,99 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
           </div>
         </div>
 
-        {/* Radar timeline (only meaningful while the radar layer is on). */}
+        {/* Radar timeline / loop controls */}
         {activeLayers.has('radar') && (
-          <div className="flex items-center gap-3 flex-wrap bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2">
-            <button
-              type="button"
-              onClick={() => setPlaying((p) => !p)}
-              disabled={radarFrames.length === 0}
-              className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 disabled:opacity-40 cursor-pointer"
-              aria-label={playing ? 'Pause radar animation' : 'Play radar animation'}
-            >
-              {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-            </button>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, radarFrames.length - 1)}
-              value={frameIndex}
-              onChange={(e) => {
-                setPlaying(false);
-                setFrameIndex(Number(e.target.value));
-              }}
-              disabled={radarFrames.length === 0}
-              className="flex-1 min-w-[140px] accent-amber-500"
-              aria-label="Radar frame"
-            />
-            <span className="text-2xs font-mono text-slate-300 tabular-nums w-16 text-right">{frameLabel}</span>
-            <button
-              type="button"
-              onClick={() => void loadRadar()}
-              className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 cursor-pointer"
-              aria-label="Refresh radar"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${radarStatus === 'loading' ? 'animate-spin' : ''}`} />
-            </button>
+          <div className="space-y-2 bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => step(-1)}
+                disabled={radarFrames.length === 0}
+                className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer"
+                aria-label="Previous radar frame"
+              >
+                <SkipBack className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPlaying((p) => !p)}
+                disabled={radarFrames.length === 0}
+                className="p-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-400 disabled:opacity-40 cursor-pointer"
+                aria-label={playing ? 'Pause radar loop' : 'Play radar loop'}
+              >
+                {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => step(1)}
+                disabled={radarFrames.length === 0}
+                className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer"
+                aria-label="Next radar frame"
+              >
+                <SkipForward className="w-3.5 h-3.5" />
+              </button>
+
+              <input
+                type="range"
+                min={0}
+                max={Math.max(0, radarFrames.length - 1)}
+                value={frameIndex}
+                onChange={(e) => {
+                  setPlaying(false);
+                  setFrameIndex(Number(e.target.value));
+                }}
+                disabled={radarFrames.length === 0}
+                className="flex-1 min-w-[130px] accent-amber-500"
+                aria-label="Radar frame"
+              />
+              <span className="text-2xs font-mono text-slate-300 tabular-nums w-14 text-right">{frameLabel}</span>
+
+              {/* Playback speed */}
+              <button
+                type="button"
+                onClick={() => setSpeedIdx((i) => (i + 1) % RADAR_SPEEDS.length)}
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-2xs font-mono text-slate-300 cursor-pointer"
+                title="Radar loop speed"
+              >
+                <Gauge className="w-3 h-3 text-slate-400" />
+                {RADAR_SPEEDS[speedIdx].label}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void loadRadar()}
+                className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 cursor-pointer"
+                aria-label="Refresh radar"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${radarStatus === 'loading' ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+            <div className="flex items-center justify-between text-2xs font-mono text-slate-500">
+              <span>{radarStatus === 'ready' ? `${radarFrames.length} frames · past → nowcast` : 'Loading radar…'}</span>
+              <span>{playing ? 'Playing' : 'Paused'}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Rain accumulation window selector */}
+        {activeLayers.has('rain') && (
+          <div className="flex items-center gap-2 flex-wrap bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2">
+            <span className="text-2xs font-mono uppercase text-slate-400">Rain:</span>
+            {(['now', '1h', '3h', '6h', '24h'] as RainMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setRainMode(mode)}
+                className={`px-2 py-1 rounded-md text-2xs font-mono border transition-colors cursor-pointer ${
+                  rainMode === mode
+                    ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
+                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-slate-100'
+                }`}
+                title={mode === 'now' ? 'Instantaneous intensity' : `Accumulated total over the next ${mode}`}
+              >
+                {mode === 'now' ? 'Now' : `+${mode}`}
+              </button>
+            ))}
           </div>
         )}
 
@@ -466,7 +669,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
             {activeLayers.has('rain') && (
               <div className="flex items-center gap-1.5">
                 <CloudRain className="w-3 h-3 text-sky-400" />
-                <span>Rain circles · size = mm/h</span>
+                <span>{rainMode === 'now' ? 'Rain · size = mm/h' : `Accumulated mm · next ${rainMode}`}</span>
               </div>
             )}
             {activeLayers.has('lightning') && (
