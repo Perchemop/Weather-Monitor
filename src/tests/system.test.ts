@@ -6,6 +6,7 @@
 import './setup.js';
 import assert from 'node:assert/strict';
 import { calculateDeterministicRisk, SAFETY_DISCLAIMER } from '../services/riskEngine.js';
+import { evaluateCandidateAlerts } from '../static/alerts.js';
 import { buildWeeklyPerformanceSummary } from '../services/performanceSummary.js';
 import { redactSecretsInError, maskSecret } from '../utils/security.js';
 import { deepEqual, setStateIfChanged } from '../utils/state.js';
@@ -147,6 +148,36 @@ async function runTests() {
     ];
     const risk = calculateDeterministicRisk(current, hourly, mockThresholds, 'Australia/Adelaide');
     assert.ok(risk.score >= 50, 'Severe upcoming gust in next 6h must trigger elevated risk score');
+  });
+
+  test('Deterministic Risk: Building convective energy raises STORM lightning risk', () => {
+    const current = createMockWeather({ windSpeed: 10, windGusts: 15, lightningPotential: 1200, cape: 2600 });
+    const risk = calculateDeterministicRisk(current, [], mockThresholds, 'Australia/Adelaide');
+    assert.equal(risk.level, 'CRITICAL', `Expected CRITICAL, got ${risk.level}`);
+    assert.ok(
+      risk.factors.some((f) => f.id === 'lightning-critical'),
+      'A critical lightning factor must be present'
+    );
+  });
+
+  test('Alert Engine: Developing lightning triggers a LIGHTNING alert candidate', () => {
+    const current = createMockWeather({ weatherCode: 3, lightningPotential: 700, cape: 2000 });
+    const candidates = evaluateCandidateAlerts(current, [], mockThresholds);
+    const lightning = candidates.find((c) => c.alertType === 'LIGHTNING');
+    assert.ok(lightning, 'A LIGHTNING candidate should be produced');
+    assert.equal(lightning!.severity, 'HIGH');
+  });
+
+  test('Alert Engine: An active thunderstorm uses STORM, not a duplicate LIGHTNING alert', () => {
+    const current = createMockWeather({
+      weatherCode: 95,
+      weatherDescription: 'Thunderstorm',
+      lightningPotential: 900,
+      cape: 2500
+    });
+    const candidates = evaluateCandidateAlerts(current, [], mockThresholds);
+    assert.ok(candidates.some((c) => c.alertType === 'STORM'), 'STORM candidate expected');
+    assert.ok(!candidates.some((c) => c.alertType === 'LIGHTNING'), 'LIGHTNING must not duplicate STORM');
   });
 
   // 2. Secret Redaction & Protection Tests
