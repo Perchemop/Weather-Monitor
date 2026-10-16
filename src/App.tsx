@@ -614,14 +614,16 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setActiveTab('activity')}
-                className="w-full text-left p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors group"
+                className="w-full text-left p-5 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-sm hover:shadow-md hover:border-slate-600/60 transition-all group"
               >
                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <HardHat className="w-4 h-4 text-amber-400" />
-                    <span className="text-sm font-mono font-bold uppercase tracking-wider text-slate-300">Activity Risk Matrix</span>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-slate-900/80 to-slate-950/80 border border-slate-800/80 shadow-sm">
+                      <HardHat className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <span className="text-sm font-semibold tracking-tight text-slate-100">Activity Risk Matrix</span>
                   </div>
-                  <span className="text-xs font-mono text-amber-400 group-hover:text-amber-300">
+                  <span className="text-xs font-medium text-slate-400 group-hover:text-slate-200 transition-colors">
                     View full matrix →
                   </span>
                 </div>
