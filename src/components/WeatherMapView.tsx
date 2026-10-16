@@ -19,7 +19,9 @@ import { CurrentWeather, LocationItem } from '../types';
 
 export type MapLayer = 'radar' | 'rain' | 'wind' | 'lightning';
 
-type RainMode = 'now' | '1h' | '3h' | '6h' | '24h';
+type RainView = 'now' | 'accum';
+type RainDirection = 'past' | 'next';
+type RainHours = 1 | 3 | 6 | 24;
 
 interface WeatherMapViewProps {
   location: LocationItem | null;
@@ -55,7 +57,7 @@ const RADAR_SPEEDS = [
   { label: '1x', ms: 600 },
   { label: '2x', ms: 300 }
 ];
-const RAIN_WINDOW_HOURS: Record<Exclude<RainMode, 'now'>, number> = { '1h': 1, '3h': 3, '6h': 6, '24h': 24 };
+const RAIN_HOUR_OPTIONS: RainHours[] = [1, 3, 6, 24];
 
 /** Colour ramp for instantaneous rain intensity (mm/h). */
 function intensityColor(mmh: number): string {
@@ -104,7 +106,9 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
   const [activeLayers, setActiveLayers] = useState<Set<MapLayer>>(
     () => new Set<MapLayer>(initialLayers && initialLayers.length > 0 ? initialLayers : ['radar', 'wind'])
   );
-  const [rainMode, setRainMode] = useState<RainMode>('now');
+  const [rainView, setRainView] = useState<RainView>('now');
+  const [rainDirection, setRainDirection] = useState<RainDirection>('next');
+  const [rainHours, setRainHours] = useState<RainHours>(3);
   const [radarFrames, setRadarFrames] = useState<RadarFrame[]>([]);
   const [radarHost, setRadarHost] = useState<string>('');
   const [frameIndex, setFrameIndex] = useState(0);
@@ -340,6 +344,9 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
         'precipitation,wind_speed_10m,wind_direction_10m,lightning_potential,cape,weather_code'
       );
       url.searchParams.set('hourly', 'precipitation');
+      // Past hours let the rain layer show how much has already fallen; forward
+      // hours cover accumulation forecasts.
+      url.searchParams.set('past_hours', '24');
       url.searchParams.set('forecast_hours', '24');
       url.searchParams.set('timezone', 'auto');
       const res = await fetch(url.toString());
@@ -384,10 +391,26 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
     return idx;
   }, [timeAxis]);
 
+  /**
+   * Sums hourly precipitation over a window.
+   * - `next`: the current hour plus the following `hours-1` (forecast total).
+   * - `past`: the last `hours` buckets ending with the current (in-progress)
+   *   hour — i.e. how much has already fallen.
+   */
   const accumulation = useCallback(
-    (p: GridPoint, hours: number): number => {
+    (p: GridPoint, hours: number, direction: RainDirection): number => {
+      let from: number;
+      let to: number; // exclusive
+      if (direction === 'next') {
+        from = startHourIdx;
+        to = startHourIdx + hours;
+      } else {
+        from = Math.max(0, startHourIdx - hours + 1);
+        to = startHourIdx + 1;
+      }
       let sum = 0;
-      for (let i = startHourIdx; i < Math.min(p.precipHourly.length, startHourIdx + hours); i++) {
+      const end = Math.min(p.precipHourly.length, to);
+      for (let i = from; i < end; i++) {
         sum += p.precipHourly[i] || 0;
       }
       return sum;
@@ -440,10 +463,10 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
     }
     if (!map.hasLayer(layer)) layer.addTo(map);
 
-    const hours = rainMode === 'now' ? 0 : RAIN_WINDOW_HOURS[rainMode];
+    const showAccum = rainView === 'accum';
 
     for (const p of grid) {
-      if (rainMode === 'now') {
+      if (!showAccum) {
         if (p.precipitation <= 0.05) continue;
         const color = intensityColor(p.precipitation);
         L.circleMarker([p.lat, p.lon], {
@@ -456,9 +479,10 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
           .bindTooltip(`${p.precipitation.toFixed(1)} mm/h now`, { direction: 'top' })
           .addTo(layer);
       } else {
-        const total = accumulation(p, hours);
+        const total = accumulation(p, rainHours, rainDirection);
         if (total <= 0.05) continue;
         const color = accumulationColor(total);
+        const when = rainDirection === 'past' ? `past ${rainHours}h` : `next ${rainHours}h`;
         L.circleMarker([p.lat, p.lon], {
           radius: Math.min(28, 6 + Math.sqrt(total) * 3.2),
           color,
@@ -466,11 +490,11 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
           fillColor: color,
           fillOpacity: Math.min(0.62, 0.22 + total * 0.02)
         })
-          .bindTooltip(`${total.toFixed(1)} mm in next ${hours}h`, { direction: 'top' })
+          .bindTooltip(`${total.toFixed(1)} mm (${when})`, { direction: 'top' })
           .addTo(layer);
       }
     }
-  }, [grid, activeLayers, rainMode, accumulation]);
+  }, [grid, activeLayers, rainView, rainDirection, rainHours, accumulation]);
 
   // Render lightning-potential circles from the sampled grid.
   useEffect(() => {
@@ -523,13 +547,15 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
 
   return (
     <div className="space-y-4 animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 shadow-sm space-y-4">
+      <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 backdrop-blur">
         <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-amber-400" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-amber-500/10 to-amber-400/5 border border-amber-500/30 shadow-sm">
+              <Layers className="w-4 h-4 text-amber-400" />
+            </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-100">Live Weather Map</h3>
-              <p className="text-2xs font-mono text-slate-400 flex items-center gap-1">
+              <h3 className="text-sm font-semibold tracking-tight text-slate-100">Live Weather Map</h3>
+              <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
                 <MapPin className="w-3 h-3 text-amber-400" />
                 {place}
               </p>
@@ -545,10 +571,10 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                   type="button"
                   onClick={() => toggleLayer(id)}
                   aria-pressed={active}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-all shadow-sm cursor-pointer ${
                     active
-                      ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-slate-100'
+                      ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
+                      : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:text-slate-100 hover:border-slate-600/80'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5" />
@@ -561,13 +587,13 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
 
         {/* Radar timeline / loop controls */}
         {activeLayers.has('radar') && (
-          <div className="space-y-2 bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2">
+          <div className="space-y-2 bg-slate-950/70 border border-slate-800/80 rounded-xl px-3 py-2.5 shadow-sm">
             <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 type="button"
                 onClick={() => step(-1)}
                 disabled={radarFrames.length === 0}
-                className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer"
+                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
                 aria-label="Previous radar frame"
               >
                 <SkipBack className="w-3.5 h-3.5" />
@@ -576,7 +602,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                 type="button"
                 onClick={() => setPlaying((p) => !p)}
                 disabled={radarFrames.length === 0}
-                className="p-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-400 disabled:opacity-40 cursor-pointer"
+                className="p-1.5 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-400/10 hover:from-amber-500/30 hover:to-amber-400/15 border border-amber-500/40 text-amber-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
                 aria-label={playing ? 'Pause radar loop' : 'Play radar loop'}
               >
                 {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
@@ -585,7 +611,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                 type="button"
                 onClick={() => step(1)}
                 disabled={radarFrames.length === 0}
-                className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer"
+                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
                 aria-label="Next radar frame"
               >
                 <SkipForward className="w-3.5 h-3.5" />
@@ -610,7 +636,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
               <button
                 type="button"
                 onClick={() => setSpeedIdx((i) => (i + 1) % RADAR_SPEEDS.length)}
-                className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-2xs font-mono text-slate-300 cursor-pointer"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 text-2xs font-mono text-slate-300 cursor-pointer shadow-sm"
                 title="Radar loop speed"
               >
                 <Gauge className="w-3 h-3 text-slate-400" />
@@ -620,7 +646,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
               <button
                 type="button"
                 onClick={() => void loadRadar()}
-                className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 cursor-pointer"
+                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 text-slate-300 cursor-pointer shadow-sm"
                 aria-label="Refresh radar"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${radarStatus === 'loading' ? 'animate-spin' : ''}`} />
@@ -633,33 +659,80 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
           </div>
         )}
 
-        {/* Rain accumulation window selector */}
+        {/* Rain view / accumulation window selector */}
         {activeLayers.has('rain') && (
-          <div className="flex items-center gap-2 flex-wrap bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2">
-            <span className="text-2xs font-mono uppercase text-slate-400">Rain:</span>
-            {(['now', '1h', '3h', '6h', '24h'] as RainMode[]).map((mode) => (
+          <div className="flex items-center gap-2 flex-wrap bg-slate-950/70 border border-slate-800/80 rounded-xl px-3 py-2 shadow-sm">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Rain:</span>
+            <button
+              type="button"
+              onClick={() => setRainView('now')}
+              className={`px-2 py-1 rounded-lg text-2xs font-mono border transition-all cursor-pointer ${
+                rainView === 'now'
+                  ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
+                  : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:text-slate-100 hover:border-slate-600/80'
+              }`}
+              title="Instantaneous rain intensity"
+            >
+              Now
+            </button>
+
+            {/* Accumulation direction: already fallen vs forecast */}
+            <div className="flex items-center rounded-lg overflow-hidden border border-slate-700/80 shadow-sm">
               <button
-                key={mode}
                 type="button"
-                onClick={() => setRainMode(mode)}
-                className={`px-2 py-1 rounded-md text-2xs font-mono border transition-colors cursor-pointer ${
-                  rainMode === mode
-                    ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
-                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-slate-100'
+                onClick={() => {
+                  setRainView('accum');
+                  setRainDirection('past');
+                }}
+                className={`px-2 py-1 text-2xs font-mono transition-all cursor-pointer ${
+                  rainView === 'accum' && rainDirection === 'past'
+                    ? 'bg-sky-500/20 text-sky-300'
+                    : 'bg-slate-800/80 text-slate-300 hover:text-slate-100'
                 }`}
-                title={mode === 'now' ? 'Instantaneous intensity' : `Accumulated total over the next ${mode}`}
+                title="Rain that has already fallen (last N hours)"
               >
-                {mode === 'now' ? 'Now' : `+${mode}`}
+                Past
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setRainView('accum');
+                  setRainDirection('next');
+                }}
+                className={`px-2 py-1 text-2xs font-mono border-l border-slate-700/80 transition-all cursor-pointer ${
+                  rainView === 'accum' && rainDirection === 'next'
+                    ? 'bg-sky-500/20 text-sky-300'
+                    : 'bg-slate-800/80 text-slate-300 hover:text-slate-100'
+                }`}
+                title="Rain forecast (next N hours)"
+              >
+                Next
+              </button>
+            </div>
+
+            {rainView === 'accum' &&
+              RAIN_HOUR_OPTIONS.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => setRainHours(h)}
+                  className={`px-2 py-1 rounded-lg text-2xs font-mono border transition-all cursor-pointer ${
+                    rainHours === h
+                      ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
+                      : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:text-slate-100 hover:border-slate-600/80'
+                  }`}
+                >
+                  {h}h
+                </button>
+              ))}
           </div>
         )}
 
-        <div className="relative rounded-xl overflow-hidden border border-slate-800">
+        <div className="relative rounded-2xl overflow-hidden border border-slate-800/80 shadow-sm">
           <div ref={containerRef} className="h-[52vh] min-h-[340px] w-full bg-slate-950" />
 
           {/* Layer legend */}
-          <div className="absolute bottom-2 left-2 z-[500] flex flex-col gap-1.5 bg-slate-950/85 border border-slate-800 rounded-lg px-2.5 py-2 text-[10px] font-mono text-slate-300">
+          <div className="absolute bottom-2 left-2 z-[500] flex flex-col gap-1.5 bg-slate-950/90 border border-slate-800/80 rounded-xl px-2.5 py-2 text-[10px] font-mono text-slate-300 shadow-sm backdrop-blur">
             {activeLayers.has('wind') && (
               <div className="flex items-center gap-1.5">
                 <Wind className="w-3 h-3 text-cyan-400" />
@@ -669,7 +742,11 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
             {activeLayers.has('rain') && (
               <div className="flex items-center gap-1.5">
                 <CloudRain className="w-3 h-3 text-sky-400" />
-                <span>{rainMode === 'now' ? 'Rain · size = mm/h' : `Accumulated mm · next ${rainMode}`}</span>
+                <span>
+                  {rainView === 'now'
+                    ? 'Rain now · size = mm/h'
+                    : `${rainDirection === 'past' ? 'Fallen' : 'Forecast'} · ${rainDirection} ${rainHours}h`}
+                </span>
               </div>
             )}
             {activeLayers.has('lightning') && (
