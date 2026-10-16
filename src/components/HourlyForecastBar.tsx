@@ -17,8 +17,8 @@ const HourlyForecastBarComponent: React.FC<HourlyForecastBarProps> = ({
 
   if (isLoading || !hourly || hourly.length === 0) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm animate-pulse space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md animate-pulse space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
           <div className="h-4 w-48 bg-slate-800 rounded" />
           <div className="h-6 w-24 bg-slate-950 rounded-lg" />
         </div>
@@ -54,23 +54,25 @@ const HourlyForecastBarComponent: React.FC<HourlyForecastBarProps> = ({
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+    <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
       {/* Header with Switcher */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-        <div className="flex items-center gap-2">
-          <Clock className="w-4 h-4 text-amber-400" />
-          <h3 className="text-sm font-mono font-bold tracking-wider uppercase text-slate-300">
-            NEXT {viewCount} HOURS OUTLOOK
+      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-slate-900/80 to-slate-950/80 border border-slate-800/80 shadow-sm">
+            <Clock className="w-4 h-4 text-amber-400" />
+          </div>
+          <h3 className="text-sm font-semibold tracking-tight text-slate-100">
+            Next {viewCount} Hours Outlook
           </h3>
         </div>
 
         {/* View toggle */}
-        <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-mono">
+        <div className="flex items-center bg-slate-950 rounded-xl p-0.5 border border-slate-800/80 text-xs font-medium shadow-sm">
           <button
             id="view-6h-btn"
             onClick={() => setViewCount(6)}
-            className={`px-2.5 py-1 rounded transition-colors ${
-              viewCount === 6 ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
+              viewCount === 6 ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             6 Hours
@@ -78,8 +80,8 @@ const HourlyForecastBarComponent: React.FC<HourlyForecastBarProps> = ({
           <button
             id="view-12h-btn"
             onClick={() => setViewCount(12)}
-            className={`px-2.5 py-1 rounded transition-colors ${
-              viewCount === 12 ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
+              viewCount === 12 ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             12 Hours
@@ -87,8 +89,8 @@ const HourlyForecastBarComponent: React.FC<HourlyForecastBarProps> = ({
           <button
             id="view-24h-btn"
             onClick={() => setViewCount(24)}
-            className={`px-2.5 py-1 rounded transition-colors ${
-              viewCount === 24 ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+            className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
+              viewCount === 24 ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             24 Hours

@@ -44,7 +44,7 @@ export const ConstructionImpacts: React.FC<ConstructionImpactsProps> = ({ impact
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+    <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
         <div className="flex items-center gap-2">

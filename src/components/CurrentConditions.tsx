@@ -27,14 +27,14 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
 }) => {
   if (isLoading || !weather) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm animate-pulse space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md animate-pulse space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
           <div className="h-4 w-44 bg-slate-800 rounded" />
           <div className="h-3 w-28 bg-slate-800 rounded" />
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-24 rounded-lg bg-slate-950/70 border border-slate-800/90" />
+            <div key={i} className="h-24 rounded-xl bg-slate-950/70 border border-slate-800/90" />
           ))}
         </div>
       </div>
@@ -64,13 +64,15 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
   const WeatherIcon = getWeatherIcon(weather.weatherCode);
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+    <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-        <div className="flex items-center gap-2">
-          <WeatherIcon className="w-5 h-5 text-amber-400" />
-          <h3 className="text-sm font-mono font-bold tracking-wider uppercase text-slate-300">
-            CURRENT ONSITE CONDITIONS
+      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-amber-500/10 to-amber-400/5 border border-amber-500/30 shadow-sm">
+            <WeatherIcon className="w-4 h-4 text-amber-400" />
+          </div>
+          <h3 className="text-sm font-semibold tracking-tight text-slate-100">
+            Current Onsite Conditions
           </h3>
         </div>
         <span className="text-xs font-mono text-slate-400">
