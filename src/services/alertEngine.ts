@@ -145,6 +145,28 @@ export async function evaluateAndProcessAlerts(
       startTime: current.timestamp,
       expectedDuration: '1–2 hours'
     });
+  } else {
+    // No active thunderstorm code, but convective energy may still be building.
+    // Open-Meteo's Lightning Potential Index (LPI) and CAPE flag developing
+    // storms ahead of a WMO 95 code so crews can prepare in time.
+    const peakLpi = Math.max(current.lightningPotential ?? 0, ...next6.map((h) => h.lightningPotential ?? 0));
+    const peakCape = Math.max(current.cape ?? 0, ...next6.map((h) => h.cape ?? 0));
+    if (peakLpi >= 500 || peakCape >= 1500) {
+      const severe = peakLpi >= 1000 || peakCape >= 2500;
+      candidateAlerts.push({
+        alertType: 'LIGHTNING',
+        severity: severe ? 'CRITICAL' : 'HIGH',
+        title: severe ? 'SEVERE LIGHTNING RISK ALERT' : 'LIGHTNING RISK ALERT',
+        message: `Convective storm energy is building (LPI ${Math.round(peakLpi)} J/kg, CAPE ${Math.round(
+          peakCape
+        )} J/kg). Thunderstorm and lightning activity is possible within the next few hours — secure crane booms and plan to suspend elevated work.`,
+        triggerCondition: 'Lightning potential >= 500 J/kg or CAPE >= 1500 J/kg',
+        observedValue: `LPI ${Math.round(peakLpi)} J/kg / CAPE ${Math.round(peakCape)} J/kg`,
+        thresholdValue: 'LPI 500 J/kg / CAPE 1500 J/kg',
+        startTime: current.timestamp,
+        expectedDuration: '2–4 hours'
+      });
+    }
   }
 
   // 5. Extreme UV

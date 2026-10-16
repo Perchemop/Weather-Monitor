@@ -223,6 +223,47 @@ export function calculateDeterministicRisk(
     highestLevel = 'CRITICAL';
   }
 
+  // 7b. Lightning Potential / Convective Energy (Open-Meteo LPI + CAPE).
+  // These catch developing storms before a WMO thunderstorm code is issued.
+  const lightningIndex = current.lightningPotential ?? 0;
+  const cape = current.cape ?? 0;
+  const lightningMetric =
+    lightningIndex > 0 ? `LPI ${Math.round(lightningIndex)} J/kg` : `CAPE ${Math.round(cape)} J/kg`;
+  if (lightningIndex >= 1000 || cape >= 2500) {
+    factors.push({
+      id: 'lightning-critical',
+      category: 'STORM',
+      label: 'Severe Lightning Risk',
+      value: lightningMetric,
+      threshold: 'LPI >= 1000 / CAPE >= 2500 J/kg',
+      severity: 'CRITICAL'
+    });
+    highestScore = Math.max(highestScore, 97);
+    highestLevel = 'CRITICAL';
+  } else if (lightningIndex >= 500 || cape >= 1500) {
+    factors.push({
+      id: 'lightning-high',
+      category: 'STORM',
+      label: 'Elevated Lightning Risk',
+      value: lightningMetric,
+      threshold: 'LPI >= 500 / CAPE >= 1500 J/kg',
+      severity: 'HIGH'
+    });
+    highestScore = Math.max(highestScore, 72);
+    if (highestLevel !== 'CRITICAL') highestLevel = 'HIGH';
+  } else if (lightningIndex >= 100 || cape >= 800) {
+    factors.push({
+      id: 'lightning-moderate',
+      category: 'STORM',
+      label: 'Developing Storm Energy',
+      value: lightningMetric,
+      threshold: 'LPI >= 100 / CAPE >= 800 J/kg',
+      severity: 'MODERATE'
+    });
+    highestScore = Math.max(highestScore, 45);
+    if (highestLevel === 'LOW') highestLevel = 'MODERATE';
+  }
+
   // Check next 6 hours to also factor in imminent peak conditions
   const next6Hours = hourlyForecast.slice(0, 6);
   let peakPeriod: { start: string; end: string; metric: string } | undefined;
@@ -252,6 +293,27 @@ export function calculateDeterministicRisk(
     });
     highestScore = Math.max(highestScore, 96);
     highestLevel = 'CRITICAL';
+  }
+
+  // Check for imminent lightning/convective energy in the next 6 hours.
+  const lightningHour = next6Hours.find(
+    (h) => (h.lightningPotential ?? 0) >= 500 || (h.cape ?? 0) >= 1500
+  );
+  if (lightningHour && !factors.some((f) => f.id === 'lightning-critical' || f.id === 'lightning-high')) {
+    const value =
+      (lightningHour.lightningPotential ?? 0) > 0
+        ? `LPI up to ${Math.round(lightningHour.lightningPotential ?? 0)} J/kg`
+        : `CAPE up to ${Math.round(lightningHour.cape ?? 0)} J/kg`;
+    factors.push({
+      id: 'forecast-lightning',
+      category: 'STORM',
+      label: 'Imminent Lightning Risk Forecast',
+      value,
+      threshold: 'LPI >= 500 / CAPE >= 1500 J/kg (within 6h)',
+      severity: 'HIGH'
+    });
+    highestScore = Math.max(highestScore, 74);
+    if (highestLevel !== 'CRITICAL') highestLevel = 'HIGH';
   }
 
   // Check for imminent extreme wind gusts

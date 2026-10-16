@@ -271,11 +271,11 @@ export async function fetchOpenMeteoData(
   url.searchParams.set('longitude', longitude.toFixed(4));
   url.searchParams.set(
     'current',
-    'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,surface_pressure,wind_speed_10m,wind_gusts_10m,is_day'
+    'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day,cape,lightning_potential'
   );
   url.searchParams.set(
     'hourly',
-    'temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,uv_index'
+    'temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,cape,lightning_potential'
   );
   url.searchParams.set(
     'daily',
@@ -334,7 +334,10 @@ export function validateAndNormalizeOpenMeteoData(
     weatherDescription: getWeatherDescription(weatherCode),
     pressure: parseSafeNumber(currentRaw.surface_pressure, 1013),
     visibility: 10000,
-    isDay: currentRaw.is_day === 1 || currentRaw.is_day === true
+    isDay: currentRaw.is_day === 1 || currentRaw.is_day === true,
+    windDirection: parseSafeNumber(currentRaw.wind_direction_10m, 0),
+    cape: Math.max(0, parseSafeNumber(currentRaw.cape, 0)),
+    lightningPotential: Math.max(0, parseSafeNumber(currentRaw.lightning_potential, 0))
   };
 
   const hourly: HourlyForecastItem[] = [];
@@ -356,6 +359,9 @@ export function validateAndNormalizeOpenMeteoData(
       const precip = parseSafeNumber(hourlyRaw.precipitation?.[i], 0);
       const wCode = parseSafeNumber(hourlyRaw.weather_code?.[i], 0);
       const uv = parseSafeNumber(hourlyRaw.uv_index?.[i], 0);
+      const windDir = parseSafeNumber(hourlyRaw.wind_direction_10m?.[i], 0);
+      const cape = Math.max(0, parseSafeNumber(hourlyRaw.cape?.[i], 0));
+      const lpi = Math.max(0, parseSafeNumber(hourlyRaw.lightning_potential?.[i], 0));
 
       let risk: RiskLevel = 'LOW';
       if (gusts >= 65 || precip >= 15 || wCode >= 95 || temp >= 40) {
@@ -376,7 +382,10 @@ export function validateAndNormalizeOpenMeteoData(
         weatherCode: wCode,
         weatherDescription: getWeatherDescription(wCode),
         uvIndex: uv,
-        riskLevel: risk
+        riskLevel: risk,
+        windDirection: windDir,
+        cape,
+        lightningPotential: lpi
       });
 
       if (i === 0 || (timeDate.getTime() <= nowMs && timeDate.getTime() > nowMs - 3600000)) {
