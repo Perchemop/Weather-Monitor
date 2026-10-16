@@ -7,6 +7,7 @@ import './setup.js';
 import assert from 'node:assert/strict';
 import { calculateDeterministicRisk, SAFETY_DISCLAIMER } from '../services/riskEngine.js';
 import { evaluateCandidateAlerts } from '../static/alerts.js';
+import { emailRelayConfigured } from '../static/emailRelay.js';
 import { buildWeeklyPerformanceSummary } from '../services/performanceSummary.js';
 import { redactSecretsInError, maskSecret } from '../utils/security.js';
 import { deepEqual, setStateIfChanged } from '../utils/state.js';
@@ -178,6 +179,15 @@ async function runTests() {
     const candidates = evaluateCandidateAlerts(current, [], mockThresholds);
     assert.ok(candidates.some((c) => c.alertType === 'STORM'), 'STORM candidate expected');
     assert.ok(!candidates.some((c) => c.alertType === 'LIGHTNING'), 'LIGHTNING must not duplicate STORM');
+  });
+
+  test('Email relay: only a valid http(s) relay URL is accepted', () => {
+    assert.equal(emailRelayConfigured('https://relay.example.workers.dev/alert'), true);
+    assert.equal(emailRelayConfigured('http://localhost:8787'), true);
+    assert.equal(emailRelayConfigured('  https://relay.example.com?secret=x '), true);
+    assert.equal(emailRelayConfigured(''), false);
+    assert.equal(emailRelayConfigured(undefined), false);
+    assert.equal(emailRelayConfigured('ftp://relay.example.com'), false);
   });
 
   // 2. Secret Redaction & Protection Tests
