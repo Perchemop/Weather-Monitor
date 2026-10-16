@@ -16,11 +16,11 @@ import {
   Gauge
 } from 'lucide-react';
 import { CurrentWeather, LocationItem } from '../types';
+import { RainDirection, sumPrecipitationWindow } from '../utils/rainAccum';
 
 export type MapLayer = 'radar' | 'rain' | 'wind' | 'lightning';
 
 type RainView = 'now' | 'accum';
-type RainDirection = 'past' | 'next';
 type RainHours = 1 | 3 | 6 | 24;
 
 interface WeatherMapViewProps {
@@ -392,29 +392,11 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
   }, [timeAxis]);
 
   /**
-   * Sums hourly precipitation over a window.
-   * - `next`: the current hour plus the following `hours-1` (forecast total).
-   * - `past`: the last `hours` buckets ending with the current (in-progress)
-   *   hour — i.e. how much has already fallen.
+   * Sums hourly precipitation over a window (see utils/rainAccum for the rules).
    */
   const accumulation = useCallback(
-    (p: GridPoint, hours: number, direction: RainDirection): number => {
-      let from: number;
-      let to: number; // exclusive
-      if (direction === 'next') {
-        from = startHourIdx;
-        to = startHourIdx + hours;
-      } else {
-        from = Math.max(0, startHourIdx - hours + 1);
-        to = startHourIdx + 1;
-      }
-      let sum = 0;
-      const end = Math.min(p.precipHourly.length, to);
-      for (let i = from; i < end; i++) {
-        sum += p.precipHourly[i] || 0;
-      }
-      return sum;
-    },
+    (p: GridPoint, hours: number, direction: RainDirection): number =>
+      sumPrecipitationWindow(p.precipHourly, startHourIdx, hours, direction),
     [startHourIdx]
   );
 

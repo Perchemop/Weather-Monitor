@@ -32,6 +32,7 @@ import { hasMinimumRole, canOperate, canAdminister } from '../utils/roles.js';
 import { validatePasswordStrength, describePasswordPolicy } from '../utils/password.js';
 import { generateTotpSecret, generateTotp, verifyTotp, buildOtpauthUrl } from '../utils/totp.js';
 import { TtlCache } from '../utils/ttlCache.js';
+import { sumPrecipitationWindow } from '../utils/rainAccum.js';
 import {
   setUserMfaSecret,
   setUserMfaEnabled,
@@ -786,6 +787,38 @@ async function runTests() {
     setStateIfChanged(setter as any, { a: 2, b: [1, 2] });
     assert.notEqual(value, before, 'changed payload must replace the state reference');
     assert.equal(value.a, 2);
+  });
+
+  test('Rain accumulation: forward window sums the current hour plus the next ones', () => {
+    // index 2 is "now": 1+2+3 = 6 over the next 3 hours (indices 2,3,4)
+    const hourly = [9, 9, 1, 2, 3, 4, 5];
+    assert.equal(sumPrecipitationWindow(hourly, 2, 3, 'next'), 6);
+    assert.equal(sumPrecipitationWindow(hourly, 2, 1, 'next'), 1, 'single-hour forecast is the current bucket');
+  });
+
+  test('Rain accumulation: past window ends with the current (in-progress) hour', () => {
+    const hourly = [1, 2, 3, 4, 5, 6, 7];
+    // last 3 hours ending at index 4 => indices 2,3,4 => 3+4+5 = 12
+    assert.equal(sumPrecipitationWindow(hourly, 4, 3, 'past'), 12);
+    assert.equal(sumPrecipitationWindow(hourly, 4, 1, 'past'), 5);
+  });
+
+  test('Rain accumulation: past window clamps at the start of the series', () => {
+    const hourly = [1, 2, 3, 4];
+    // start=1, window=6 would reach before index 0; clamp to indices 0..1 => 3
+    assert.equal(sumPrecipitationWindow(hourly, 1, 6, 'past'), 3);
+  });
+
+  test('Rain accumulation: next window clamps at the end of the series', () => {
+    const hourly = [1, 2, 3, 4];
+    assert.equal(sumPrecipitationWindow(hourly, 2, 24, 'next'), 7, 'only available buckets are summed');
+  });
+
+  test('Rain accumulation: tolerates empty, missing and invalid samples', () => {
+    assert.equal(sumPrecipitationWindow([], 0, 3, 'next'), 0);
+    assert.equal(sumPrecipitationWindow([1, NaN, 2] as number[], 0, 3, 'next'), 3, 'NaN samples count as zero');
+    assert.equal(sumPrecipitationWindow([1, -5, 2] as number[], 0, 3, 'next'), 3, 'negative samples are ignored');
+    assert.equal(sumPrecipitationWindow([1, 2, 3], 0, 0, 'next'), 0, 'a zero-length window sums nothing');
   });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
