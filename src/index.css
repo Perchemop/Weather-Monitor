@@ -104,6 +104,34 @@ header[data-app-header] {
   }
 }
 
+/* Comfortable touch targets on phones and tablets (coarse pointers). Every
+   in-app control gets a 44px minimum so tap accuracy matches the desktop feel.
+   Leaflet's own chrome and map markers are excluded — the map keeps its native
+   control sizing, and its markers scale with the data they represent. */
+@media (pointer: coarse) {
+  #root button:not([class*='leaflet-']),
+  #root [role='button']:not([class*='leaflet-']),
+  #root select:not([class*='leaflet-']),
+  #root input[type='range']:not([class*='leaflet-']) {
+    min-height: 44px;
+  }
+
+  /* Leaflet's zoom buttons are 30px by default; enlarge them for thumbs. */
+  .leaflet-touch .leaflet-control-zoom-in,
+  .leaflet-touch .leaflet-control-zoom-out {
+    width: 44px !important;
+    height: 44px !important;
+    line-height: 44px !important;
+    font-size: 22px !important;
+  }
+
+  /* Icon-only controls have no label to give them width, so square them up. */
+  #root .touch-square {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 
 /* Respect users who prefer reduced motion: neutralise entrance animations and
    the perpetual pulse/spin loops so the interface stays calm. */

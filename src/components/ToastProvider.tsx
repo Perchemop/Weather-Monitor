@@ -102,7 +102,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => removeToast(toast.id)}
-                className="text-slate-400 hover:text-slate-200 p-0.5 rounded transition-colors"
+                className="touch-square inline-flex items-center justify-center text-slate-400 hover:text-slate-200 p-0.5 rounded transition-colors"
                 aria-label="Dismiss notification"
               >
                 <X className="w-3.5 h-3.5" />

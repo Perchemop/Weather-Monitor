@@ -195,7 +195,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
               type="button"
               id="logout-btn"
               onClick={onLogout}
-              className="flex items-center gap-1 p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-400 hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+              className="touch-square flex items-center justify-center gap-1 p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-400 hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
               title="Lock safety enclave / log out"
               aria-label="Lock safety enclave"
             >
@@ -207,7 +207,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="sm:hidden p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
+            className="touch-square sm:hidden p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white"
             aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}

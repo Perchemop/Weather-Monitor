@@ -575,7 +575,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                 type="button"
                 onClick={() => step(-1)}
                 disabled={radarFrames.length === 0}
-                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
+                className="touch-square p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
                 aria-label="Previous radar frame"
               >
                 <SkipBack className="w-3.5 h-3.5" />
@@ -584,7 +584,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                 type="button"
                 onClick={() => setPlaying((p) => !p)}
                 disabled={radarFrames.length === 0}
-                className="p-1.5 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-400/10 hover:from-amber-500/30 hover:to-amber-400/15 border border-amber-500/40 text-amber-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
+                className="touch-square p-1.5 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-400/10 hover:from-amber-500/30 hover:to-amber-400/15 border border-amber-500/40 text-amber-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
                 aria-label={playing ? 'Pause radar loop' : 'Play radar loop'}
               >
                 {playing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
@@ -593,7 +593,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                 type="button"
                 onClick={() => step(1)}
                 disabled={radarFrames.length === 0}
-                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
+                className="touch-square p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
                 aria-label="Next radar frame"
               >
                 <SkipForward className="w-3.5 h-3.5" />
@@ -628,7 +628,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
               <button
                 type="button"
                 onClick={() => void loadRadar()}
-                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 text-slate-300 cursor-pointer shadow-sm"
+                className="touch-square p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/80 text-slate-300 cursor-pointer shadow-sm"
                 aria-label="Refresh radar"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${radarStatus === 'loading' ? 'animate-spin' : ''}`} />
