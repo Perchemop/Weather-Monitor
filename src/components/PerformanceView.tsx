@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { LocationItem, WeeklyPerformanceSummary } from '../types';
 import { apiFetch } from '../utils/api';
+import { EmptyState } from './EmptyState';
 
 interface PerformanceViewProps {
   location: LocationItem | null;
@@ -105,15 +106,15 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ location }) =>
     return (
       <div className="animate-fadeIn space-y-4">
         <div className="h-8 w-72 rounded bg-slate-800/60 animate-pulse" />
-        <div className="h-40 rounded-xl bg-slate-900 border border-slate-800 animate-pulse" />
-        <div className="h-32 rounded-xl bg-slate-900 border border-slate-800 animate-pulse" />
+        <div className="h-40 rounded-2xl bg-slate-900/80 border border-slate-800/80 animate-pulse" />
+        <div className="h-32 rounded-2xl bg-slate-900/80 border border-slate-800/80 animate-pulse" />
       </div>
     );
   }
 
   if (error && !summary) {
     return (
-      <div className="animate-fadeIn bg-slate-900 border border-red-900/50 rounded-xl p-8 text-center space-y-3">
+      <div className="animate-fadeIn bg-slate-900/80 border border-red-900/50 rounded-2xl p-8 text-center space-y-3">
         <AlertTriangle className="w-8 h-8 text-red-400 mx-auto" />
         <p className="text-sm text-slate-300">{error}</p>
         <button
@@ -182,7 +183,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ location }) =>
       </div>
 
       {/* Highlights */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+      <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
         <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-2">
           <Gauge className="w-4 h-4 text-amber-400" /> Highlights
         </h3>
@@ -198,7 +199,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ location }) =>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Monitoring reliability */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
           <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 mb-4 flex items-center gap-2">
             <Activity className="w-4 h-4 text-emerald-400" /> Monitoring Reliability
           </h3>
@@ -218,7 +219,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ location }) =>
         </div>
 
         {/* Observed conditions */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
           <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 mb-4 flex items-center gap-2">
             <Wind className="w-4 h-4 text-cyan-400" /> Observed Conditions
           </h3>
@@ -234,7 +235,7 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ location }) =>
       </div>
 
       {/* Alerts */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+      <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
         <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-300 mb-4 flex items-center gap-2">
           <ShieldAlert className="w-4 h-4 text-orange-400" /> Alert Activity
         </h3>
@@ -260,7 +261,13 @@ export const PerformanceView: React.FC<PerformanceViewProps> = ({ location }) =>
           <div>
             <div className="text-[11px] font-mono uppercase tracking-wider text-slate-500 mb-2">Top types</div>
             {summary.alerts.byType.length === 0 ? (
-              <p className="text-xs text-slate-500">No alerts recorded in this window.</p>
+              <EmptyState
+                nested
+                size="compact"
+                icon={BarChart3}
+                title="No alerts recorded in this window"
+                description="Threshold breaches will be summarised here."
+              />
             ) : (
               <div className="space-y-1.5">
                 {summary.alerts.byType.map((t) => (
