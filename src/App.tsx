@@ -20,6 +20,7 @@ const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'Setti
 const UsersView = lazyNamed(() => import('./components/UsersView'), 'UsersView');
 const ActivityRiskView = lazyNamed(() => import('./components/ActivityRiskView'), 'ActivityRiskView');
 const PerformanceView = lazyNamed(() => import('./components/PerformanceView'), 'PerformanceView');
+const WeatherMapView = lazyNamed(() => import('./components/WeatherMapView'), 'WeatherMapView');
 import {
   CurrentWeather,
   RiskAssessment,
@@ -40,7 +41,7 @@ import { apiFetch } from './utils/api';
 import { deepEqual, setStateIfChanged } from './utils/state';
 import { initKeepAwake } from './utils/wakeLock';
 import { STATIC_MODE } from './static/mode';
-import { ShieldCheck, Database, HardHat, CheckCircle2, ArrowRightLeft, WifiOff } from 'lucide-react';
+import { ShieldCheck, HardHat, CheckCircle2, WifiOff } from 'lucide-react';
 
 const FALLBACK_SITE: LocationItem = {
   id: 'loc-default',
@@ -89,7 +90,6 @@ export default function App() {
     consecutiveFailures: 0
   });
   const [dataStatus, setDataStatus] = useState<'LIVE' | 'CACHED' | 'OFFLINE' | 'UNAVAILABLE'>('LIVE');
-  const [systemHealth, setSystemHealth] = useState<any>(null);
   const [providerComparison, setProviderComparison] = useState<ProviderComparison | null>(null);
   const [hasWeatherApiKey, setHasWeatherApiKey] = useState<boolean>(true);
   const [activeProvider, setActiveProvider] = useState<string>('WeatherAPI (Main Reference)');
@@ -288,16 +288,7 @@ export default function App() {
         }
       } catch {}
 
-      // 6. Fetch Health Diagnostics from backend
-      try {
-        const healthRes = await apiFetch('/api/health');
-        if (healthRes.ok) {
-          const hData = await healthRes.json();
-          setStateIfChanged(setSystemHealth, hData);
-        }
-      } catch {}
-
-      // 7. Direct Client Fallback: If backend weather was not fetched, query directly from Open-Meteo
+      // 6. Direct Client Fallback: If backend weather was not fetched, query directly from Open-Meteo
       if (!weatherLoaded) {
         try {
           const livePayload = await fetchRealWeatherData(
@@ -671,6 +662,9 @@ export default function App() {
           />
         )}
 
+        {/* Live weather map: radar, rain, wind & lightning */}
+        {activeTab === 'map' && <WeatherMapView location={currentLocation} current={currentWeather} />}
+
         {/* Alerts & Delivery History */}
         {activeTab === 'alerts' && (
           <AlertHistoryView alerts={allAlerts} deliveries={alertDeliveries} />
@@ -691,9 +685,6 @@ export default function App() {
 
         {/* Weekly Performance Summary */}
         {activeTab === 'performance' && <PerformanceView location={currentLocation} />}
-
-        {/* System Health Diagnostics */}
-        {activeTab === 'system' && false}
 
         {/* Settings & Threshold Calibration */}
         {activeTab === 'settings' && <SettingsView onSettingsSaved={refreshDashboard} />}
