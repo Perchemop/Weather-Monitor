@@ -6,8 +6,10 @@ import { HourlyForecastBar } from './components/HourlyForecastBar';
 import { ActiveAlertsPanel } from './components/ActiveAlertsPanel';
 import { LocationModal } from './components/LocationModal';
 import { LoginScreen } from './components/LoginScreen';
+import { LightningQuickCard } from './components/LightningQuickCard';
 import { useToast } from './components/ToastProvider';
 import { lazyNamed, ViewLoadingFallback } from './components/LazyBoundary';
+import type { MapLayer } from './components/WeatherMapView';
 
 // Code-split non-dashboard views. Recharts (used by ForecastView and
 // HistoricalView) and the large settings/report surfaces are only fetched
@@ -66,6 +68,9 @@ export default function App() {
   // App Navigation & Modals
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  // Map tab focus: the lightning quick-card opens the map with the storm layer on.
+  const [mapInitialLayers, setMapInitialLayers] = useState<MapLayer[]>(['radar', 'wind']);
+  const [mapKey, setMapKey] = useState(0);
 
   // Weather & Risk State
   const [currentLocation, setCurrentLocation] = useState<LocationItem | null>(FALLBACK_SITE);
@@ -491,6 +496,13 @@ export default function App() {
   const openLocationModal = useCallback(() => setIsLocationModalOpen(true), []);
   const closeLocationModal = useCallback(() => setIsLocationModalOpen(false), []);
 
+  // Dashboard quick-tab → Map tab with the lightning layer pre-enabled.
+  const openLightningMap = useCallback(() => {
+    setMapInitialLayers(['radar', 'lightning']);
+    setMapKey((k) => k + 1);
+    setActiveTab('map');
+  }, []);
+
   const elevatedActivities = useMemo(
     () =>
       riskAssessment?.affectedActivities.filter(
@@ -624,6 +636,9 @@ export default function App() {
               </button>
             )}
 
+            {/* Lightning & storm quick-tab (jumps to the lightning map layer) */}
+            <LightningQuickCard current={currentWeather} risk={riskAssessment} onOpenMap={openLightningMap} />
+
       <div className="pt-2 border-t border-slate-800/70 text-xs text-slate-400">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
@@ -663,7 +678,14 @@ export default function App() {
         )}
 
         {/* Live weather map: radar, rain, wind & lightning */}
-        {activeTab === 'map' && <WeatherMapView location={currentLocation} current={currentWeather} />}
+        {activeTab === 'map' && (
+          <WeatherMapView
+            key={mapKey}
+            location={currentLocation}
+            current={currentWeather}
+            initialLayers={mapInitialLayers}
+          />
+        )}
 
         {/* Alerts & Delivery History */}
         {activeTab === 'alerts' && (
