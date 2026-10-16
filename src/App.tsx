@@ -464,6 +464,14 @@ export default function App() {
   const openLocationModal = useCallback(() => setIsLocationModalOpen(true), []);
   const closeLocationModal = useCallback(() => setIsLocationModalOpen(false), []);
 
+  const elevatedActivities = useMemo(
+    () =>
+      riskAssessment?.affectedActivities.filter(
+        (a) => a.riskLevel === 'HIGH' || a.riskLevel === 'CRITICAL'
+      ) || [],
+    [riskAssessment]
+  );
+
   // Loading state while checking authentication
   if (authChecking) {
     return (
@@ -492,13 +500,6 @@ export default function App() {
   const tempUnit = ownerSettings?.temperatureUnit || 'C';
   const windUnit = ownerSettings?.windUnit || 'km/h';
   const monitorInterval = ownerSettings?.monitorIntervalMinutes || 15;
-  const elevatedActivities = useMemo(
-    () =>
-      riskAssessment?.affectedActivities.filter(
-        (a) => a.riskLevel === 'HIGH' || a.riskLevel === 'CRITICAL'
-      ) || [],
-    [riskAssessment]
-  );
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
