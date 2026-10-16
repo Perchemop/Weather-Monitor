@@ -18,13 +18,12 @@ export interface SmtpConfig {
 
 export function getSmtpConfig(): SmtpConfig | null {
   const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASSWORD;
-  const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
+  if (!host) return null;
 
-  if (!host || !user || !pass) {
-    return null;
-  }
+  const user = process.env.SMTP_USER || '';
+  const pass = process.env.SMTP_PASSWORD || '';
+  const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
+  const fromAddress = user || 'no-reply@localhost';
 
   return {
     host,
@@ -32,8 +31,26 @@ export function getSmtpConfig(): SmtpConfig | null {
     secure: port === 465,
     user,
     pass,
-    from: process.env.SMTP_FROM || `"Construction Weather Monitor" <${user}>`
+    from: process.env.SMTP_FROM || `"Construction Weather Monitor" <${fromAddress}>`
   };
+}
+
+/**
+ * Builds a nodemailer transport for the configured SMTP server.
+ *
+ * Auth is only attached when both a username and password are present, so
+ * local/dev relays that accept unauthenticated mail (MailHog, Mailpit, an
+ * internal relay) work without dummy credentials. TLS verification is relaxed
+ * to tolerate self-signed certificates on internal relays.
+ */
+function createTransport(config: SmtpConfig) {
+  return nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    ...(config.user && config.pass ? { auth: { user: config.user, pass: config.pass } } : {}),
+    tls: { rejectUnauthorized: false }
+  });
 }
 
 export function getPublicSmtpStatus(): {
@@ -49,7 +66,7 @@ export function getPublicSmtpStatus(): {
     configured: true,
     host: config.host,
     port: config.port,
-    userMasked: maskSecret(config.user)
+    userMasked: config.user ? maskSecret(config.user) : '(no auth)'
   };
 }
 
@@ -79,18 +96,7 @@ export async function sendAlertEmail(
     return { success: false, error: errorMsg };
   }
 
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: {
-      user: config.user,
-      pass: config.pass
-    },
-    tls: {
-      rejectUnauthorized: false
-    }
-  });
+  const transporter = createTransport(config);
 
   const subject = `${alert.alertType} — Construction Weather Monitor`;
   const activitiesList = affectedActivities.length > 0
@@ -233,13 +239,7 @@ export async function processAlertRetryQueue(): Promise<{
     return { retried: 0, succeeded: 0, failed: 0 };
   }
 
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: { user: config.user, pass: config.pass },
-    tls: { rejectUnauthorized: false }
-  });
+  const transporter = createTransport(config);
 
   let succeeded = 0;
   let failed = 0;
@@ -286,13 +286,7 @@ export async function sendRecoveryEmail(
   const config = getSmtpConfig();
   if (!config) return { success: false, error: 'SMTP not configured' };
 
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: { user: config.user, pass: config.pass },
-    tls: { rejectUnauthorized: false }
-  });
+  const transporter = createTransport(config);
 
   const subject = `WEATHER ALERT CLEARED — ${alert.alertType} — Construction Weather Monitor`;
   const textBody = `
@@ -334,17 +328,11 @@ export async function sendTestEmail(recipientEmail: string): Promise<{ success: 
   if (!config) {
     return {
       success: false,
-      error: 'SMTP credentials not configured. Please set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD.'
+      error: 'SMTP is not configured. Set SMTP_HOST (plus SMTP_USER/SMTP_PASSWORD if your relay requires authentication).'
     };
   }
 
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: { user: config.user, pass: config.pass },
-    tls: { rejectUnauthorized: false }
-  });
+  const transporter = createTransport(config);
 
   const subject = 'Test Notification — Construction Weather Monitor';
   const textBody = `

@@ -195,11 +195,19 @@ tiles (only fetched when the tab is opened — it never touches the initial
 bundle):
 
 - **Radar** — [RainViewer](https://www.rainviewer.com/api.html) precipitation
-  tiles with a play/pause past→nowcast timeline (refreshed every 5 minutes).
-- **Rain** — a 5×5 Open-Meteo sample grid drawn as intensity circles (mm/h).
+  tiles animated as a smooth past→nowcast loop (play/pause, step, 0.5×/1×/2×
+  speed, scrub timeline). Frames are preloaded for the current viewport so the
+  loop plays without stutter; the feed refreshes every 5 minutes.
+- **Rain** — an Open-Meteo 5×5 sample grid, switchable between *instantaneous*
+  intensity (mm/h) and **accumulated totals over the next 1 / 3 / 6 / 24 hours** —
+  useful for trench-flooding and runoff planning.
 - **Wind** — the same grid rendered as direction arrows coloured by speed.
 - **Lightning** — storm-energy circles from Open-Meteo's Lightning Potential
   Index (LPI) and CAPE.
+
+A dashboard **Lightning & Storm quick-tab** summarises the live storm level
+(LPI / CAPE / active thunderstorm) and opens the map with the lightning layer
+already enabled.
 
 All sources are free and require no API key. If a feed is unreachable the map
 degrades gracefully (the base map and remaining layers stay usable).
@@ -237,6 +245,25 @@ and the relay sends the email. A free, open-source **Cloudflare Worker** example
 (with Resend/Brevo senders) ships in
 [`integrations/cloudflare-worker-email-relay`](integrations/cloudflare-worker-email-relay).
 Leave it blank to stay browser-only.
+
+### Server email path, end to end
+
+The full server build emails alerts directly over SMTP (`nodemailer`). Only
+`SMTP_HOST` is required — add `SMTP_USER`/`SMTP_PASSWORD` when your relay needs
+authentication. To verify the whole path locally with no account:
+
+```bash
+docker compose --profile mail up --build     # starts the app + Mailpit catcher
+# in .env:
+#   SMTP_HOST=mailpit
+#   SMTP_PORT=1025
+#   OWNER_EMAIL=safety@site.local
+```
+
+Trigger an alert (or Settings → Email Gateway → *Send Test Notification*), then
+read the delivered message at <http://localhost:8025>. Point `SMTP_HOST` at any
+free relay (Brevo 300/day, SMTP2GO 1000/mo, Mailjet, or a Gmail App Password) for
+real delivery — see `.env.example` for the exact host/port values.
 
 ### Deploying to GitHub Pages
 
