@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldAlert, Mail, CheckCircle2, XCircle, Filter, Calendar, Download } from 'lucide-react';
 import { AlertItem, AlertDelivery } from '../types';
+import { EmptyState } from './EmptyState';
 
 interface AlertHistoryViewProps {
   alerts: AlertItem[];
@@ -155,9 +156,11 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
       {activeTab === 'alerts' ? (
         <div className="space-y-3">
           {filteredAlerts.length === 0 ? (
-            <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-xl text-slate-500 font-mono text-sm">
-              No alert records matching the selected criteria.
-            </div>
+            <EmptyState
+              icon={ShieldAlert}
+              title="No alert records match these filters"
+              description="Adjust the severity, type or time range filters above. New alerts will be recorded here as soon as a threshold is breached."
+            />
           ) : (
             filteredAlerts.map((alert) => {
               const isCritical = alert.severity === 'CRITICAL';
@@ -166,7 +169,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
               return (
                 <div
                   key={alert.id}
-                  className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-colors shadow-sm"
+                  className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-slate-700/90 transition-all shadow-sm"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -223,7 +226,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
         </div>
       ) : (
         /* Deliveries Tab */
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl overflow-hidden shadow-md">
           <div className="p-4 border-b border-slate-800 flex items-center justify-between">
             <h4 className="text-xs font-mono font-bold uppercase text-slate-400">
               SMTP DISPATCH LOG (Stored Locally)
@@ -232,9 +235,12 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
           </div>
 
           {deliveries.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 font-mono text-sm">
-              No alert emails dispatched yet.
-            </div>
+            <EmptyState
+              nested
+              icon={Mail}
+              title="No alert emails dispatched yet"
+              description="Successful SMTP deliveries will be logged here when a severe-weather email is sent."
+            />
           ) : (
             <div className="divide-y divide-slate-800">
               {deliveries.map((del) => {

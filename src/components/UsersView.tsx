@@ -208,7 +208,7 @@ export function UsersView() {
 
   if (isLoading) {
     return (
-      <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-xl text-slate-400 font-mono text-sm animate-pulse">
+      <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 font-mono text-sm animate-pulse">
         Loading site access control roster...
       </div>
     );
@@ -217,7 +217,7 @@ export function UsersView() {
   return (
     <div className="space-y-6 pb-20">
       {/* Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-amber-400" />
@@ -270,7 +270,7 @@ export function UsersView() {
       {showAddForm && (
         <form
           onSubmit={handleAddUser}
-          className="bg-slate-900 border border-amber-500/20 rounded-xl p-5 shadow-sm space-y-4 animate-fade-in duration-150"
+          className="bg-slate-900 border border-amber-500/20 rounded-2xl p-5 shadow-md space-y-4 animate-fade-in duration-150"
         >
           <h4 className="text-xs font-mono font-bold uppercase text-slate-300 border-b border-slate-800 pb-3">
             PROVISION NEW OPERATOR ACCOUNT
@@ -341,7 +341,7 @@ export function UsersView() {
       )}
 
       {/* User roster */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-md overflow-hidden">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <h4 className="text-xs font-mono font-bold uppercase text-slate-300">ACTIVE OPERATOR ROSTER</h4>
           <span className="text-2xs font-mono text-slate-500">{users.length} account(s)</span>

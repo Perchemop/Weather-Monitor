@@ -114,7 +114,7 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
   return (
     <div
       id="hero-risk-card"
-      className={`rounded-xl border ${config.border} ${config.bg} p-5 sm:p-7 shadow-lg relative overflow-hidden transition-all`}
+      className={`rounded-2xl border ${config.border} ${config.bg} p-5 sm:p-7 shadow-lg relative overflow-hidden transition-all`}
     >
       {/* Background visual watermarks */}
       <div className="absolute -right-8 -bottom-8 opacity-5 pointer-events-none">
