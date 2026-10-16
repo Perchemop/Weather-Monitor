@@ -84,8 +84,8 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
               <button
                 type="button"
                 onClick={() => setActiveTab('alerts')}
-                className={`px-3 py-1.5 rounded transition-colors ${
-                  activeTab === 'alerts' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
+                  activeTab === 'alerts' ? 'bg-slate-800 text-amber-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Alert Events ({alerts.length})
@@ -93,8 +93,8 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
               <button
                 type="button"
                 onClick={() => setActiveTab('deliveries')}
-                className={`px-3 py-1.5 rounded transition-colors ${
-                  activeTab === 'deliveries' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
+                  activeTab === 'deliveries' ? 'bg-slate-800 text-amber-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Email Deliveries ({deliveries.length})
@@ -105,7 +105,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
               type="button"
               id="export-alerts-csv-btn"
               onClick={exportCsv}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-xs font-mono font-semibold text-slate-200 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-xs font-mono font-semibold text-slate-200 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
               title="Download audit as CSV"
             >
               <Download className="w-3.5 h-3.5 text-amber-400" />

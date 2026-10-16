@@ -220,7 +220,7 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+            className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
           >
             {isLoading ? (
               <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
