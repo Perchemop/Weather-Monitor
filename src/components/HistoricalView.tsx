@@ -106,8 +106,8 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
                 <button
                   key={r}
                   onClick={() => setRange(r)}
-                  className={`px-3 py-1.5 rounded transition-colors capitalize ${
-                    range === r ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                  className={`px-3 py-1.5 rounded-lg transition-all capitalize cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
+                    range === r ? 'bg-slate-800 text-amber-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {r === '7days' ? '7 Days' : r === '30days' ? '30 Days' : r}
@@ -121,7 +121,7 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
               id="export-observations-csv-btn"
               onClick={exportCsv}
               disabled={observations.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-xs font-mono font-semibold text-slate-200 transition-colors disabled:opacity-40 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-xs font-mono font-semibold text-slate-200 transition-colors disabled:opacity-40 cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
               title="Download observations as CSV"
             >
               <Download className="w-3.5 h-3.5 text-amber-400" />

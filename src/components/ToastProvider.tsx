@@ -21,10 +21,18 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 /** Stable fallback used when a component calls `useToast()` outside the provider. */
 const FALLBACK_TOAST: ToastContextValue = {
-  showToast: (msg: string) => console.log('[Toast]', msg),
-  success: (msg: string) => console.log('[Toast Success]', msg),
-  error: (msg: string) => console.error('[Toast Error]', msg),
-  warning: (msg: string) => console.warn('[Toast Warning]', msg),
+  showToast: (msg: string) => {
+    if (import.meta.env.DEV) console.log('[Toast]', msg);
+  },
+  success: (msg: string) => {
+    if (import.meta.env.DEV) console.log('[Toast Success]', msg);
+  },
+  error: (msg: string) => {
+    if (import.meta.env.DEV) console.error('[Toast Error]', msg);
+  },
+  warning: (msg: string) => {
+    if (import.meta.env.DEV) console.warn('[Toast Warning]', msg);
+  },
   info: (msg: string) => console.info('[Toast Info]', msg)
 };
 
