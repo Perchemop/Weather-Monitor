@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { calculateDeterministicRisk, SAFETY_DISCLAIMER } from '../services/riskEngine.js';
 import { evaluateCandidateAlerts } from '../static/alerts.js';
 import { emailRelayConfigured } from '../static/emailRelay.js';
+import { getSmtpConfig } from '../services/emailService.js';
 import { buildWeeklyPerformanceSummary } from '../services/performanceSummary.js';
 import { redactSecretsInError, maskSecret } from '../utils/security.js';
 import { deepEqual, setStateIfChanged } from '../utils/state.js';
@@ -188,6 +189,48 @@ async function runTests() {
     assert.equal(emailRelayConfigured(''), false);
     assert.equal(emailRelayConfigured(undefined), false);
     assert.equal(emailRelayConfigured('ftp://relay.example.com'), false);
+  });
+
+  test('SMTP: a host-only relay is valid (no-auth local/dev SMTP)', () => {
+    const saved = {
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD,
+      from: process.env.SMTP_FROM
+    };
+    try {
+      delete process.env.SMTP_USER;
+      delete process.env.SMTP_PASSWORD;
+      delete process.env.SMTP_FROM;
+      process.env.SMTP_HOST = 'mailpit';
+      process.env.SMTP_PORT = '1025';
+
+      const config = getSmtpConfig();
+      assert.ok(config, 'host-only SMTP must be considered configured');
+      assert.equal(config!.host, 'mailpit');
+      assert.equal(config!.port, 1025);
+      assert.equal(config!.secure, false);
+      assert.equal(config!.user, '');
+      assert.ok(config!.from && config!.from.length > 0, 'a From header must be synthesised');
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        const key = `SMTP_${k.toUpperCase()}`;
+        if (v === undefined) delete process.env[key];
+        else process.env[key] = v;
+      }
+    }
+  });
+
+  test('SMTP: no host means not configured', () => {
+    const saved = process.env.SMTP_HOST;
+    try {
+      delete process.env.SMTP_HOST;
+      assert.equal(getSmtpConfig(), null);
+    } finally {
+      if (saved === undefined) delete process.env.SMTP_HOST;
+      else process.env.SMTP_HOST = saved;
+    }
   });
 
   // 2. Secret Redaction & Protection Tests
