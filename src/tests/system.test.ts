@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { calculateDeterministicRisk, SAFETY_DISCLAIMER } from '../services/riskEngine.js';
 import { buildWeeklyPerformanceSummary } from '../services/performanceSummary.js';
 import { redactSecretsInError, maskSecret } from '../utils/security.js';
+import { deepEqual, setStateIfChanged } from '../utils/state.js';
 import { evaluateDataFreshness } from '../utils/time.js';
 import { CurrentWeather, HourlyForecastItem, RiskThresholds } from '../types.js';
 import { convertTemperature, convertWind, formatTemperature, formatWind } from '../utils/units.js';
@@ -674,6 +675,33 @@ async function runTests() {
     assert.equal(summary.monitoring.successRatePct, 50);
     assert.equal(summary.monitoring.observations, 2);
     assert.ok(summary.highlights.length >= 2);
+  });
+
+  // ---------------------------------------------------------------------------
+  // State stability helpers (guards against the dashboard render/poll loop)
+  // ---------------------------------------------------------------------------
+  test('deepEqual compares nested JSON structures structurally', () => {
+    assert.equal(deepEqual({ a: [1, { b: 2 }] }, { a: [1, { b: 2 }] }), true);
+    assert.equal(deepEqual({ a: 1 }, { a: 2 }), false);
+    assert.equal(deepEqual([1, 2, 3], [1, 2]), false);
+    assert.equal(deepEqual(null, null), true);
+    assert.equal(deepEqual(null, undefined), false);
+    assert.equal(deepEqual('x', 'x'), true);
+  });
+
+  test('setStateIfChanged preserves the previous reference for identical payloads', () => {
+    let value: any = { a: 1, b: [1, 2] };
+    const setter = (updater: any) => {
+      value = typeof updater === 'function' ? updater(value) : updater;
+    };
+    const before = value;
+
+    setStateIfChanged(setter as any, { a: 1, b: [1, 2] });
+    assert.equal(value, before, 'structurally identical payload must not replace the state reference');
+
+    setStateIfChanged(setter as any, { a: 2, b: [1, 2] });
+    assert.notEqual(value, before, 'changed payload must replace the state reference');
+    assert.equal(value.a, 2);
   });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);

@@ -1,5 +1,75 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Motion & scrollbar primitives.
+   Tailwind v4 exposes custom `--animate-*` theme tokens as `animate-*`
+   utilities. These replace the previously inert `animate-fadeIn`,
+   `animate-in slide-in-from-bottom-2`, `fade-in-50` and `zoom-in-95` classes,
+   which were no-ops because no keyframes were configured.
+--------------------------------------------------------------------------- */
+@theme {
+  --animate-fadeIn: fade-in 0.3s ease-out both;
+  --animate-fade-in: fade-in 0.3s ease-out both;
+  --animate-toast-in: toast-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-modal-in: modal-in 0.2s ease-out both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Hide native scrollbars on horizontal tab/forecast rails while keeping them
+   scrollable via wheel, touch and keyboard. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Respect users who prefer reduced motion: neutralise entrance animations and
+   the perpetual pulse/spin loops so the interface stays calm. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @media print {
   header,
   footer,

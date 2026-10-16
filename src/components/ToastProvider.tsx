@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -18,6 +18,15 @@ interface ToastContextValue {
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
+
+/** Stable fallback used when a component calls `useToast()` outside the provider. */
+const FALLBACK_TOAST: ToastContextValue = {
+  showToast: (msg: string) => console.log('[Toast]', msg),
+  success: (msg: string) => console.log('[Toast Success]', msg),
+  error: (msg: string) => console.error('[Toast Error]', msg),
+  warning: (msg: string) => console.warn('[Toast Warning]', msg),
+  info: (msg: string) => console.info('[Toast Info]', msg)
+};
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -42,8 +51,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const warning = useCallback((message: string) => showToast(message, 'warning'), [showToast]);
   const info = useCallback((message: string) => showToast(message, 'info'), [showToast]);
 
+  // Memoise the context value so adding/removing a toast doesn't re-render every
+  // consumer (the whole app subtree) through a fresh object identity.
+  const value = useMemo(
+    () => ({ showToast, success, error, warning, info }),
+    [showToast, success, error, warning, info]
+  );
+
   return (
-    <ToastContext.Provider value={{ showToast, success, error, warning, info }}>
+    <ToastContext.Provider value={value}>
       {children}
       {/* Toast Notification Container */}
       <div
@@ -70,7 +86,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           return (
             <div
               key={toast.id}
-              className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-200 animate-in slide-in-from-bottom-2 ${bgColor}`}
+              className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-200 animate-toast-in ${bgColor}`}
               role="alert"
             >
               {icon}
@@ -95,13 +111,7 @@ export function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext);
   if (!ctx) {
     // Graceful fallback if invoked outside provider
-    return {
-      showToast: (msg: string) => console.log('[Toast]', msg),
-      success: (msg: string) => console.log('[Toast Success]', msg),
-      error: (msg: string) => console.error('[Toast Error]', msg),
-      warning: (msg: string) => console.warn('[Toast Warning]', msg),
-      info: (msg: string) => console.info('[Toast Info]', msg)
-    };
+    return FALLBACK_TOAST;
   }
   return ctx;
 }

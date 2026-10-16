@@ -8,7 +8,7 @@ interface HourlyForecastBarProps {
   isLoading?: boolean;
 }
 
-export const HourlyForecastBar: React.FC<HourlyForecastBarProps> = ({
+const HourlyForecastBarComponent: React.FC<HourlyForecastBarProps> = ({
   hourly,
   windUnit = 'km/h',
   isLoading = false
@@ -158,3 +158,5 @@ export const HourlyForecastBar: React.FC<HourlyForecastBarProps> = ({
     </div>
   );
 };
+
+export const HourlyForecastBar = React.memo(HourlyForecastBarComponent);

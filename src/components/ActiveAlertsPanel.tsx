@@ -8,7 +8,7 @@ interface ActiveAlertsPanelProps {
   onViewAllAlerts?: () => void;
 }
 
-export const ActiveAlertsPanel: React.FC<ActiveAlertsPanelProps> = ({
+const ActiveAlertsPanelComponent: React.FC<ActiveAlertsPanelProps> = ({
   alerts,
   onDismissAlert,
   onViewAllAlerts
@@ -134,3 +134,5 @@ export const ActiveAlertsPanel: React.FC<ActiveAlertsPanelProps> = ({
     </div>
   );
 };
+
+export const ActiveAlertsPanel = React.memo(ActiveAlertsPanelComponent);
