@@ -19,7 +19,7 @@ interface CrossReferenceCardProps {
   isChecking?: boolean;
 }
 
-export const CrossReferenceCard: React.FC<CrossReferenceCardProps> = ({
+const CrossReferenceCardComponent: React.FC<CrossReferenceCardProps> = ({
   comparison,
   hasApiKey,
   onRefresh,
@@ -272,3 +272,5 @@ export const CrossReferenceCard: React.FC<CrossReferenceCardProps> = ({
     </div>
   );
 };
+
+export const CrossReferenceCard = React.memo(CrossReferenceCardComponent);

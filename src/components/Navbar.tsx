@@ -44,7 +44,7 @@ const ROLE_BADGE: Record<UserRole, { label: string; icon: React.ComponentType<{ 
   VIEWER: { label: 'Viewer', icon: Eye, className: 'bg-slate-700/40 text-slate-300 border-slate-600' }
 };
 
-export const Navbar: React.FC<NavbarProps> = ({
+const NavbarComponent: React.FC<NavbarProps> = ({
   currentLocation,
   activeTab,
   setActiveTab,
@@ -278,3 +278,5 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+
+export const Navbar = React.memo(NavbarComponent);

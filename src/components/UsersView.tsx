@@ -270,7 +270,7 @@ export function UsersView() {
       {showAddForm && (
         <form
           onSubmit={handleAddUser}
-          className="bg-slate-900 border border-amber-500/20 rounded-xl p-5 shadow-sm space-y-4 animate-in fade-in-50 duration-150"
+          className="bg-slate-900 border border-amber-500/20 rounded-xl p-5 shadow-sm space-y-4 animate-fade-in duration-150"
         >
           <h4 className="text-xs font-mono font-bold uppercase text-slate-300 border-b border-slate-800 pb-3">
             PROVISION NEW OPERATOR ACCOUNT

@@ -19,7 +19,7 @@ interface CurrentConditionsProps {
   isLoading?: boolean;
 }
 
-export const CurrentConditions: React.FC<CurrentConditionsProps> = ({
+const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
   weather,
   tempUnit = 'C',
   windUnit = 'km/h',
@@ -175,3 +175,5 @@ export const CurrentConditions: React.FC<CurrentConditionsProps> = ({
     </div>
   );
 };
+
+export const CurrentConditions = React.memo(CurrentConditionsComponent);

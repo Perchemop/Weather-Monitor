@@ -19,7 +19,7 @@ interface HeroRiskCardProps {
   isLoading?: boolean;
 }
 
-export const HeroRiskCard: React.FC<HeroRiskCardProps> = ({ risk, locationName, isLoading = false }) => {
+const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName, isLoading = false }) => {
   const [showFactors, setShowFactors] = useState(false);
 
   if (isLoading || !risk) {
@@ -238,3 +238,5 @@ export const HeroRiskCard: React.FC<HeroRiskCardProps> = ({ risk, locationName, 
     </div>
   );
 };
+
+export const HeroRiskCard = React.memo(HeroRiskCardComponent);

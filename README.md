@@ -226,10 +226,32 @@ npx vite preview --outDir dist-static --base /Weather-Monitor/
 ## Performance & Code Splitting
 
 Non-dashboard views are loaded on demand via `React.lazy` + `Suspense`, and heavy
-libraries are split into dedicated cached chunks:
+libraries are split into dedicated, long-cached chunks (`vite.config.ts`
+`manualChunks`):
 
-- Forecast and Historical charts pull **recharts** (~404 kB) only when opened.
-- The initial application shell stays small (~317 kB raw / ~92 kB gzip).
+- **react** runtime (~224 kB raw) is its own chunk, so application code changes
+  don't invalidate the framework cache.
+- Forecast and Historical charts pull **recharts** (~333 kB raw) only when opened.
+- **lucide-react** icons and remaining vendors are isolated (~28 kB / ~65 kB raw).
+- The initial application entry is ~99 kB raw.
+
+### Render stability (no flicker)
+
+The dashboard polls every 30 s. Two rules keep that polling from flashing the UI:
+
+- The polling callback (`loadDashboardData`) is **referentially stable** — it reads
+  the active location from a ref and never lists it as a dependency, so the
+  interval is created once instead of being rebuilt (and re-fired) on every render.
+- Every state write goes through `setStateIfChanged` (`src/utils/state.ts`), which
+  keeps the previous object reference when a polled payload is structurally
+  identical. Children (`Navbar`, dashboard cards, modals) are wrapped in
+  `React.memo`, so an unchanged poll produces **zero re-renders**.
+
+Background polls refresh silently; the loading skeleton is only shown for the
+initial load and explicit, user-triggered refreshes.
+
+Entrance animations (`fade-in`, toast/modal transitions) are defined in
+`src/index.css` and automatically disabled under `prefers-reduced-motion`.
 
 ---
 

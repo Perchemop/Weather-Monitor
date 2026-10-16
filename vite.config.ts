@@ -28,13 +28,21 @@ export default defineConfig(() => {
     },
     build: {
       outDir: isStatic ? 'dist-static' : 'dist',
-      // Split large third-party libraries into their own cached chunks so the
-      // initial app shell stays small and recharts only loads with chart views.
+      // Match the TS/browser target we actually support.
+      target: 'es2022',
+      // Skip the (unused) gzip/brotli size report to keep builds fast.
+      reportCompressedSize: false,
+      // Split large third-party libraries into their own long-cached chunks so a
+      // code change doesn't invalidate the React runtime, and recharts only
+      // loads with the chart views.
       rollupOptions: {
         output: {
-          manualChunks: {
-            charts: ['recharts'],
-            icons: ['lucide-react']
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory')) return 'charts';
+            if (id.includes('lucide-react')) return 'icons';
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('scheduler')) return 'react';
+            return 'vendor';
           }
         }
       },
