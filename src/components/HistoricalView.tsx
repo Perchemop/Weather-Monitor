@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Clock, Database, Download } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { CurrentWeather, LocationItem } from '../types';
+import { EmptyState } from './EmptyState';
 
 interface HistoricalViewProps {
   location: LocationItem | null;
@@ -90,7 +91,7 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
   return (
     <div className="space-y-6">
       {/* Controls Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+      <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4 mb-4">
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-amber-400" />
@@ -139,21 +140,19 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
       </div>
 
       {isLoading ? (
-        <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-xl text-slate-400 font-mono text-sm">
+        <div className="p-12 text-center bg-slate-900/80 border border-slate-800/80 rounded-2xl shadow-md text-slate-400 font-mono text-sm">
           Loading historical database records...
         </div>
       ) : observations.length === 0 ? (
-        <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-xl text-slate-500 font-mono text-sm">
-          No historical observations recorded in SQLite for this timeframe yet.
-          <br />
-          <span className="text-xs text-slate-600">
-            The local background monitoring service automatically logs observations every 15 minutes.
-          </span>
-        </div>
+        <EmptyState
+          icon={Database}
+          title="No historical observations yet"
+          description="The local background monitoring service automatically logs an observation every 15 minutes. Records for this timeframe will appear here once collected."
+        />
       ) : (
         <div className="space-y-6">
           {/* Charts */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
             <h4 className="text-xs font-mono font-bold uppercase text-slate-400 mb-4">
               WIND & GUST TRENDS (KM/H)
             </h4>
