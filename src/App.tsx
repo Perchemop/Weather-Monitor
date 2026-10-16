@@ -16,7 +16,6 @@ const ForecastView = lazyNamed(() => import('./components/ForecastView'), 'Forec
 const AlertHistoryView = lazyNamed(() => import('./components/AlertHistoryView'), 'AlertHistoryView');
 const HistoricalView = lazyNamed(() => import('./components/HistoricalView'), 'HistoricalView');
 const ReportsView = lazyNamed(() => import('./components/ReportsView'), 'ReportsView');
-const SystemHealthView = lazyNamed(() => import('./components/SystemHealthView'), 'SystemHealthView');
 const SettingsView = lazyNamed(() => import('./components/SettingsView'), 'SettingsView');
 const UsersView = lazyNamed(() => import('./components/UsersView'), 'UsersView');
 const ActivityRiskView = lazyNamed(() => import('./components/ActivityRiskView'), 'ActivityRiskView');
@@ -597,39 +596,23 @@ export default function App() {
               </button>
             )}
 
-            {/* 6. Dynamic System Health Strip */}
-            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-slate-400">
-              <div className="flex items-center gap-4 flex-wrap">
-                <span className="flex items-center gap-1.5 text-slate-300">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  Primary Ref: <strong className="text-emerald-300">{activeProvider}</strong>
-                </span>
-                <span>•</span>
-                <span className="flex items-center gap-1.5 text-slate-300">
-                  <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
-                  Cross-Ref & Fallback:{' '}
-                  <strong className="text-cyan-300">{STATIC_MODE ? 'Single provider (Open-Meteo)' : 'Open-Meteo Ready'}</strong>
-                </span>
-                <span>•</span>
-                <span className="flex items-center gap-1.5 text-slate-300">
-                  <Database className="w-4 h-4 text-emerald-400" />
-                  DB: <strong className="text-emerald-300">{STATIC_MODE ? 'IndexedDB (Browser)' : 'SQLite Local'}</strong>
-                </span>
-                <span>•</span>
-                <span className="flex items-center gap-1.5 text-slate-300">
-                  <HardHat className="w-4 h-4 text-amber-400" />
-                  Cycle: <strong className="text-slate-200">{monitorInterval}m Auto</strong>
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('system')}
-                className="text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
-              >
-                View System Health Details →
-              </button>
-            </div>
+      <div className="pt-2 border-t border-slate-800/70 text-xs text-slate-400">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span className="text-slate-300 font-bold uppercase tracking-wider">Status</span>
+          </div>
+          <div className="flex items-center gap-4 flex-wrap">
+            <span>Primary Ref: <strong className="text-emerald-300">{activeProvider}</strong></span>
+            <span>•</span>
+            <span>DB: <strong className="text-emerald-300">{STATIC_MODE ? 'IndexedDB (Browser)' : 'SQLite Local'}</strong></span>
+            <span>•</span>
+            <span>Cycle: <strong className="text-slate-200">{monitorInterval}m Auto</strong></span>
+            <span>•</span>
+            <span>Data: <strong className="text-cyan-300">{dataStatus}</strong></span>
+          </div>
+        </div>
+      </div>
           </div>
         )}
 
@@ -673,9 +656,7 @@ export default function App() {
         {activeTab === 'performance' && <PerformanceView location={currentLocation} />}
 
         {/* System Health Diagnostics */}
-        {activeTab === 'system' && (
-          <SystemHealthView health={systemHealth} onRefreshHealth={refreshDashboard} />
-        )}
+        {activeTab === 'system' && false}
 
         {/* Settings & Threshold Calibration */}
         {activeTab === 'settings' && <SettingsView onSettingsSaved={refreshDashboard} />}

@@ -82,7 +82,6 @@ const NavbarComponent: React.FC<NavbarProps> = ({
     { id: 'history', label: 'History', icon: Clock, visible: true },
     { id: 'reports', label: 'Reports', icon: FileText, visible: true },
     { id: 'performance', label: 'Performance', icon: BarChart3, visible: true },
-    { id: 'system', label: 'Health', icon: Layers, visible: canOperate },
     { id: 'settings', label: 'Settings', icon: Settings, visible: isOwner },
     // User/account management only applies to the server build.
     { id: 'users', label: 'Users', icon: Users, visible: isOwner && !STATIC_MODE }
