@@ -17,6 +17,7 @@ import {
 import { UserAccount, UserRole } from '../types';
 import { useToast } from './ToastProvider';
 import { apiFetch } from '../utils/api';
+import { EmptyState } from './EmptyState';
 
 interface RoleMeta {
   label: string;
@@ -348,7 +349,13 @@ export function UsersView() {
         </div>
 
         {users.length === 0 ? (
-          <div className="p-8 text-center text-xs font-mono text-slate-500">No operator accounts provisioned.</div>
+          <EmptyState
+            nested
+            size="compact"
+            icon={Users}
+            title="No operator accounts provisioned"
+            description="Add an operator above to grant dashboard or alert access."
+          />
         ) : (
           <div className="divide-y divide-slate-800/80">
             {users.map((user) => {
