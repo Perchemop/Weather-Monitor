@@ -14,6 +14,7 @@ import { redactSecretsInError } from '../utils/redact.js';
 import { store } from './store.js';
 import { evaluateAndProcessAlerts } from './alerts.js';
 import { notifyAlert, notifyRecovery } from './notifications.js';
+import { dispatchAlertEmail, emailRelayConfigured } from './emailRelay.js';
 
 class StaticMonitoringService {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -166,6 +167,21 @@ class StaticMonitoringService {
           if (settings.recoveryNotificationsEnabled) {
             for (const cleared of clearedAlerts) {
               await notifyRecovery(cleared, loc.name).catch(() => {});
+            }
+          }
+
+          // Optional severe-weather email relay (opt-in). Only HIGH/CRITICAL
+          // alerts are relayed, and only when the operator has configured a
+          // relay endpoint. See src/static/emailRelay.ts.
+          if (emailRelayConfigured(settings.alertWebhookUrl)) {
+            for (const alert of newAlerts) {
+              if (alert.severity === 'HIGH' || alert.severity === 'CRITICAL') {
+                await dispatchAlertEmail(alert, {
+                  url: settings.alertWebhookUrl,
+                  recipient: settings.ownerEmail,
+                  locationName: loc.name
+                }).catch(() => {});
+              }
             }
           }
 
