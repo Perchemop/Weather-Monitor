@@ -335,6 +335,12 @@ export interface OwnerSettings {
   recoveryNotificationsEnabled: boolean;
   dataRetentionDays: number;
   thresholds: RiskThresholds;
+  /**
+   * Static build only: optional HTTPS relay endpoint that emails severe alerts
+   * (see `src/static/emailRelay.ts`). Empty/undefined keeps the app
+   * browser-only. The relay holds the email-provider key; none is stored here.
+   */
+  alertWebhookUrl?: string;
 }
 
 export interface AuthStatus {
