@@ -27,6 +27,7 @@ import { useToast } from './ToastProvider';
 import { apiFetch } from '../utils/api';
 import { STATIC_MODE } from '../static/mode';
 import { requestNotificationPermission } from '../static/notifications';
+import { emailRelayConfigured } from '../static/emailRelay';
 
 interface SettingsViewProps {
   onSettingsSaved?: () => void;
@@ -1052,6 +1053,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
                       ? 'Blocked — allow notifications in site settings'
                       : 'Enable browser alerts'}
               </button>
+            </div>
+          )}
+
+          {/* Optional severe-weather email relay (static build) */}
+          {STATIC_MODE && (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+              <h4 className="text-xs font-mono font-bold uppercase text-slate-300 border-b border-slate-800 pb-3">
+                SEVERE WEATHER EMAIL (OPTIONAL RELAY)
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                A static site cannot send email directly — that would expose your mail credentials to every
+                visitor. Instead, point the app at a small relay you control (a free, open-source Cloudflare
+                Worker example ships in{' '}
+                <code className="text-amber-400">integrations/cloudflare-worker-email-relay</code>). HIGH and
+                CRITICAL alerts are then POSTed to it as JSON and it sends the email. Leave blank to stay
+                browser-only.
+              </p>
+              <div>
+                <label className="text-slate-400 block mb-1 text-xs font-mono">Relay Webhook URL:</label>
+                <input
+                  type="url"
+                  placeholder="https://your-relay.workers.dev/alert"
+                  value={settings.alertWebhookUrl || ''}
+                  onChange={(e) => setSettings({ ...settings, alertWebhookUrl: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-amber-500 font-mono text-xs"
+                />
+                <p className="mt-1.5 text-2xs font-mono text-slate-500">
+                  {emailRelayConfigured(settings.alertWebhookUrl)
+                    ? 'Relay configured — severe alerts will be emailed (remember to Save Changes).'
+                    : 'No relay configured — alerts stay in-app and as browser notifications only.'}
+                </p>
+              </div>
             </div>
           )}
         </div>

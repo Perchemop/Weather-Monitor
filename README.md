@@ -17,6 +17,10 @@ Autonomous, local-first microclimate risk evaluation and automated safety alerti
 - **Per-User Push Preferences**: Each operator controls their own Web Push delivery — a master switch, a minimum alert severity floor, and an opt-in for recovery (all-clear) notifications — without unsubscribing their devices.
 - **Serverless Static Build (GitHub Pages)**: The same UI can be built with `npm run build:static` to run entirely in the browser — no server, no database. Weather comes straight from Open-Meteo, risk/alerts use the shared deterministic engine, state persists in IndexedDB, and alerts use native browser notifications. Monitoring keeps running while the page is open and catches up when the tab regains focus or the network returns.
 - **Activity Risk Matrix & Weekly Performance**: The construction activity risk matrix lives in its own tab (condensed to a summary link on the dashboard), and a rolling 7-day performance summary — monitoring coverage, monitor-run reliability, observed condition extremes and an alert breakdown — is available on-screen and exportable as text.
+- **Live Weather Map**: A lazy-loaded, open-source Leaflet tab overlaying RainViewer radar (with an animated timeline), Open-Meteo rain, wind-direction arrows and lightning storm-energy — all key-free.
+- **Lightning Forecasting**: Open-Meteo Lightning Potential Index and CAPE raise a dedicated **LIGHTNING** alert ahead of a WMO thunderstorm code, in both the server and static engines.
+- **Keep Screen Awake**: A Screen Wake Lock toggle stops a phone/tablet left on the dashboard from sleeping, and polling pauses while the tab is hidden to save mobile battery.
+- **Optional Severe-Weather Email**: The server build emails via SMTP; the static build can POST severe alerts to a free, open-source Cloudflare Worker relay you own (`integrations/cloudflare-worker-email-relay`).
 - **Operational Delivery**: Structured JSON logging, an unauthenticated `/healthz` liveness probe, an auth-or-token-gated Prometheus `/metrics` endpoint, GitHub Actions CI, and a Dockerfile + Compose stack.
 
 ---
@@ -173,7 +177,9 @@ npm run build:static        # emits dist-static/
   SQLite, no telemetry.
 - **Alerts**: delivered via the browser **Notification API** — opt in under
   Settings → Cycle & Alerts. Notifications fire only while the page/tab is open
-  (a background server is what enables closed-tab push in the server build).
+  (a background server is what enables closed-tab push in the server build). An
+  optional, operator-owned **email relay** (see below) can also email severe
+  alerts.
 - **API shim**: a `window.fetch` interceptor serves the existing `/api/*` contract
   from the in-browser backend, so the UI is shared verbatim with the server build.
 - **Graceful degradation**: server-only features (multi-user, roles, MFA, SMTP
@@ -181,6 +187,56 @@ npm run build:static        # emits dist-static/
   explicit non-fatal responses. The AI briefing card is shown as
   **Deterministic Rules** and produces rule-based output, not model output.
 - **Backup**: Settings → Storage exports the full local state as JSON.
+
+### Live weather map (radar · rain · wind · lightning)
+
+The **Map** tab is a lazy-loaded, open-source Leaflet view over OpenStreetMap
+tiles (only fetched when the tab is opened — it never touches the initial
+bundle):
+
+- **Radar** — [RainViewer](https://www.rainviewer.com/api.html) precipitation
+  tiles with a play/pause past→nowcast timeline (refreshed every 5 minutes).
+- **Rain** — a 5×5 Open-Meteo sample grid drawn as intensity circles (mm/h).
+- **Wind** — the same grid rendered as direction arrows coloured by speed.
+- **Lightning** — storm-energy circles from Open-Meteo's Lightning Potential
+  Index (LPI) and CAPE.
+
+All sources are free and require no API key. If a feed is unreachable the map
+degrades gracefully (the base map and remaining layers stay usable).
+
+### Lightning risk & alerts
+
+Beyond the WMO thunderstorm codes (95/96/99), the risk engine and both alert
+engines now consume Open-Meteo's **Lightning Potential Index** and **CAPE** to
+raise a **LIGHTNING** alert *before* a storm code is issued:
+
+| Metric | Moderate | High | Critical |
+| --- | --- | --- | --- |
+| LPI (J/kg) | ≥ 100 | ≥ 500 | ≥ 1000 |
+| CAPE (J/kg) | ≥ 800 | ≥ 1500 | ≥ 2500 |
+
+This is deterministic, key-free, and works in both the server and static builds.
+
+### Keeping the screen awake
+
+A **Keep awake** toggle (top navigation and mobile menu) uses the
+[Screen Wake Lock API](https://developer.mozilla.org/docs/Web/API/Screen_Wake_Lock_API)
+to stop a phone/tablet left on the dashboard from dimming or sleeping. The lock
+is re-acquired automatically when the tab becomes visible again, and the
+preference is remembered. It is a graceful no-op where unsupported (e.g. older
+iOS Safari). Note the browser releases the lock whenever the tab is backgrounded,
+so for true 24/7 monitoring run the server build (which keeps monitoring and
+alerting with no browser open).
+
+### Optional severe-weather email
+
+Email from a purely static site needs a small relay you own (the page must never
+hold mail credentials). When a relay URL is configured under
+Settings → Cycle & Alerts, every **HIGH/CRITICAL** alert is POSTed to it as JSON
+and the relay sends the email. A free, open-source **Cloudflare Worker** example
+(with Resend/Brevo senders) ships in
+[`integrations/cloudflare-worker-email-relay`](integrations/cloudflare-worker-email-relay).
+Leave it blank to stay browser-only.
 
 ### Deploying to GitHub Pages
 
@@ -232,8 +288,18 @@ libraries are split into dedicated, long-cached chunks (`vite.config.ts`
 - **react** runtime (~224 kB raw) is its own chunk, so application code changes
   don't invalidate the framework cache.
 - Forecast and Historical charts pull **recharts** (~333 kB raw) only when opened.
+- The **Map** tab pulls **leaflet** (~150 kB raw) only when opened.
 - **lucide-react** icons and remaining vendors are isolated (~28 kB / ~65 kB raw).
 - The initial application entry is ~99 kB raw.
+
+### Mobile performance
+
+- The 30 s dashboard poll is **suspended while the tab is hidden** and resumes with
+  an immediate refresh on return, so a backgrounded tab stops waking the radio and
+  CPU. The in-browser monitor likewise catches up on visibility/online/focus.
+- The tab rail uses momentum scrolling with snap points, tap targets are enlarged
+  on small screens, safe-area insets respect notches, and expensive box-shadows
+  are dropped below 640 px (the dominant paint cost on low-end mobile GPUs).
 
 ### Render stability (no flicker)
 
