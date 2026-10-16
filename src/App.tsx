@@ -38,6 +38,7 @@ import { calculateDeterministicRisk } from './services/riskEngine';
 import { CrossReferenceCard } from './components/CrossReferenceCard';
 import { apiFetch } from './utils/api';
 import { deepEqual, setStateIfChanged } from './utils/state';
+import { initKeepAwake } from './utils/wakeLock';
 import { STATIC_MODE } from './static/mode';
 import { ShieldCheck, Database, HardHat, CheckCircle2, ArrowRightLeft, WifiOff } from 'lucide-react';
 
@@ -332,12 +333,48 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     void loadDashboardData({ showLoading: true });
-    // Poll every 30s for fresh monitor status (silent background refresh).
-    const interval = setInterval(() => {
-      void loadDashboardData();
-    }, 30000);
-    return () => clearInterval(interval);
+
+    // Poll every 30s for fresh monitor status (silent background refresh). The
+    // poll is suspended while the tab is hidden — a hidden timer keeps the
+    // phone radio and CPU awake for no benefit — and resumes with an immediate
+    // refresh when the operator returns. This is the single biggest mobile
+    // battery/CPU win and eliminates background render churn.
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (interval) return;
+      interval = setInterval(() => {
+        void loadDashboardData();
+      }, 30000);
+    };
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void loadDashboardData();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    startPolling();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [isAuthenticated, loadDashboardData]);
+
+  // Re-apply the operator's persisted "keep screen awake" preference once the
+  // app is interactive. No-op where the Screen Wake Lock API is unsupported.
+  useEffect(() => {
+    void initKeepAwake();
+  }, []);
 
   // Explicit, user-triggered refresh that shows the skeleton.
   const refreshDashboard = useCallback(() => {

@@ -57,6 +57,54 @@
   display: none;
 }
 
+/* ---------------------------------------------------------------------------
+   Mobile ergonomics.
+   - `-webkit-text-size-adjust` stops iOS Safari inflating text in landscape.
+   - Horizontal rails get momentum scrolling + snap points so the active tab
+     lands cleanly under the thumb.
+   - Safe-area insets keep content clear of the notch and home indicator.
+   - Heavy shadows/blur are dropped on small screens (they are the dominant
+     paint cost on low-end mobile GPUs) while keeping the dark theme intact.
+--------------------------------------------------------------------------- */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+.no-scrollbar {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* The main navigation tab rail. */
+nav[aria-label='Main navigation'] {
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+nav[aria-label='Main navigation'] > button {
+  scroll-snap-align: start;
+}
+
+/* Respect notches / rounded corners when installed as a PWA. */
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+header[data-app-header] {
+  padding-top: env(safe-area-inset-top);
+}
+
+@media (max-width: 640px) {
+  /* Flatten expensive box-shadows and backdrop filters on small devices. */
+  .shadow-sm,
+  .shadow,
+  .shadow-md,
+  .shadow-lg,
+  .shadow-xl,
+  .shadow-2xl {
+    box-shadow: none !important;
+  }
+}
+
+
 /* Respect users who prefer reduced motion: neutralise entrance animations and
    the perpetual pulse/spin loops so the interface stays calm. */
 @media (prefers-reduced-motion: reduce) {

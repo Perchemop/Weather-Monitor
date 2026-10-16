@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { LocationItem, UserRole } from '../types';
 import { STATIC_MODE } from '../static/mode';
+import { KeepAwakeToggle } from './KeepAwakeToggle';
 
 interface NavbarProps {
   currentLocation: LocationItem | null;
@@ -89,7 +90,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
   const navItems = allNavItems.filter((item) => item.visible);
 
   return (
-    <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white select-none">
+    <header data-app-header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white select-none">
       {/* Top Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
         {/* Brand & Identity */}
@@ -132,6 +133,9 @@ const NavbarComponent: React.FC<NavbarProps> = ({
             </span>
             <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
           </button>
+
+          {/* Keep-screen-awake toggle (Screen Wake Lock) */}
+          <KeepAwakeToggle />
 
           {/* Status Badges */}
           <div className="hidden sm:flex items-center gap-2">
@@ -224,7 +228,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                   id={`nav-tab-${item.id}`}
                   onClick={() => setActiveTab(item.id)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer ${
                     isActive
                       ? 'bg-slate-800 text-amber-400 border border-slate-700 shadow-inner'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -268,6 +272,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
               </button>
             );
           })}
+          <KeepAwakeToggle fullWidth />
           <div className="pt-2 border-t border-slate-800 text-2xs font-mono text-slate-500 flex items-center justify-between px-2">
             <span>Status: {monitorStatus}</span>
             <span>{getRelativeTime(lastCheckTime)}</span>
