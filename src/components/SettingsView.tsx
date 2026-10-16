@@ -632,7 +632,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
 
   if (isLoading || !settings) {
     return (
-      <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-xl text-slate-400 font-mono text-sm animate-pulse">
+      <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 font-mono text-sm animate-pulse">
         Loading safety enclave configuration...
       </div>
     );
@@ -663,7 +663,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
   return (
     <div className="space-y-6 pb-20">
       {/* Top Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Settings className="w-5 h-5 text-amber-400" />
@@ -723,7 +723,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
       {/* 1. General & Units Tab */}
       {activeTab === 'general' && (
         <div className="space-y-5 animate-fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
             <h4 className="text-xs font-mono font-bold uppercase text-slate-300 border-b border-slate-800 pb-3">
               SITE OWNER & DISPLAY PREFERENCES
             </h4>
@@ -783,7 +783,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
       {/* 2. Safety Thresholds Tab */}
       {activeTab === 'thresholds' && (
         <div className="space-y-5 animate-fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-5">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-5">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
                 CRANE & HIGH-RISK THRESHOLD LIMITS
@@ -959,7 +959,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
       {/* 3. Monitoring & Cycles Tab */}
       {activeTab === 'monitoring' && (
         <div className="space-y-5 animate-fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
             <h4 className="text-xs font-mono font-bold uppercase text-slate-300 border-b border-slate-800 pb-3">
               AUTONOMOUS MONITORING SERVICE INTERVALS
             </h4>
@@ -1026,7 +1026,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
 
           {/* Native notification opt-in (static build only — no mail/push backend) */}
           {STATIC_MODE && (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-3">
               <h4 className="text-xs font-mono font-bold uppercase text-slate-300 border-b border-slate-800 pb-3">
                 BROWSER ALERTS
               </h4>
@@ -1058,7 +1058,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
 
           {/* Optional severe-weather email relay (static build) */}
           {STATIC_MODE && (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-3">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-3">
               <h4 className="text-xs font-mono font-bold uppercase text-slate-300 border-b border-slate-800 pb-3">
                 SEVERE WEATHER EMAIL (OPTIONAL RELAY)
               </h4>
@@ -1093,7 +1093,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
       {/* 4. SMTP Email Gateway Tab */}
       {activeTab === 'smtp' && (
         <div className="space-y-5 animate-fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
                 EMAIL NOTIFICATION GATEWAY
@@ -1132,7 +1132,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
           </div>
 
           {/* Secrets Enclave Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Key className="w-4 h-4 text-emerald-400" />
@@ -1176,7 +1176,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
       {activeTab === 'storage' && (
         <div className="space-y-5 animate-fade-in duration-200">
           {/* Backup Management Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Archive className="w-4 h-4 text-emerald-400" />
@@ -1230,7 +1230,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
           </div>
 
           {/* Retention Pruning */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Database className="w-4 h-4 text-cyan-400" />
@@ -1286,7 +1286,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
           </div>
 
           {/* Dangerous Actions Card */}
-          <div className="bg-slate-900 border border-red-900/30 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-red-900/30 rounded-2xl p-5 shadow-md space-y-4">
             <h4 className="text-xs font-mono font-bold uppercase text-red-400 border-b border-red-950 pb-2">
               DANGER ZONE: DATA PURGING
             </h4>
@@ -1320,7 +1320,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
       {/* 6. Security & Master Password Tab */}
       {activeTab === 'security' && (
         <div className="space-y-5 animate-fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
               <Lock className="w-4 h-4 text-amber-400" />
               <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
@@ -1386,7 +1386,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
           </div>
 
           {/* Multi-Factor Authentication */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -1500,7 +1500,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
           </div>
 
           {/* Device Push Notifications */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Send className="w-4 h-4 text-cyan-400" />
@@ -1612,7 +1612,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
           </div>
 
           {/* Active Sessions / Devices */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Monitor className="w-4 h-4 text-sky-400" />
