@@ -28,7 +28,7 @@ const ActiveAlertsPanelComponent: React.FC<ActiveAlertsPanelProps> = ({
           <button
             id="btn-view-alert-history"
             onClick={onViewAllAlerts}
-            className="text-xs font-mono text-amber-400 hover:text-amber-300 transition-colors"
+            className="text-xs font-mono text-amber-400 hover:text-amber-300 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none rounded"
           >
             View Alert History →
           </button>
