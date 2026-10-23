@@ -1,20 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ProviderComparison } from '../types';
-import {
-  ShieldCheck,
-  CheckCircle2,
-  AlertTriangle,
-  Layers,
-  ArrowRightLeft,
-  Lock,
-  RefreshCw,
-  Info
-} from 'lucide-react';
+import { CheckCircle2, AlertTriangle, ArrowRightLeft, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { STATIC_MODE } from '../static/mode';
 
 interface CrossReferenceCardProps {
   comparison: ProviderComparison | null;
   hasApiKey: boolean;
+  activeProvider?: string;
   onRefresh?: () => void;
   isChecking?: boolean;
 }
@@ -22,255 +14,257 @@ interface CrossReferenceCardProps {
 const CrossReferenceCardComponent: React.FC<CrossReferenceCardProps> = ({
   comparison,
   hasApiKey,
+  activeProvider,
   onRefresh,
   isChecking = false
 }) => {
-  if (!comparison) {
-    return (
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 backdrop-blur-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-200">Dual-Provider Weather Cross-Reference</h3>
-              <p className="text-xs text-slate-400">
-                {STATIC_MODE
-                  ? 'Open-Meteo is the active data source. Dual-provider cross-referencing requires the server build.'
-                  : hasApiKey
-                    ? 'Initializing WeatherAPI main reference and Open-Meteo cross-reference...'
-                    : 'Open-Meteo active. Configure WEATHER_API_KEY in server environment for dual-model cross-referencing.'}
-              </p>
-            </div>
-          </div>
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              disabled={isChecking}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-              Cross-Check Now
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
+  const [expanded, setExpanded] = useState(false);
 
-  const isFallback = comparison.isFallbackActive;
-  const isHighConcordance = comparison.concordance === 'HIGH';
-  const isModerate = comparison.concordance === 'MODERATE';
+  const isFallback = comparison?.isFallbackActive ?? false;
+  const isHighConcordance = comparison?.concordance === 'HIGH';
 
-  const p = comparison.primaryReading;
-  const c = comparison.crossRefReading;
-  const v = comparison.variance;
+  const chip = isFallback
+    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+    : isHighConcordance
+    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+    : 'bg-sky-500/10 text-sky-300 border-sky-500/30';
+
+  const chipLabel = isFallback
+    ? 'Fallback active'
+    : comparison
+    ? `${comparison.concordance} agreement · ${comparison.confidenceScore}%`
+    : 'Awaiting cross-check';
 
   return (
-    <div className="bg-slate-900/70 border border-slate-800/90 rounded-xl p-5 backdrop-blur-sm shadow-lg space-y-4">
-      {/* Header bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
-        <div className="flex items-center gap-3">
-          <div
-            className={`p-2.5 rounded-lg ${
-              isFallback
-                ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
-                : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
-            }`}
+    <section
+      aria-label="Dual-provider cross-reference"
+      className="rounded-2xl border border-slate-800/70 bg-slate-900/60"
+    >
+      {/* Compact summary header — the table stays one click away */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 p-5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <ArrowRightLeft className="h-4 w-4 shrink-0 text-slate-500" />
+          <h3 className="text-sm font-semibold tracking-tight text-slate-200">Provider cross-reference</h3>
+          <span
+            className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${chip}`}
           >
-            <ArrowRightLeft className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-slate-100">Dual-Provider Cross-Reference</h3>
-              <span
-                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
-                  isFallback
-                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                    : isHighConcordance
-                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                    : 'bg-blue-500/10 text-blue-300 border-blue-500/30'
-                }`}
-              >
-                {isFallback
-                  ? 'AUTOMATIC FALLBACK ACTIVE'
-                  : `${comparison.concordance} CONCORDANCE (${comparison.confidenceScore}% AGREEMENT)`}
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Main Reference: <span className="text-slate-200 font-medium">{comparison.primaryProvider}</span> • Cross-Check: <span className="text-slate-200 font-medium">{comparison.crossRefProvider}</span>
-            </p>
-          </div>
+            {chipLabel}
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-950/80 border border-slate-800 rounded-md text-[11px] text-slate-400">
-            <Lock className="w-3 h-3 text-emerald-400" />
-            <span>Key Secured in Server Env</span>
-          </div>
-
+        <div className="flex items-center gap-1.5">
           {onRefresh && (
             <button
               onClick={onRefresh}
               disabled={isChecking}
-              title="Trigger immediate dual-model sync"
-              className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium bg-slate-800 hover:bg-slate-700 active:bg-slate-800 text-slate-200 rounded-md border border-slate-700 transition disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+              title="Trigger an immediate dual-provider sync"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-slate-200 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
             >
-              <RefreshCw className={`w-3 h-3 ${isChecking ? 'animate-spin text-blue-400' : ''}`} />
-              <span className="hidden sm:inline">Sync Models</span>
+              <RefreshCw className={`h-3.5 w-3.5 ${isChecking ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Sync</span>
+            </button>
+          )}
+          {comparison && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              aria-expanded={expanded}
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-slate-200 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
+            >
+              <span>{expanded ? 'Hide detail' : 'Detail'}</span>
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
           )}
         </div>
       </div>
 
-      {/* Fallback notification if active */}
-      {isFallback && (
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-950/30 border border-amber-800/40 text-amber-200 text-xs">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <div className="font-semibold text-amber-300">Automatic Fallback Engaged</div>
-            <p className="text-amber-200/90 leading-relaxed">
-              {comparison.fallbackReason || 'WeatherAPI primary reference is temporarily unreachable. Open-Meteo has taken over active risk monitoring automatically with 0% downtime.'}
+      {/* One-line plain-language reading while collapsed */}
+      {comparison && !expanded && (
+        <p className="px-5 pb-4 text-xs text-slate-500">
+          {activeProvider && (
+            <>
+              Reading from <span className="font-medium text-slate-400">{activeProvider}</span>
+              <span className="text-slate-700"> · </span>
+            </>
+          )}
+          {comparison.notes}
+        </p>
+      )}
+
+      {/* Fallback notice always visible when engaged */}
+      {isFallback && comparison && (
+        <div className="mx-5 mb-5 flex items-start gap-3 rounded-xl border border-amber-800/40 bg-amber-950/25 p-3.5 text-xs text-amber-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+          <p className="leading-relaxed">
+            <span className="font-semibold text-amber-300">Automatic fallback engaged. </span>
+            {comparison.fallbackReason ||
+              'The primary reference is temporarily unreachable; Open-Meteo has taken over monitoring.'}
+          </p>
+        </div>
+      )}
+
+      {/* Expanded comparison matrix */}
+      {comparison && expanded && (
+        <div className="animate-fadeIn px-5 pb-5">
+          {!STATIC_MODE && (
+            <p className="mb-3 text-[11px] text-slate-500">
+              Main reference <span className="text-slate-300">{comparison.primaryProvider}</span>
+              <span className="text-slate-600"> · </span>
+              cross-check <span className="text-slate-300">{comparison.crossRefProvider}</span>
+              <span className="text-slate-600"> · </span>
+              key held in server environment
             </p>
+          )}
+
+          <div className="overflow-x-auto rounded-xl border border-slate-800/60">
+            <table className="w-full min-w-[560px] border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 bg-slate-950/40 text-left text-slate-500">
+                  <th className="px-3.5 py-2 font-medium">Metric</th>
+                  <th className="px-3.5 py-2 font-medium">{comparison.primaryProvider}</th>
+                  <th className="px-3.5 py-2 font-medium">{comparison.crossRefProvider}</th>
+                  <th className="px-3.5 py-2 font-medium">Variance</th>
+                  <th className="px-3.5 py-2 font-medium">Assessment</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                <Row
+                  label="Temperature"
+                  primary={`${comparison.primaryReading.temperature.toFixed(1)}°C`}
+                  cross={`${comparison.crossRefReading.temperature.toFixed(1)}°C`}
+                  delta={comparison.variance.tempDelta > 0 ? `±${comparison.variance.tempDelta}°C` : '0°C'}
+                  deltaFlag={comparison.variance.tempDelta > 2}
+                  ok={comparison.variance.tempDelta <= 1}
+                  okLabel="Strict agreement"
+                  infoLabel="Normal variance"
+                />
+                <Row
+                  label="Sustained wind"
+                  primary={`${comparison.primaryReading.windSpeed.toFixed(1)} km/h`}
+                  cross={`${comparison.crossRefReading.windSpeed.toFixed(1)} km/h`}
+                  delta={
+                    comparison.variance.windDelta > 0 ? `±${comparison.variance.windDelta} km/h` : '0 km/h'
+                  }
+                  deltaFlag={comparison.variance.windDelta > 10}
+                  ok={Math.max(
+                    comparison.primaryReading.windSpeed,
+                    comparison.crossRefReading.windSpeed
+                  ) < 40}
+                  okLabel="Safe working band"
+                  infoLabel="Elevated — threshold flagged"
+                  okWhenFalse="text-amber-400"
+                />
+                <Row
+                  label="Peak gusts"
+                  primary={`${comparison.primaryReading.windGusts.toFixed(1)} km/h`}
+                  cross={`${comparison.crossRefReading.windGusts.toFixed(1)} km/h`}
+                  delta={
+                    comparison.variance.gustDelta > 0 ? `±${comparison.variance.gustDelta} km/h` : '0 km/h'
+                  }
+                  deltaFlag={comparison.variance.gustDelta > 15}
+                  ok={Math.max(
+                    comparison.primaryReading.windGusts,
+                    comparison.crossRefReading.windGusts
+                  ) < 45}
+                  okLabel="Sub-threshold"
+                  infoLabel="Crane limits enforced"
+                  okWhenFalse="text-amber-400"
+                />
+                <Row
+                  label="Rain probability"
+                  primary={`${comparison.primaryReading.rainProbability}%`}
+                  cross={`${comparison.crossRefReading.rainProbability}%`}
+                  delta={
+                    comparison.variance.rainProbDelta > 0 ? `±${comparison.variance.rainProbDelta}%` : '0%'
+                  }
+                  deltaFlag={comparison.variance.rainProbDelta > 25}
+                  ok={Math.max(
+                    comparison.primaryReading.rainProbability,
+                    comparison.crossRefReading.rainProbability
+                  ) < 60}
+                  okLabel="Dry window"
+                  infoLabel="Precipitation watch"
+                  okWhenFalse="text-sky-400"
+                />
+                <Row
+                  label="Pressure"
+                  primary={`${comparison.primaryReading.pressure.toFixed(1)} hPa`}
+                  cross={`${comparison.crossRefReading.pressure.toFixed(1)} hPa`}
+                  delta={
+                    comparison.variance.pressureDelta > 0
+                      ? `±${comparison.variance.pressureDelta} hPa`
+                      : '0 hPa'
+                  }
+                  deltaFlag={false}
+                  ok={comparison.primaryReading.pressure > 1020}
+                  okLabel="Stable high"
+                  infoLabel="Frontal boundary"
+                />
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* Cross-Reference Comparison Matrix */}
-      {c && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-medium">
-                <th className="pb-2 text-slate-400 font-medium">Atmospheric Metric</th>
-                <th className="pb-2 text-emerald-400 font-semibold">WeatherAPI (Main Ref)</th>
-                <th className="pb-2 text-cyan-400 font-semibold">Open-Meteo (Cross-Ref)</th>
-                <th className="pb-2 text-slate-300 font-semibold">Variance (Δ)</th>
-                <th className="pb-2 text-slate-400 font-medium">Safety Assessment</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60 font-mono">
-              {/* Temperature */}
-              <tr className="hover:bg-slate-800/20">
-                <td className="py-2 text-slate-300 font-sans font-medium flex items-center gap-1.5">
-                  Temperature
-                </td>
-                <td className="py-2 text-slate-100 font-medium">{p.temperature.toFixed(1)}°C</td>
-                <td className="py-2 text-slate-300">{c.temperature.toFixed(1)}°C</td>
-                <td className="py-2">
-                  <span className={`px-1.5 py-0.5 rounded text-[11px] ${v.tempDelta > 2 ? 'bg-amber-500/10 text-amber-400 font-semibold' : 'text-slate-300'}`}>
-                    {v.tempDelta > 0 ? `±${v.tempDelta}°C` : '0°C'}
-                  </span>
-                </td>
-                <td className="py-2 font-sans text-slate-400">
-                  {v.tempDelta <= 1 ? (
-                    <span className="text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Strict Agreement
-                    </span>
-                  ) : (
-                    'Normal microclimate variance'
-                  )}
-                </td>
-              </tr>
-
-              {/* Wind Speed */}
-              <tr className="hover:bg-slate-800/20">
-                <td className="py-2 text-slate-300 font-sans font-medium">Sustained Wind</td>
-                <td className="py-2 text-slate-100 font-medium">{p.windSpeed.toFixed(1)} km/h</td>
-                <td className="py-2 text-slate-300">{c.windSpeed.toFixed(1)} km/h</td>
-                <td className="py-2">
-                  <span className={`px-1.5 py-0.5 rounded text-[11px] ${v.windDelta > 10 ? 'bg-amber-500/10 text-amber-400 font-semibold' : 'text-slate-300'}`}>
-                    {v.windDelta > 0 ? `±${v.windDelta} km/h` : '0 km/h'}
-                  </span>
-                </td>
-                <td className="py-2 font-sans text-slate-400">
-                  {Math.max(p.windSpeed, c.windSpeed) >= 40 ? (
-                    <span className="text-amber-400 font-medium">Elevated threshold flagged</span>
-                  ) : (
-                    <span className="text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Safe Working Band
-                    </span>
-                  )}
-                </td>
-              </tr>
-
-              {/* Wind Gusts */}
-              <tr className="hover:bg-slate-800/20">
-                <td className="py-2 text-slate-300 font-sans font-medium">Peak Gusts</td>
-                <td className="py-2 text-slate-100 font-semibold">{p.windGusts.toFixed(1)} km/h</td>
-                <td className="py-2 text-slate-300">{c.windGusts.toFixed(1)} km/h</td>
-                <td className="py-2">
-                  <span className={`px-1.5 py-0.5 rounded text-[11px] ${v.gustDelta > 15 ? 'bg-amber-500/10 text-amber-400 font-semibold' : 'text-slate-300'}`}>
-                    {v.gustDelta > 0 ? `±${v.gustDelta} km/h` : '0 km/h'}
-                  </span>
-                </td>
-                <td className="py-2 font-sans text-slate-400">
-                  {Math.max(p.windGusts, c.windGusts) >= 45 ? (
-                    <span className="text-amber-400 font-medium">Conservative crane limits enforced</span>
-                  ) : (
-                    <span className="text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Sub-threshold
-                    </span>
-                  )}
-                </td>
-              </tr>
-
-              {/* Rain Probability */}
-              <tr className="hover:bg-slate-800/20">
-                <td className="py-2 text-slate-300 font-sans font-medium">Rain Probability</td>
-                <td className="py-2 text-slate-100 font-medium">{p.rainProbability}%</td>
-                <td className="py-2 text-slate-300">{c.rainProbability}%</td>
-                <td className="py-2">
-                  <span className={`px-1.5 py-0.5 rounded text-[11px] ${v.rainProbDelta > 25 ? 'bg-amber-500/10 text-amber-400 font-semibold' : 'text-slate-300'}`}>
-                    {v.rainProbDelta > 0 ? `±${v.rainProbDelta}%` : '0%'}
-                  </span>
-                </td>
-                <td className="py-2 font-sans text-slate-400">
-                  {Math.max(p.rainProbability, c.rainProbability) >= 60 ? (
-                    <span className="text-blue-400 font-medium">Precipitation watch active</span>
-                  ) : (
-                    <span className="text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Dry Window
-                    </span>
-                  )}
-                </td>
-              </tr>
-
-              {/* Pressure */}
-              <tr className="hover:bg-slate-800/20">
-                <td className="py-2 text-slate-300 font-sans font-medium">Atmospheric Pressure</td>
-                <td className="py-2 text-slate-100 font-medium">{p.pressure.toFixed(1)} hPa</td>
-                <td className="py-2 text-slate-300">{c.pressure.toFixed(1)} hPa</td>
-                <td className="py-2">
-                  <span className="text-slate-300 text-[11px]">
-                    {v.pressureDelta > 0 ? `±${v.pressureDelta} hPa` : '0 hPa'}
-                  </span>
-                </td>
-                <td className="py-2 font-sans text-slate-400">
-                  {p.pressure > 1020 ? 'Stable High Pressure system' : 'Frontal boundary monitor'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      {/* Empty state */}
+      {!comparison && (
+        <p className="px-5 pb-5 text-xs text-slate-500">
+          {STATIC_MODE
+            ? 'Open-Meteo is the active source; dual-provider cross-referencing requires the server build.'
+            : hasApiKey
+            ? 'Initialising WeatherAPI (main) and Open-Meteo (cross-check)...'
+            : 'Open-Meteo active — set WEATHER_API_KEY on the server to enable dual-model cross-referencing.'}
+        </p>
       )}
-
-      {/* Footer Notes & Consensus Protocol */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/70 text-xs text-slate-400">
-        <div className="flex items-center gap-2">
-          <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-          <span>
-            {comparison.notes}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5 text-slate-400 shrink-0 text-[11px]">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Conservative Fail-Safe Protocol Enabled</span>
-        </div>
-      </div>
-    </div>
+    </section>
   );
 };
+
+interface RowProps {
+  label: string;
+  primary: string;
+  cross: string;
+  delta: string;
+  deltaFlag: boolean;
+  ok: boolean;
+  okLabel: string;
+  infoLabel: string;
+  okWhenFalse?: string;
+}
+
+const Row: React.FC<RowProps> = ({
+  label,
+  primary,
+  cross,
+  delta,
+  deltaFlag,
+  ok,
+  okLabel,
+  infoLabel,
+  okWhenFalse = 'text-slate-400'
+}) => (
+  <tr className="transition-colors hover:bg-slate-800/20">
+    <td className="px-3.5 py-2 font-medium text-slate-300">{label}</td>
+    <td className="px-3.5 py-2 font-semibold tabular-nums text-slate-100">{primary}</td>
+    <td className="px-3.5 py-2 tabular-nums text-slate-400">{cross}</td>
+    <td className="px-3.5 py-2 tabular-nums">
+      <span
+        className={
+          deltaFlag ? 'font-semibold text-amber-400' : 'text-slate-500'
+        }
+      >
+        {delta}
+      </span>
+    </td>
+    <td className="px-3.5 py-2">
+      {ok ? (
+        <span className="flex items-center gap-1.5 text-emerald-400">
+          <CheckCircle2 className="h-3 w-3 shrink-0" /> {okLabel}
+        </span>
+      ) : (
+        <span className={okWhenFalse}>{infoLabel}</span>
+      )}
+    </td>
+  </tr>
+);
 
 export const CrossReferenceCard = React.memo(CrossReferenceCardComponent);
