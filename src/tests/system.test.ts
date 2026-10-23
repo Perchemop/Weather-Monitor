@@ -15,6 +15,7 @@ import { deepEqual, setStateIfChanged } from '../utils/state.js';
 import { evaluateDataFreshness } from '../utils/time.js';
 import { CurrentWeather, HourlyForecastItem, RiskThresholds } from '../types.js';
 import { convertTemperature, convertWind, formatTemperature, formatWind } from '../utils/units.js';
+import { weatherApiCodeToWmo, normalizeWeatherApiData, validateAndNormalizeOpenMeteoData } from '../services/weatherService.js';
 import { createDatabaseBackup, getDatabaseBackupsList, hashPasswordWithSalt } from '../database/db.js';
 import {
   createUserAccount,
@@ -151,6 +152,139 @@ async function runTests() {
     ];
     const risk = calculateDeterministicRisk(current, hourly, mockThresholds, 'UTC');
     assert.ok(risk.score >= 50, 'Severe upcoming gust in next 6h must trigger elevated risk score');
+  });
+
+  test('WeatherAPI: condition codes map onto WMO semantics', () => {
+    assert.equal(weatherApiCodeToWmo(1000), 0, 'WeatherAPI clear (1000) must not read as a storm code');
+    assert.equal(weatherApiCodeToWmo(1003), 2);
+    assert.equal(weatherApiCodeToWmo(1009), 3);
+    assert.equal(weatherApiCodeToWmo(1135), 45, 'fog maps to WMO fog');
+    assert.equal(weatherApiCodeToWmo(1195), 65, 'heavy rain maps to WMO heavy rain');
+    assert.equal(weatherApiCodeToWmo(1087), 95, 'thundery outbreaks must map to WMO thunderstorm');
+    assert.equal(weatherApiCodeToWmo(1276), 95);
+    assert.equal(weatherApiCodeToWmo(1279), 96);
+    assert.equal(weatherApiCodeToWmo(1282), 99);
+  });
+
+  test('WeatherAPI: a clear-sky payload does not register a thunderstorm', () => {
+    const raw = {
+      location: { tz_id: 'UTC' },
+      current: {
+        last_updated_epoch: 1769000000,
+        temp_c: 24,
+        feelslike_c: 24,
+        humidity: 45,
+        wind_kph: 14,
+        gust_kph: 22,
+        precip_mm: 0,
+        uv: 5,
+        pressure_mb: 1015,
+        vis_km: 10,
+        is_day: 1,
+        condition: { code: 1000, text: 'Sunny' }
+      },
+      forecast: {
+        forecastday: [
+          {
+            date: '2026-01-15',
+            day: {
+              maxtemp_c: 28,
+              mintemp_c: 17,
+              daily_chance_of_rain: 5,
+              totalprecip_mm: 0,
+              maxwind_kph: 18,
+              uv: 6,
+              condition: { code: 1000, text: 'Sunny' }
+            },
+            hour: [
+              {
+                time_epoch: 1769000400,
+                temp_c: 24,
+                wind_kph: 15,
+                gust_kph: 24,
+                chance_of_rain: 0,
+                precip_mm: 0,
+                uv: 6,
+                condition: { code: 1000, text: 'Sunny' }
+              }
+            ]
+          }
+        ]
+      }
+    };
+    const normalized = normalizeWeatherApiData(raw as any, 'loc-x', 'Test Site', -34.9, 138.6);
+    assert.equal(normalized.current.weatherCode, 0, 'current code must be mapped to WMO clear');
+    assert.equal(normalized.hourly[0].weatherCode, 0);
+    const risk = calculateDeterministicRisk(normalized.current, normalized.hourly, mockThresholds, 'UTC');
+    assert.notEqual(risk.level, 'CRITICAL', `clear sky must never be CRITICAL (was ${risk.level})`);
+    assert.ok(
+      !risk.factors.some((f) => f.category === 'STORM'),
+      'clear conditions must not produce storm factors'
+    );
+  });
+
+  test('WeatherAPI: a thunderstorm payload still triggers storm handling', () => {
+    const raw = {
+      current: {
+        last_updated_epoch: 1769000000,
+        temp_c: 20,
+        wind_kph: 30,
+        gust_kph: 55,
+        precip_mm: 2,
+        uv: 1,
+        pressure_mb: 1002,
+        vis_km: 5,
+        is_day: 1,
+        condition: { code: 1276, text: 'Thunderstorm' }
+      }
+    };
+    const normalized = normalizeWeatherApiData(raw as any, 'loc-x', 'Test Site', -34.9, 138.6);
+    assert.ok(normalized.current.weatherCode >= 95, 'thunder codes must stay above the WMO 95 threshold');
+  });
+
+  test('Open-Meteo: wall-clock times convert to true UTC instants', () => {
+    // Adelaide summer: UTC+10:30. 10:00 local on 2026-01-15 is 23:30 UTC the
+    // previous day; a naive parse in a UTC container would read 10:00 UTC.
+    const raw = {
+      utc_offset_seconds: 37800,
+      timezone: 'UTC',
+      current: {
+        time: '2026-01-15T10:00',
+        temperature_2m: 25,
+        apparent_temperature: 25,
+        relative_humidity_2m: 40,
+        precipitation: 0,
+        weather_code: 0,
+        surface_pressure: 1014,
+        wind_speed_10m: 12,
+        wind_gusts_10m: 20,
+        wind_direction_10m: 180,
+        is_day: 1,
+        cape: 0,
+        lightning_potential: 0
+      },
+      hourly: { time: ['2026-01-15T10:00', '2026-01-15T11:00'], temperature_2m: [25, 26] }
+    };
+    const normalized = validateAndNormalizeOpenMeteoData(raw as any, 'loc-x', 'Test Site', -34.9, 138.6);
+    assert.equal(normalized.current.timestamp, '2026-01-14T23:30:00.000Z');
+    assert.equal(normalized.hourly[0].time, '2026-01-14T23:30:00.000Z');
+    assert.equal(normalized.hourly[1].time, '2026-01-15T00:30:00.000Z');
+  });
+
+  test('Deterministic Risk: extreme UV raises the headline level to HIGH', () => {
+    const current = createMockWeather({ uvIndex: 12, windSpeed: 15, windGusts: 25 });
+    const risk = calculateDeterministicRisk(current, [], mockThresholds, 'UTC');
+    assert.equal(risk.level, 'HIGH', `expected HIGH for extreme UV, got ${risk.level}`);
+    assert.ok(risk.factors.some((f) => f.id === 'uv-extreme'));
+    assert.ok(risk.score >= 60, 'extreme UV must lift the score');
+  });
+
+  test('Deterministic Risk: very high UV is visible in level and score', () => {
+    const current = createMockWeather({ uvIndex: 9, windSpeed: 15, windGusts: 25 });
+    const risk = calculateDeterministicRisk(current, [], mockThresholds, 'UTC');
+    assert.ok(risk.factors.some((f) => f.id === 'uv-very-high'), 'the UV factor must be listed');
+    assert.ok(risk.score >= 40, 'a listed factor must move the score');
+    assert.notEqual(risk.level, 'LOW', 'very high UV must not stay LOW');
   });
 
   test('Deterministic Risk: Building convective energy raises STORM lightning risk', () => {
