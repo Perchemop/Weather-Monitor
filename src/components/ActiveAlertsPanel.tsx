@@ -14,117 +14,116 @@ const ActiveAlertsPanelComponent: React.FC<ActiveAlertsPanelProps> = ({
   onViewAllAlerts
 }) => {
   return (
-    <div id="active-alerts-panel" className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-        <div className="flex items-center gap-2">
-          <ShieldAlert className="w-5 h-5 text-red-400" />
-          <h3 className="text-sm font-mono font-bold tracking-wider uppercase text-slate-300">
-            ACTIVE SITE ALERTS ({alerts.length})
-          </h3>
-        </div>
+    <div id="active-alerts-panel" className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-slate-800/70 pb-3.5">
+        <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-slate-200">
+          <ShieldAlert className={`h-4 w-4 ${alerts.length > 0 ? 'text-red-400' : 'text-slate-500'}`} />
+          Active alerts
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+              alerts.length > 0 ? 'bg-red-500/15 text-red-300' : 'bg-slate-800/80 text-slate-400'
+            }`}
+          >
+            {alerts.length}
+          </span>
+        </h3>
 
-        {onViewAllAlerts && (
+        {onViewAllAlerts && alerts.length > 0 && (
           <button
             id="btn-view-alert-history"
             onClick={onViewAllAlerts}
-            className="text-xs font-mono text-amber-400 hover:text-amber-300 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none rounded"
+            className="rounded text-xs font-medium text-slate-400 transition-colors hover:text-amber-300 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
           >
-            View Alert History →
+            History →
           </button>
         )}
       </div>
 
       {alerts.length === 0 ? (
-        <div className="p-4 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-center gap-3 text-slate-400">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+        <div className="mt-4 flex items-center gap-3 rounded-xl border border-slate-800/60 bg-slate-950/40 p-4">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
           <div>
-            <div className="text-sm font-bold text-slate-200">NO ACTIVE ALERTS</div>
-            <div className="text-xs text-slate-400 mt-0.5">
-              No configured weather thresholds are currently being exceeded.
+            <div className="text-sm font-semibold text-slate-200">All clear</div>
+            <div className="mt-0.5 text-xs text-slate-500">
+              No configured weather thresholds are currently exceeded.
             </div>
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="mt-4 space-y-2.5">
           {alerts.map((alert) => {
             const isCritical = alert.severity === 'CRITICAL';
             const isHigh = alert.severity === 'HIGH';
+
+            const accent = isCritical
+              ? 'border-red-500/60 bg-red-950/30'
+              : isHigh
+              ? 'border-orange-500/60 bg-orange-950/25'
+              : 'border-amber-500/50 bg-amber-950/20';
+            const chip = isCritical
+              ? 'bg-red-500 text-white'
+              : isHigh
+              ? 'bg-orange-500 text-slate-950'
+              : 'bg-amber-400 text-slate-950';
+            const iconColor = isCritical
+              ? 'text-red-400'
+              : isHigh
+              ? 'text-orange-400'
+              : 'text-amber-400';
 
             return (
               <div
                 key={alert.id}
                 id={`alert-card-${alert.id}`}
-                className={`p-4 rounded-xl border transition-all ${
-                  isCritical
-                    ? 'bg-red-950/40 border-red-800/80 text-red-200 shadow-sm'
-                    : isHigh
-                    ? 'bg-orange-950/40 border-orange-800/80 text-orange-200 shadow-sm'
-                    : 'bg-amber-950/30 border-amber-800/80 text-amber-200 shadow-sm'
-                }`}
+                className={`flex flex-col gap-3 rounded-xl border-l-4 border ${accent} p-4 sm:flex-row sm:items-center sm:justify-between`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div
-                      className={`p-2 rounded-lg shrink-0 mt-0.5 ${
-                        isCritical
-                          ? 'bg-red-500/20 text-red-400'
-                          : isHigh
-                          ? 'bg-orange-500/20 text-orange-400'
-                          : 'bg-amber-500/20 text-amber-400'
-                      }`}
-                    >
-                      {isCritical ? <Zap className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm text-slate-100">{alert.title}</span>
-                        <span
-                          className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded ${
-                            isCritical
-                              ? 'bg-red-500 text-white'
-                              : isHigh
-                              ? 'bg-orange-500 text-slate-950'
-                              : 'bg-amber-500 text-slate-950'
-                          }`}
-                        >
-                          {alert.severity}
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                        {alert.message}
-                      </p>
-
-                      <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] font-mono text-slate-400">
-                        <span>
-                          <strong className="text-slate-200">Observed:</strong> {alert.observedValue}
-                        </span>
-                        <span>•</span>
-                        <span>
-                          <strong className="text-slate-200">Threshold:</strong> {alert.thresholdValue}
-                        </span>
-                        <span>•</span>
-                        <span>
-                          <strong className="text-slate-200">Window:</strong> {alert.expectedDuration}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-start sm:self-center">
-                    {onDismissAlert && (
-                      <button
-                        id={`btn-dismiss-alert-${alert.id}`}
-                        onClick={() => onDismissAlert(alert.id)}
-                        className="p-1.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors border border-slate-700"
-                        title="Acknowledge / Dismiss Alert"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="mt-0.5 shrink-0">
+                    {isCritical ? (
+                      <Zap className={`h-5 w-5 ${iconColor}`} />
+                    ) : (
+                      <AlertTriangle className={`h-5 w-5 ${iconColor}`} />
                     )}
                   </div>
+
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-100">{alert.title}</span>
+                      <span
+                        className={`rounded px-1.5 py-px text-[10px] font-bold uppercase tracking-wide ${chip}`}
+                      >
+                        {alert.severity}
+                      </span>
+                    </div>
+
+                    <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-300">{alert.message}</p>
+
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] tabular-nums text-slate-500">
+                      <span>
+                        Observed <span className="font-semibold text-slate-300">{alert.observedValue}</span>
+                      </span>
+                      <span>
+                        Threshold <span className="text-slate-300">{alert.thresholdValue}</span>
+                      </span>
+                      <span>
+                        Window <span className="text-slate-300">{alert.expectedDuration}</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-center">
+                  {onDismissAlert && (
+                    <button
+                      id={`btn-dismiss-alert-${alert.id}`}
+                      onClick={() => onDismissAlert(alert.id)}
+                      className="touch-square flex items-center justify-center rounded-lg border border-slate-700/80 bg-slate-900/70 p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
+                      title="Acknowledge and dismiss alert"
+                      aria-label={`Dismiss alert: ${alert.title}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             );

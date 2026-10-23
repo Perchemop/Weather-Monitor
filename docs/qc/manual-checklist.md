@@ -34,7 +34,7 @@ Run against a deployed build after a change. Tick each item; note any deviation.
 
 ## Alerts & monitoring
 
-- [ ] "Check Now" refreshes conditions; a failed server check is labelled as a
+- [ ] "Check now" refreshes conditions; a failed server check is labelled as a
       direct provider reading rather than a success.
 - [ ] Switching location reports failure honestly if the site cannot load.
 - [ ] Alert history and the weekly performance summary render.
