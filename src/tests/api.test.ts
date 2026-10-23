@@ -503,6 +503,18 @@ async function main(): Promise<void> {
     assert.equal(typeof res.body.result.alertsPruned, 'number');
   });
 
+  await test('Health: database status reflects real persistence health', async () => {
+    const owner = new Client(base);
+    assert.equal(
+      (await owner.post('/api/auth/login', { password: OWNER_PASSWORD, email: 'owner@site.local' })).status,
+      200
+    );
+    const health = await owner.get('/api/health');
+    assert.equal(health.status, 200);
+    assert.equal(health.body.databaseStatus, 'HEALTHY', 'a healthy store must report HEALTHY');
+    assert.equal(health.body.databasePersistError, undefined, 'no error payload when healthy');
+  });
+
   await test('Metrics: /metrics requires auth and exposes Prometheus metrics', async () => {
     // By default (no METRICS_TOKEN) scrapers must hold a session.
     const anonClient = new Client(base);
@@ -523,6 +535,7 @@ async function main(): Promise<void> {
     assert.match(text, /cwm_locations_total \d+/);
     assert.match(text, /cwm_observations_total \d+/);
     assert.match(text, /cwm_alert_deliveries_total \d+/);
+    assert.match(text, /cwm_database_persist_healthy [01]/, 'persistence health must be exposed');
     assert.match(text, /cwm_monitor_runs_total\{status="SUCCESS"\} \d+/);
     assert.match(text, /cwm_settings_monitor_interval_minutes \d+/);
 

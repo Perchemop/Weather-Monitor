@@ -18,6 +18,11 @@ import { convertTemperature, convertWind, formatTemperature, formatWind } from '
 import { weatherApiCodeToWmo, normalizeWeatherApiData, validateAndNormalizeOpenMeteoData } from '../services/weatherService.js';
 import { createDatabaseBackup, getDatabaseBackupsList, hashPasswordWithSalt } from '../database/db.js';
 import {
+  markPersistenceFailure,
+  clearPersistenceFailure,
+  getPersistenceStatus
+} from '../database/db.js';
+import {
   createUserAccount,
   verifyUserCredentials,
   getAllUsers,
@@ -953,6 +958,90 @@ async function runTests() {
     assert.equal(sumPrecipitationWindow([1, NaN, 2] as number[], 0, 3, 'next'), 3, 'NaN samples count as zero');
     assert.equal(sumPrecipitationWindow([1, -5, 2] as number[], 0, 3, 'next'), 3, 'negative samples are ignored');
     assert.equal(sumPrecipitationWindow([1, 2, 3], 0, 0, 'next'), 0, 'a zero-length window sums nothing');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Property tests (guide §3: unit, property-based, integration, manual QC)
+  // ---------------------------------------------------------------------------
+
+  test('Property: identical inputs always produce identical assessments', () => {
+    // Determinism is a safety requirement: the same observation must never
+    // yield two different scores, or an alert decision cannot be explained.
+    const current = createMockWeather({ windSpeed: 30, windGusts: 52, temperature: 31, uvIndex: 9 });
+    const hourly: HourlyForecastItem[] = [
+      {
+        time: new Date(Date.now() + 3600000).toISOString(),
+        temperature: 30,
+        windSpeed: 31,
+        windGusts: 60,
+        precipitation: 1,
+        rainProbability: 70,
+        weatherCode: 3,
+        weatherDescription: 'Overcast',
+        uvIndex: 9,
+        riskLevel: 'HIGH'
+      }
+    ];
+    const first = calculateDeterministicRisk(current, hourly, mockThresholds, 'Australia/Adelaide');
+    for (let i = 0; i < 25; i++) {
+      const again = calculateDeterministicRisk(current, hourly, mockThresholds, 'Australia/Adelaide');
+      assert.equal(again.level, first.level, 'risk level must be stable across runs');
+      assert.equal(again.score, first.score, 'risk score must be stable across runs');
+      assert.equal(again.factors.length, first.factors.length, 'factor set must be stable');
+    }
+  });
+
+  test('Property: raising a hazard input never lowers the risk level', () => {
+    // Monotonicity at every severity boundary: a stronger wind must never be
+    // classified safer than a weaker one.
+    const order: RiskLevel[] = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
+    const rank = (level: RiskLevel) => order.indexOf(level);
+    for (const gusts of [20, 45, 55, 68, 90]) {
+      const stronger = calculateDeterministicRisk(
+        createMockWeather({ windGusts: gusts, windSpeed: Math.max(10, gusts - 10) }),
+        [],
+        mockThresholds,
+        'Australia/Adelaide'
+      );
+      const weaker = calculateDeterministicRisk(
+        createMockWeather({ windGusts: Math.max(0, gusts - 10), windSpeed: Math.max(0, gusts - 20) }),
+        [],
+        mockThresholds,
+        'Australia/Adelaide'
+      );
+      assert.ok(
+        rank(stronger.level) >= rank(weaker.level),
+        `gusts ${gusts} (${stronger.level}) must not rank below gusts ${gusts - 10} (${weaker.level})`
+      );
+    }
+  });
+
+  test('Property: the safety disclaimer is always attached', () => {
+    for (const gusts of [0, 45, 68, 95]) {
+      const risk = calculateDeterministicRisk(
+        createMockWeather({ windGusts: gusts }),
+        [],
+        mockThresholds,
+        'Australia/Adelaide'
+      );
+      assert.equal(risk.safetyDisclaimer, SAFETY_DISCLAIMER, 'the disclaimer is unconditional');
+    }
+  });
+
+  test('Persistence health: a failed write is recorded and cleared on success', () => {
+    // A swallowed persist failure is a silent data-loss risk, so it must be
+    // observable (guide §3: never lose user data; no fake success).
+    clearPersistenceFailure();
+    assert.equal(getPersistenceStatus().healthy, true, 'starts healthy');
+
+    markPersistenceFailure('disk full');
+    const failed = getPersistenceStatus();
+    assert.equal(failed.healthy, false, 'a failed write must be reported');
+    assert.equal(failed.lastError?.message, 'disk full');
+    assert.ok(failed.lastError?.at, 'a failure carries a timestamp');
+
+    clearPersistenceFailure();
+    assert.equal(getPersistenceStatus().healthy, true, 'a successful write clears the failure');
   });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
