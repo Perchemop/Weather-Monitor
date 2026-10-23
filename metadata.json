@@ -1,6 +1,6 @@
 {
   "name": "Construction Weather Monitor",
-  "description": "Private, single-user local construction weather monitoring and automated alerting system.",
+  "description": "Private, local-first construction weather monitoring and automated alerting system with role-based access.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

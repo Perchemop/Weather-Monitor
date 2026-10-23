@@ -24,6 +24,30 @@ import { DEFAULT_THRESHOLDS } from '../services/riskEngine.js';
 import { generateSecureBootstrapPassword } from '../utils/security.js';
 
 let dbInstance: Database | null = null;
+
+// Persistence health. `persistDb()` swallows write failures so a request is
+// never blocked by a disk problem, which means a failed write would otherwise
+// be invisible. The last failure is recorded here so operators can see that
+// data is at risk instead of being told everything is healthy.
+let lastPersistError: { message: string; at: string } | null = null;
+
+/** Records a failed database write; used by persistDb and testable on its own. */
+export function markPersistenceFailure(message: string): void {
+  lastPersistError = { message: String(message).slice(0, 500), at: new Date().toISOString() };
+}
+
+/** Clears the recorded failure. Called after a write succeeds. */
+export function clearPersistenceFailure(): void {
+  lastPersistError = null;
+}
+
+/**
+ * Whether the SQLite file is being written successfully. `false` means at least
+ * one write failed and the on-disk database is missing the latest changes.
+ */
+export function getPersistenceStatus(): { healthy: boolean; lastError: { message: string; at: string } | null } {
+  return { healthy: lastPersistError === null, lastError: lastPersistError };
+}
 // DATA_DIR allows tests (and advanced deployments) to relocate the SQLite
 // database and its backups away from the default `./data` directory.
 const DB_DIR = process.env.DATA_DIR
@@ -77,7 +101,12 @@ export function persistDb() {
     const data = dbInstance.export();
     const buffer = Buffer.from(data);
     fs.writeFileSync(DB_FILE, buffer);
-  } catch (err) {
+    clearPersistenceFailure();
+  } catch (err: any) {
+    // Keep the in-memory database usable (the process must not crash on a disk
+    // problem), but never hide the failure: the file no longer matches memory,
+    // so an unacknowledged write failure is a real data-loss risk.
+    markPersistenceFailure(err?.message ? String(err.message) : String(err));
     console.error('Failed to persist SQLite database to disk:', err);
   }
 }
