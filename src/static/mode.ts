@@ -9,7 +9,8 @@
  * The regular Node/Express build leaves this `false`, so it keeps talking to
  * the HTTP API exactly as before.
  */
-export const STATIC_MODE: boolean = import.meta.env.VITE_APP_MODE === 'static';
+export const STATIC_MODE: boolean =
+  import.meta.env.VITE_APP_MODE === 'static' || import.meta.env.MODE === 'static';
 
 /**
  * Application base path. On GitHub Pages the app is served from
