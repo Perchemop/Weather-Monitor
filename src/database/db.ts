@@ -39,14 +39,34 @@ export async function getDb(): Promise<Database> {
     fs.mkdirSync(DB_DIR, { recursive: true });
   }
 
-  if (fs.existsSync(DB_FILE)) {
+  const isNewDatabase = !fs.existsSync(DB_FILE);
+  if (isNewDatabase) {
+    dbInstance = new SQL.Database();
+  } else {
     const fileBuffer = fs.readFileSync(DB_FILE);
     dbInstance = new SQL.Database(fileBuffer);
-  } else {
-    dbInstance = new SQL.Database();
   }
 
   initializeSchema(dbInstance);
+
+  // Legacy databases created before the setup marker existed already contain
+  // an OWNER but have no `owner_configured` flag. Treat them as configured so
+  // `POST /api/auth/setup` can never be replayed to overwrite that account.
+  // A genuinely new install carries `bootstrap_owner_generated` instead, so it
+  // can still complete first-run setup (even across a restart before setup).
+  if (!isNewDatabase) {
+    const flag = dbInstance.exec("SELECT value FROM settings WHERE key = 'owner_configured'");
+    const marker = dbInstance.exec("SELECT value FROM settings WHERE key = 'bootstrap_owner_generated'");
+    const owners = dbInstance.exec("SELECT COUNT(*) FROM users WHERE role = 'OWNER'");
+    const ownerCount = (owners[0]?.values[0]?.[0] as number) || 0;
+    if (!flag[0]?.values[0] && !marker[0]?.values[0] && ownerCount > 0) {
+      dbInstance.run(
+        "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('owner_configured', 'true', ?)",
+        [new Date().toISOString()]
+      );
+    }
+  }
+
   persistDb();
   return dbInstance;
 }
@@ -451,6 +471,10 @@ function initializeSchema(db: Database) {
        VALUES (?, ?, ?, 'OWNER', ?, ?, 1, ?, ?)`,
       ['usr-owner-1', defaultEmail, 'Site Owner', hash, salt, now, now]
     );
+    db.run(
+      "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('bootstrap_owner_generated', 'true', ?)",
+      [now]
+    );
   }
 }
 
@@ -516,10 +540,10 @@ export async function getOwnerInfo(): Promise<{ email: string; isConfigured: boo
   const owners = (await getAllUsers()).filter((u) => u.role === 'OWNER');
   const email = owners[0]?.email || process.env.OWNER_EMAIL || null;
   if (!email) return null;
-  // An existing OWNER account is itself proof that setup has completed. This
-  // also covers installations migrated from the legacy single-owner table,
-  // which never wrote the `owner_configured` setting.
-  const isConfigured = (await isOwnerPasswordConfigured()) || owners.length > 0;
+  // An existing database from before the setup marker existed is backfilled to
+  // `owner_configured` by getDb(); a fresh install stays unconfigured until the
+  // operator completes `POST /api/auth/setup`.
+  const isConfigured = await isOwnerPasswordConfigured();
   return { email, isConfigured };
 }
 
