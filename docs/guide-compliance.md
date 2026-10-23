@@ -20,7 +20,7 @@ recorded deviation; **Deferred** = tracked gap with rationale.
 | Rule | Status | Where |
 | --- | --- | --- |
 | Real data models, persistence, validation, error handling | Met | `src/database/db.ts`, route validation in `server.ts` |
-| Runnable/testable/buildable from a clean checkout | Met | CI: install → type-check → 81 tests → server build → static build |
+| Runnable/testable/buildable from a clean checkout | Met | CI: install → type-check → 86 tests → server build → static build |
 | Free and open-source tools and dependencies | Met | `ATTRIBUTION.md`; no proprietary runtime |
 | Traceability capability → implementation + tests | Met | `REQUIREMENTS_TRACEABILITY.md` |
 | No proprietary code, assets or reverse-engineered internals | Met | `docs/inspiration.md` (clean-room statement) |
@@ -48,7 +48,7 @@ runs on all three OSes. Recorded as D-18.
 | Lightweight local persistence | Met | SQLite via `sql.js`, single file, `DATA_DIR` overridable |
 | Command-centric or clear use-case layer | **Adapted** | see below |
 | No panics in non-test code; never lose user data | Met | errors caught per route/location; persistence failures surfaced, never swallowed silently |
-| Testing: unit, property-based, integration, manual QC | Met | 53 system (incl. property tests), 28 HTTP integration, `docs/qc/` |
+| Testing: unit, property-based, integration, manual QC | Met | 57 system (incl. property tests + persistence health), 29 HTTP integration, `docs/qc/` |
 | CI on multiple OS runners | Met | `format-check` + matrix `build-test` (Windows/macOS/Linux) + `docker` |
 
 **Adapted — command-centric.** The guide prefers a command layer. This app is an
@@ -71,7 +71,7 @@ reported as healthy. Recorded as D-20.
 | Commit and push after every meaningful change; CI is the source of truth | Met | every slice pushed and verified; `ci.sh run "…"` |
 | CI: format check | Met | `scripts/check-format.mjs`, `format-check` job |
 | CI: lint with warnings denied | Met | `npm run lint` (`tsc --noEmit`) fails on any diagnostic |
-| CI: full test suite | Met | 81 tests in both suites |
+| CI: full test suite | Met | 86 tests in both suites |
 | CI: dependency + build caching | Met | `actions/setup-node` with `cache: npm` |
 | CI: clear summaries and artefacts | Met | job summary step, `upload-artifact` for `dist/` + `dist-static/` |
 

@@ -8,7 +8,7 @@ detailed history lives in `CHANGELOG.md`.
 - **Branch:** `opencode/ci`, with an open pull request (#1) into `main`. Nothing
   is merged until a human reviews it.
 - **CI:** green on every slice. The workflow now runs `format-check`, a
-  multi-OS `build-test` matrix (Windows, macOS, Linux — type-check, 81 tests,
+  multi-OS `build-test` matrix (Windows, macOS, Linux — type-check, 86 tests,
   production build, static build with artefact upload), and `docker`.
 - **Operating model:** the guide's CTO.new-style flow —
   **Chat (plan) → Task (execute) → Pull Request (review)**; see

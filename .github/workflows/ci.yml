@@ -93,7 +93,7 @@ jobs:
             echo "| --- | --- |"
             echo "| type-check, tests, build, static build | see job logs |"
             echo ""
-            echo "Test suite: 53 system + 28 integration = 81 automated checks."
+            echo "Test suite: 57 system + 29 integration = 86 automated checks."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build artefacts (Linux)

@@ -96,10 +96,11 @@ newline, code files use spaces, and no trailing whitespace on lines *you* added
 
 `npm test` runs both suites in order:
 
-- `src/tests/system.test.ts` — 53 unit/system tests (risk engine, weather
-  normalisation, time, sessions, retention, push, performance summary).
-- `src/tests/api.test.ts` — 28 HTTP integration tests (auth, RBAC, CSRF, MFA,
-  sessions, backups, metrics, integrity).
+- `src/tests/system.test.ts` — 57 unit/system tests (risk engine incl. property
+  tests, weather normalisation, time, sessions, retention, push,
+  performance summary, persistence health).
+- `src/tests/api.test.ts` — 29 HTTP integration tests (auth, RBAC, CSRF, MFA,
+  sessions, backups, metrics, health, integrity).
 
 ## Workflow conventions
 
