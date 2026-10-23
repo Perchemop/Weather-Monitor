@@ -512,7 +512,7 @@ async function main(): Promise<void> {
     const health = await owner.get('/api/health');
     assert.equal(health.status, 200);
     assert.equal(health.body.databaseStatus, 'HEALTHY', 'a healthy store must report HEALTHY');
-    assert.equal(health.body.databasePersistError, undefined, 'no error payload when healthy');
+    assert.equal(health.body.databasePersistError, null, 'no error payload when healthy');
   });
 
   await test('Metrics: /metrics requires auth and exposes Prometheus metrics', async () => {
