@@ -1,6 +1,27 @@
 # Development
 
-How to work on the Construction Weather Monitor.
+How to work on the Construction Weather Monitor, following the operating guide's
+CTO.new-style model: **Chat (plan) → Task (execute) → Pull Request (review)**.
+
+## Two modes
+
+- **Chat (Orchestrator / planning)** — clarifies requirements, produces a written
+  plan and a precise Task brief (requirement IDs, files likely touched,
+  acceptance criteria). Makes no large code changes and runs no builds.
+- **Task (Coder / execution)** — implements one bounded, reviewable slice,
+  updates tests, commits and pushes, and relies on GitHub Actions to verify.
+
+Never mix the two carelessly: plan first, then execute.
+
+## Daily flow
+
+1. Chat with the Orchestrator to agree the plan and success criteria.
+2. Read `IMPLEMENTATION_PLAN.md`, `REQUIREMENTS_TRACEABILITY.md`, `DECISIONS.md`
+   and `PROGRESS.md` before editing.
+3. Implement the slice; write or update tests with every behavioural change.
+4. Commit and push; GitHub Actions is the Task Runner.
+5. Open or update a pull request for review.
+6. Update the tracking files with exact results, then repeat.
 
 ## CI-first rule (read this first)
 
@@ -59,6 +80,17 @@ without SMTP it skips email. Notable variables:
 - `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD` — email alerts.
 - `METRICS_TOKEN` — shared token for `/metrics`.
 - `DATA_DIR` — relocate the SQLite database and generated secrets.
+
+## Format check
+
+```bash
+npm run format:check           # whole repository hygiene
+npm run format:check:changed   # plus trailing whitespace on changed lines
+```
+
+Enforced by CI. Rules: no CRLF, no merge-conflict markers, every file ends with a
+newline, code files use spaces, and no trailing whitespace on lines *you* added
+(Markdown is exempt — two trailing spaces there are a hard line break).
 
 ## Running the suites (in CI)
 

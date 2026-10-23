@@ -6,6 +6,30 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **CI format check.** A dependency-free hygiene checker
+  (`scripts/check-format.mjs`, `npm run format:check`) enforces no CRLF, no
+  merge markers, a final newline, spaces-not-tabs in code, and no trailing
+  whitespace on lines a change introduces. It runs as a dedicated
+  `format-check` job (guide §4, "Required CI Design").
+- **CI hardening.** The build/test job now runs as a multi-OS matrix (Windows,
+  macOS, Linux) with `fail-fast: false`, job timeouts, least-privilege
+  `permissions`, concurrency cancellation, dependency caching, a job summary and
+  uploaded build artefacts.
+- Guide-required tracking documents: `PROGRESS.md`, `CHANGELOG.md`,
+  `DECISIONS.md`, `REQUIREMENTS_TRACEABILITY.md`, `ATTRIBUTION.md`, `LICENSE`, and
+  the `docs/` set (project brief, scope, inspiration, product name, architecture,
+  parity, assumptions and questions, development, QC checklists).
+
+### Changed
+
+- Operating model documented as the guide's CTO.new-style flow
+  **Chat (plan) → Task (execute) → Pull Request (review)**; `docs/development.md`
+  describes both modes, the two-mode rule, and the daily flow.
+- The `coder` agent may now commit, push and open a pull request directly
+  (guide §5.5), instead of being blocked from GitHub interaction.
+
 ### Fixed
 
 - **Authentication:** `POST /api/auth/setup` is now a one-time bootstrap. It
@@ -45,13 +69,6 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   false success.
 - **Tooling:** the `docs-writer` subagent's edit permission was corrected from
   deny to allow.
-
-### Added
-
-- Guide-required tracking documents: `PROGRESS.md`, `CHANGELOG.md`,
-  `DECISIONS.md`, `REQUIREMENTS_TRACEABILITY.md`, `ATTRIBUTION.md`, and the
-  `docs/` set (project brief, scope, inspiration, product name, architecture,
-  parity, assumptions and questions, development, QC checklists).
 
 ## [1.0.0]
 
