@@ -150,6 +150,17 @@ async function main(): Promise<void> {
     assert.ok(anon.cookie('cwm_csrf'), 'CSRF cookie must be issued');
   });
 
+  await test('Auth: setup cannot be replayed once an owner exists', async () => {
+    const replay = await new Client(base).post('/api/auth/setup', {
+      password: 'TakeoverAttempt9',
+      email: 'attacker@site.local'
+    });
+    assert.equal(replay.status, 409, 'setup must be a one-time bootstrap');
+    // The original credentials are untouched.
+    const still = await anon.get('/api/auth/status');
+    assert.equal(still.body.authenticated, true);
+  });
+
   await test('CSRF: cookie-authenticated mutation without the header is rejected', async () => {
     const res = await anon.post('/api/settings/restore-defaults');
     assert.equal(res.status, 403);
@@ -249,6 +260,7 @@ async function main(): Promise<void> {
   });
 
   let viewerClient: Client;
+  let viewerId = '';
 
   await test('RBAC: owner can create a VIEWER account', async () => {
     const res = await anon.postCsrf('/api/users', {
@@ -259,6 +271,7 @@ async function main(): Promise<void> {
     });
     assert.equal(res.status, 200);
     assert.equal(res.body.user.role, 'VIEWER');
+    viewerId = res.body.user.id;
   });
 
   await test('RBAC: viewer can read but cannot mutate or manage users', async () => {
@@ -335,6 +348,34 @@ async function main(): Promise<void> {
     // The current session remains valid.
     assert.equal((await anon.get('/api/auth/sessions')).status, 200);
     assert.ok(current);
+  });
+
+  await test('RBAC: role changes take effect on the live session immediately', async () => {
+    // A VIEWER is stopped by the server-side role gate.
+    assert.equal((await viewerClient.postCsrf('/api/locations', {})).status, 403);
+
+    const promote = await anon.putCsrf(`/api/users/${viewerId}`, { role: 'MANAGER' });
+    assert.equal(promote.status, 200);
+    assert.equal(promote.body.user.role, 'MANAGER');
+
+    // Same cookie, new privileges — no re-login required. The request now
+    // reaches validation (400) instead of the role gate (403).
+    const promoted = await viewerClient.postCsrf('/api/locations', {});
+    assert.equal(promoted.status, 400, 'promoted session should pass the role gate');
+
+    const demote = await anon.putCsrf(`/api/users/${viewerId}`, { role: 'VIEWER' });
+    assert.equal(demote.status, 200);
+    assert.equal((await viewerClient.postCsrf('/api/locations', {})).status, 403);
+  });
+
+  await test('Auth: email lookup is case-insensitive', async () => {
+    const c = new Client(base);
+    const res = await c.post('/api/auth/login', {
+      password: VIEWER_PASSWORD,
+      email: 'VIEWER@SITE.LOCAL'
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.email, 'viewer@site.local');
   });
 
   await test('Validation: settings reject an out-of-range retention window', async () => {
@@ -497,6 +538,39 @@ async function main(): Promise<void> {
     assert.equal(typeof res.body.alerts.bySeverity.CRITICAL, 'number');
     assert.ok(Array.isArray(res.body.alerts.byType));
     assert.ok(Array.isArray(res.body.highlights));
+  });
+
+  await test('Sessions: changing a password revokes other devices but keeps the current one', async () => {
+    const owner = new Client(base);
+    assert.equal(
+      (await owner.post('/api/auth/login', { password: OWNER_PASSWORD, email: 'owner@site.local' })).status,
+      200
+    );
+    const created = await owner.postCsrf('/api/users', {
+      email: 'rotate@site.local',
+      password: 'RotateStart1',
+      role: 'VIEWER'
+    });
+    assert.equal(created.status, 200);
+
+    const first = new Client(base);
+    const second = new Client(base);
+    assert.equal((await first.post('/api/auth/login', { password: 'RotateStart1', email: 'rotate@site.local' })).status, 200);
+    assert.equal((await second.post('/api/auth/login', { password: 'RotateStart1', email: 'rotate@site.local' })).status, 200);
+
+    const changed = await first.postCsrf('/api/auth/change-password', {
+      currentPassword: 'RotateStart1',
+      newPassword: 'RotateFinish2'
+    });
+    assert.equal(changed.status, 200);
+
+    // Current device stays signed in; the other device is immediately revoked.
+    assert.equal((await first.get('/api/auth/status')).body.authenticated, true);
+    assert.equal((await second.get('/api/auth/status')).body.authenticated, false);
+    assert.equal(
+      (await new Client(base).post('/api/auth/login', { password: 'RotateFinish2', email: 'rotate@site.local' })).status,
+      200
+    );
   });
 
   await new Promise<void>((resolve) => server.close(() => resolve()));
