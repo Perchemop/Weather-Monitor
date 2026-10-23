@@ -12,6 +12,7 @@ import {
   updateLocationStatus,
   enforceDataRetention
 } from '../database/db.js';
+import { MonitorRun } from '../types.js';
 import { fetchRealWeatherData } from './weatherService.js';
 import { calculateDeterministicRisk } from './riskEngine.js';
 import { evaluateAndProcessAlerts } from './alertEngine.js';
@@ -250,10 +251,12 @@ class MonitoringService {
         return { success: false, error: combinedError, processedCount: 0 };
       }
 
-      // Partial or total success
-      const runStatus = errors.length > 0 ? 'PARTIAL' : 'SUCCESS';
+      // Partial or total success. A PARTIAL run means the cycle finished but
+      // at least one location failed; it is recorded so metrics and the
+      // performance report can distinguish it from a fully clean run.
+      const runStatus: MonitorRun['status'] = errors.length > 0 ? 'PARTIAL' : 'SUCCESS';
       await recordMonitorRun(
-        runStatus as any,
+        runStatus,
         processedCount,
         errors.length > 0 ? errors.join('; ') : undefined,
         startTime

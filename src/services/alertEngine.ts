@@ -184,9 +184,11 @@ export async function evaluateAndProcessAlerts(
     });
   }
 
-  // Fetch currently active alerts and past alerts for deduplication and cooldown
+  // Fetch currently active alerts and past alerts for deduplication and cooldown.
+  // History is scoped to this location so one busy site cannot suppress the same
+  // alert type at another site through the shared cooldown window.
   const activeAlerts = await getActiveAlerts(locationId);
-  const recentAlerts = await getAlertHistory(20);
+  const recentAlerts = await getAlertHistory(20, locationId);
   const nowMs = Date.now();
   const cooldownMs = cooldownMinutes * 60 * 1000;
 

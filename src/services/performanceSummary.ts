@@ -51,7 +51,9 @@ export function buildWeeklyPerformanceSummary(params: {
   const runs = params.runs.filter((r) => withinWindow(r.startedAt, sinceMs));
 
   // ---- Monitoring reliability ----
-  const runsSucceeded = runs.filter((r) => r.status === 'SUCCESS').length;
+  // A PARTIAL run completed its cycle for at least one location, so it counts
+  // toward the success rate while remaining distinguishable in raw run data.
+  const runsSucceeded = runs.filter((r) => r.status === 'SUCCESS' || r.status === 'PARTIAL').length;
   const runsFailed = runs.filter((r) => r.status === 'FAILED').length;
   const expectedObservations = Math.max(1, Math.floor((windowDays * 24 * 60) / intervalMinutes));
   const successRatePct = runs.length > 0 ? round((runsSucceeded / runs.length) * 100) : 0;

@@ -229,7 +229,8 @@ export interface MonitorRun {
   id: string;
   startedAt: string;
   completedAt?: string;
-  status: 'SUCCESS' | 'FAILED' | 'RUNNING';
+  /** PARTIAL = the cycle completed but one or more locations failed. */
+  status: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'RUNNING';
   itemsProcessed: number;
   errorMessage?: string;
 }

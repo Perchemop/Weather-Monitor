@@ -555,7 +555,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       lines.push(`cwm_alert_deliveries_total ${deliveries}`);
 
       counter('cwm_monitor_runs_total', 'Completed monitoring cycles by outcome.');
-      for (const status of ['SUCCESS', 'FAILED', 'RUNNING']) {
+      for (const status of ['SUCCESS', 'PARTIAL', 'FAILED', 'RUNNING']) {
         lines.push(`cwm_monitor_runs_total{status="${status}"} ${runsByStatus[status] || 0}`);
       }
 
@@ -1014,12 +1014,10 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     try {
       const locId = (req.query.locationId as string) || undefined;
       const locations = await getAllLocations();
-      const targetLoc = locId
-        ? locations.find((l) => l.id === locId) || locations[0]
-        : (await getDefaultLocation()) || locations[0];
+      const targetLoc = locId ? locations.find((l) => l.id === locId) : await getDefaultLocation();
 
       if (!targetLoc) {
-        res.status(404).json({ error: 'No location configured.' });
+        res.status(404).json({ error: locId ? 'Location not found.' : 'No location configured.' });
         return;
       }
 
@@ -1066,12 +1064,10 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     try {
       const locId = (req.query.locationId as string) || undefined;
       const locations = await getAllLocations();
-      const targetLoc = locId
-        ? locations.find((l) => l.id === locId) || locations[0]
-        : (await getDefaultLocation()) || locations[0];
+      const targetLoc = locId ? locations.find((l) => l.id === locId) : await getDefaultLocation();
 
       if (!targetLoc) {
-        res.status(404).json({ error: 'No location configured.' });
+        res.status(404).json({ error: locId ? 'Location not found.' : 'No location configured.' });
         return;
       }
 
@@ -1096,12 +1092,10 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     try {
       const locId = (req.query.locationId as string) || undefined;
       const locations = await getAllLocations();
-      const targetLoc = locId
-        ? locations.find((l) => l.id === locId) || locations[0]
-        : (await getDefaultLocation()) || locations[0];
+      const targetLoc = locId ? locations.find((l) => l.id === locId) : await getDefaultLocation();
 
       if (!targetLoc) {
-        res.status(404).json({ error: 'No location configured.' });
+        res.status(404).json({ error: locId ? 'Location not found.' : 'No location configured.' });
         return;
       }
 
@@ -1149,12 +1143,28 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   // ----------------- MONITOR CONTROLS -----------------
   app.post('/api/monitor/check-now', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     const locId = req.body?.locationId;
+    if (locId !== undefined && typeof locId !== 'string') {
+      res.status(400).json({ error: 'locationId must be a string.' });
+      return;
+    }
+    if (locId && !(await getAllLocations()).some((l) => l.id === locId)) {
+      res.status(404).json({ error: 'Location not found.' });
+      return;
+    }
     const result = await monitoringService.executeCycle(locId, true);
+    if (result.error === 'Monitoring check already in progress.') {
+      res.status(409).json({ error: result.error });
+      return;
+    }
     if (!result.success) {
       res.status(500).json({ error: result.error });
       return;
     }
-    res.json({ success: true, message: 'Weather check completed successfully.' });
+    res.json({
+      success: true,
+      processedCount: result.processedCount,
+      message: result.processedCount === 1 ? 'Weather check completed successfully.' : `Weather check completed for ${result.processedCount} locations.`
+    });
   });
 
   app.post('/api/monitor/toggle', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
@@ -1176,7 +1186,11 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   });
 
   app.post('/api/alerts/:id/dismiss', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
-    await updateAlertStatus(req.params.id, 'DISMISSED');
+    const dismissed = await updateAlertStatus(req.params.id, 'DISMISSED');
+    if (!dismissed) {
+      res.status(404).json({ error: 'Alert not found.' });
+      return;
+    }
     res.json({ success: true });
   });
 
@@ -1255,12 +1269,29 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   });
 
   app.post('/api/locations/:id/default', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
-    await setDefaultLocation(req.params.id);
+    const ok = await setDefaultLocation(req.params.id);
+    if (!ok) {
+      res.status(404).json({ error: 'Location not found.' });
+      return;
+    }
     res.json({ success: true });
   });
 
   app.delete('/api/locations/:id', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
-    await deleteLocation(req.params.id);
+    const target = (await getAllLocations()).find((l) => l.id === req.params.id);
+    if (!target) {
+      res.status(404).json({ error: 'Location not found.' });
+      return;
+    }
+    if (target.isDefault) {
+      res.status(400).json({ error: 'The default location cannot be deleted. Promote another location first.' });
+      return;
+    }
+    const ok = await deleteLocation(req.params.id);
+    if (!ok) {
+      res.status(400).json({ error: 'The default location cannot be deleted. Promote another location first.' });
+      return;
+    }
     res.json({ success: true });
   });
 
@@ -1410,6 +1441,9 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     } else if (target === 'all') {
       await clearAllApplicationData();
       await addAuditLog('DATA_CLEARED', 'All application data wiped');
+    } else {
+      res.status(400).json({ error: "target must be one of 'cache', 'history', or 'all'." });
+      return;
     }
     res.json({ success: true });
   });
