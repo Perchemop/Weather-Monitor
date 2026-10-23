@@ -13,7 +13,7 @@ import { buildWeeklyPerformanceSummary } from '../services/performanceSummary.js
 import { redactSecretsInError, maskSecret } from '../utils/security.js';
 import { deepEqual, setStateIfChanged } from '../utils/state.js';
 import { evaluateDataFreshness } from '../utils/time.js';
-import { CurrentWeather, HourlyForecastItem, RiskThresholds } from '../types.js';
+import { CurrentWeather, HourlyForecastItem, RiskThresholds, RiskLevel } from '../types.js';
 import { convertTemperature, convertWind, formatTemperature, formatWind } from '../utils/units.js';
 import { weatherApiCodeToWmo, normalizeWeatherApiData, validateAndNormalizeOpenMeteoData } from '../services/weatherService.js';
 import { createDatabaseBackup, getDatabaseBackupsList, hashPasswordWithSalt } from '../database/db.js';
