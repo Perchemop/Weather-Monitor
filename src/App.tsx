@@ -382,6 +382,7 @@ export default function App() {
     setMonitorStatus((prev) => ({ ...prev, isChecking: true }));
     toast.info('Executing immediate weather observation cycle...');
 
+    let serverFailed = false;
     try {
       const res = await apiFetch('/api/monitor/check-now', { method: 'POST' });
       if (res.ok) {
@@ -389,9 +390,14 @@ export default function App() {
         toast.success('Site microclimate conditions updated.');
         return;
       }
-    } catch {}
+      serverFailed = true;
+    } catch {
+      serverFailed = true;
+    }
 
-    // Fallback: direct refresh from Open-Meteo
+    // The server cycle could not run (offline enclave, busy monitor). Fall
+    // back to a direct provider query and say so rather than claiming the
+    // site check succeeded.
     try {
       const loc = currentLocationRef.current || FALLBACK_SITE;
       const livePayload = await fetchRealWeatherData(
@@ -406,18 +412,22 @@ export default function App() {
       setStateIfChanged(setRiskAssessment, risk);
       setStateIfChanged(setHourlyForecast, livePayload.hourly);
       setStateIfChanged(setDailyForecast, livePayload.daily);
-      setDataStatus('LIVE');
-      toast.success('Direct observations refreshed.');
+      setDataStatus(serverFailed ? 'CACHED' : 'LIVE');
+      if (serverFailed) {
+        toast.warning('Server check could not run. Showing a direct provider reading instead.');
+      } else {
+        toast.success('Direct observations refreshed.');
+      }
     } catch {
       toast.error('Unable to fetch live weather observations.');
     } finally {
       setMonitorStatus((prev) => ({
         ...prev,
         isChecking: false,
-        lastCheckTime: new Date().toISOString()
+        lastCheckTime: serverFailed ? null : new Date().toISOString()
       }));
     }
-  }, [toast]);
+  }, [toast, loadDashboardData]);
 
   // Dismiss / Acknowledge active alert
   const handleDismissAlert = useCallback(
@@ -426,9 +436,18 @@ export default function App() {
       try {
         const res = await apiFetch(`/api/alerts/${id}/dismiss`, { method: 'POST' });
         acknowledged = res.ok;
-      } catch {}
+        if (!acknowledged) {
+          const err = await res.json().catch(() => null);
+          throw new Error(err?.error || `Dismiss failed (${res.status}).`);
+        }
+      } catch (err: any) {
+        // Keep the alert on screen: removing it would hide a live safety
+        // condition the system still considers active.
+        toast.error(err?.message || 'Failed to dismiss alert.');
+        return;
+      }
       setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
-      if (acknowledged) toast.info('Alert acknowledged and dismissed.');
+      toast.info('Alert acknowledged and dismissed.');
     },
     [toast]
   );
@@ -439,6 +458,9 @@ export default function App() {
       applyLocation(loc);
       setIsDashboardLoading(true);
       toast.info(`Switching location to ${loc.name}...`);
+
+      let loaded = false;
+      let serverError: string | null = null;
 
       try {
         const res = await apiFetch(`/api/weather/current?locationId=${loc.id}`);
@@ -452,21 +474,31 @@ export default function App() {
           markAlertsSeen(nextAlerts);
           setStateIfChanged(setActiveAlerts, nextAlerts);
           if (data.comparison) setStateIfChanged(setProviderComparison, data.comparison);
+          loaded = true;
+
+          const forecastRes = await apiFetch(`/api/weather/forecast?locationId=${loc.id}`);
+          if (forecastRes.ok) {
+            const fData = await forecastRes.json();
+            setStateIfChanged(setHourlyForecast, fData.hourly || []);
+            setStateIfChanged(setDailyForecast, fData.daily || []);
+          }
+          const crossRes = await apiFetch(`/api/weather/cross-reference?locationId=${loc.id}`);
+          if (crossRes.ok) {
+            const cData = await crossRes.json();
+            if (cData.comparison) setStateIfChanged(setProviderComparison, cData.comparison);
+          }
+        } else {
+          const err = await res.json().catch(() => null);
+          serverError = err?.error || `Server returned ${res.status}.`;
         }
-        const forecastRes = await apiFetch(`/api/weather/forecast?locationId=${loc.id}`);
-        if (forecastRes.ok) {
-          const fData = await forecastRes.json();
-          setStateIfChanged(setHourlyForecast, fData.hourly || []);
-          setStateIfChanged(setDailyForecast, fData.daily || []);
-        }
-        const crossRes = await apiFetch(`/api/weather/cross-reference?locationId=${loc.id}`);
-        if (crossRes.ok) {
-          const cData = await crossRes.json();
-          if (cData.comparison) setStateIfChanged(setProviderComparison, cData.comparison);
-        }
-        toast.success(`Active monitoring shifted to ${loc.name}`);
       } catch {
-        // Direct client fallback for selected location
+        serverError = 'Connection to the safety enclave failed.';
+      }
+
+      // The server could not serve this site (offline, unknown id). Only then
+      // do we query the provider directly, and we say so instead of claiming
+      // the monitoring shift succeeded.
+      if (!loaded) {
         try {
           const livePayload = await fetchRealWeatherData(
             loc.latitude,
@@ -481,14 +513,18 @@ export default function App() {
           setStateIfChanged(setHourlyForecast, livePayload.hourly);
           setStateIfChanged(setDailyForecast, livePayload.daily);
           if (livePayload.comparison) setStateIfChanged(setProviderComparison, livePayload.comparison);
-          setDataStatus('LIVE');
-          toast.success(`Active monitoring shifted to ${loc.name}`);
+          setDataStatus('CACHED');
+          toast.warning(`Server unavailable — showing a direct provider reading for ${loc.name}.`);
         } catch {
-          toast.error(`Failed to load weather for ${loc.name}`);
+          toast.error(
+            serverError ? `Failed to load ${loc.name}: ${serverError}` : `Failed to load weather for ${loc.name}`
+          );
         }
-      } finally {
-        setIsDashboardLoading(false);
+      } else {
+        toast.success(`Active monitoring shifted to ${loc.name}`);
       }
+
+      setIsDashboardLoading(false);
     },
     [applyLocation, markAlertsSeen, toast]
   );
@@ -711,7 +747,12 @@ export default function App() {
         {activeTab === 'performance' && <PerformanceView location={currentLocation} />}
 
         {/* Settings & Threshold Calibration */}
-        {activeTab === 'settings' && <SettingsView onSettingsSaved={refreshDashboard} />}
+        {activeTab === 'settings' && (
+          <SettingsView
+            onSettingsSaved={refreshDashboard}
+            userRole={STATIC_MODE ? 'OWNER' : userRole}
+          />
+        )}
 
         {/* User & Access Management (Owner only) */}
         {activeTab === 'users' && <UsersView />}
@@ -726,6 +767,7 @@ export default function App() {
         currentLocation={currentLocation}
         onSelectLocation={handleSelectLocation}
         onLocationAdded={refreshDashboard}
+        userRole={userRole}
       />
 
       {/* Mandatory Section 93 Privacy Footer */}

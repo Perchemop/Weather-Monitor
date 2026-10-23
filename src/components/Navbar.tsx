@@ -74,7 +74,9 @@ const NavbarComponent: React.FC<NavbarProps> = ({
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Tabs are gated by role: everyone monitors, only owners configure.
+  // Tabs are gated by role. Settings is available to every authenticated
+  // role because each account owns its password, MFA and active sessions; the
+  // owner-only configuration screens inside Settings are gated separately.
   const allNavItems = [
     { id: 'dashboard', label: 'Monitor', icon: Activity, visible: true },
     { id: 'activity', label: 'Activities', icon: HardHat, visible: true },
@@ -84,7 +86,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
     { id: 'history', label: 'History', icon: Clock, visible: true },
     { id: 'reports', label: 'Reports', icon: FileText, visible: true },
     { id: 'performance', label: 'Performance', icon: BarChart3, visible: true },
-    { id: 'settings', label: 'Settings', icon: Settings, visible: isOwner },
+    { id: 'settings', label: 'Settings', icon: Settings, visible: true },
     // User/account management only applies to the server build.
     { id: 'users', label: 'Users', icon: Users, visible: isOwner && !STATIC_MODE }
   ];

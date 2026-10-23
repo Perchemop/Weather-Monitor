@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Plus, Check, Trash2, Search, X, Star, AlertCircle } from 'lucide-react';
-import { LocationItem } from '../types';
+import { LocationItem, UserRole } from '../types';
 import { useToast } from './ToastProvider';
 import { apiFetch } from '../utils/api';
+import { STATIC_MODE } from '../static/mode';
 
 interface LocationModalProps {
   isOpen: boolean;
@@ -11,6 +12,8 @@ interface LocationModalProps {
   currentLocation: LocationItem | null;
   onSelectLocation: (loc: LocationItem) => void;
   onLocationAdded: () => void;
+  /** Mirrors the server-side gate: adding, deleting and defaulting need MANAGER+. */
+  userRole?: UserRole;
 }
 
 const LocationModalComponent: React.FC<LocationModalProps> = ({
@@ -19,9 +22,14 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
   locations,
   currentLocation,
   onSelectLocation,
-  onLocationAdded
+  onLocationAdded,
+  userRole = 'VIEWER'
 }) => {
   const toast = useToast();
+  // The static browser build has no roles; every control is local. In the
+  // server build the UI must mirror the MANAGER+ route gate so VIEWERs never
+  // see controls that the server would reject.
+  const canManage = STATIC_MODE || userRole === 'OWNER' || userRole === 'MANAGER';
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -103,7 +111,8 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
         setDeletingId(null);
         onLocationAdded();
       } else {
-        toast.error('Cannot remove active or default location.');
+        const err = await res.json().catch(() => null);
+        toast.error(err?.error || 'Cannot delete this location.');
       }
     } catch {
       toast.error('Failed to delete location.');
@@ -156,7 +165,9 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                 MONITORED CONSTRUCTION SITES
               </h3>
               <p className="text-2xs text-slate-400">
-                Switch or add microclimate telemetry coordinate locations
+                {canManage
+                  ? 'Switch or add microclimate telemetry coordinate locations'
+                  : 'Switch the monitored microclimate telemetry site'}
               </p>
             </div>
           </div>
@@ -220,7 +231,7 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                      {!loc.isDefault && (
+                      {canManage && !loc.isDefault && (
                         <button
                           type="button"
                           onClick={(e) => handleSetDefault(loc.id, e)}
@@ -231,7 +242,7 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                         </button>
                       )}
 
-                      {locations.length > 1 && !loc.isDefault && (
+                      {canManage && locations.length > 1 && !loc.isDefault && (
                         isConfirmingDelete ? (
                           <div className="flex items-center gap-1 bg-red-950 border border-red-800 rounded px-1.5 py-0.5">
                             <span className="text-2xs text-red-300 font-mono">Delete?</span>
@@ -270,7 +281,8 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
             </div>
           </div>
 
-          {/* Add Site Section */}
+          {/* Add Site Section (operators only) */}
+          {canManage && (
           <div className="border-t border-slate-800 pt-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-mono font-semibold uppercase text-slate-400">
@@ -384,6 +396,13 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
               </div>
             )}
           </div>
+          )}
+
+          {!canManage && (
+            <div className="border-t border-slate-800 pt-4 text-2xs font-mono text-slate-500">
+              Viewing access — site selection is read-only. Ask a manager to add, remove or promote locations.
+            </div>
+          )}
         </div>
       </div>
     </div>
