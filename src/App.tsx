@@ -43,7 +43,7 @@ import { apiFetch } from './utils/api';
 import { deepEqual, setStateIfChanged } from './utils/state';
 import { initKeepAwake } from './utils/wakeLock';
 import { STATIC_MODE } from './static/mode';
-import { ShieldCheck, HardHat, CheckCircle2, WifiOff } from 'lucide-react';
+import { ShieldCheck, HardHat, WifiOff } from 'lucide-react';
 
 const FALLBACK_SITE: LocationItem = {
   id: 'loc-default',
@@ -551,12 +551,12 @@ export default function App() {
   if (authChecking) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 animate-pulse">
-            <HardHat className="w-6 h-6" />
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/10 text-amber-500 animate-pulse">
+              <HardHat className="h-6 w-6" />
+            </div>
+            <span className="text-xs text-slate-500">Opening the safety enclave…</span>
           </div>
-          <span className="text-xs font-mono text-slate-400">Initializing Safety Enclave...</span>
-        </div>
       </div>
     );
   }
@@ -574,7 +574,6 @@ export default function App() {
 
   const tempUnit = ownerSettings?.temperatureUnit || 'C';
   const windUnit = ownerSettings?.windUnit || 'km/h';
-  const monitorInterval = ownerSettings?.monitorIntervalMinutes || 15;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
@@ -595,19 +594,19 @@ export default function App() {
       />
 
       {/* Main View Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 sm:py-7 space-y-5">
         {!isOnline && (
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-amber-950/50 border border-amber-800/60 text-amber-200 text-xs font-mono">
-            <WifiOff className="w-4 h-4 text-amber-400 shrink-0" />
+          <div className="flex items-center gap-2.5 rounded-xl border border-amber-800/50 bg-amber-950/30 p-3 text-xs text-amber-200">
+            <WifiOff className="h-4 w-4 shrink-0 text-amber-400" />
             <span>
-              Offline mode — showing the last cached microclimate snapshot. Live checks will resume automatically when
-              the connection returns.
+              Offline — showing the last cached snapshot. Live checks resume automatically when the connection
+              returns.
             </span>
           </div>
         )}
         <Suspense fallback={<ViewLoadingFallback label="Loading module" />}>
         {activeTab === 'dashboard' && (
-          <div className="space-y-6 animate-fadeIn">
+          <div className="space-y-5 animate-fadeIn">
             {/* 1. Hero Risk Card (Dominant Dashboard Element) */}
             <HeroRiskCard
               risk={riskAssessment}
@@ -615,29 +614,14 @@ export default function App() {
               isLoading={isDashboardLoading}
             />
 
-            {/* 2. Active Alerts Warning Box */}
+            {/* 2. Active Alerts (only this panel may sit above conditions) */}
             <ActiveAlertsPanel
               alerts={activeAlerts}
               onDismissAlert={handleDismissAlert}
               onViewAllAlerts={() => setActiveTab('alerts')}
             />
 
-            {/* Dual-Provider Atmospheric Cross-Reference */}
-            <CrossReferenceCard
-              comparison={providerComparison}
-              hasApiKey={hasWeatherApiKey}
-              onRefresh={handleRunCheckNow}
-              isChecking={monitorStatus.isChecking}
-            />
-
-            {/* 3. Next 6 Hours Outlook Bar */}
-            <HourlyForecastBar
-              hourly={hourlyForecast}
-              windUnit={windUnit}
-              isLoading={isDashboardLoading}
-            />
-
-            {/* 4. Current Onsite Weather Conditions Grid */}
+            {/* 3. Current Onsite Weather Conditions */}
             <CurrentConditions
               weather={currentWeather}
               tempUnit={tempUnit}
@@ -645,55 +629,64 @@ export default function App() {
               isLoading={isDashboardLoading}
             />
 
-            {/* 5. Condensed activity risk summary (full matrix lives in the Activity tab) */}
-            {riskAssessment && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('activity')}
-                className="w-full text-left p-5 rounded-2xl bg-slate-900/80 border border-slate-800/80 shadow-sm hover:shadow-md hover:border-slate-600/60 transition-all group"
-              >
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-slate-900/80 to-slate-950/80 border border-slate-800/80 shadow-sm">
-                      <HardHat className="w-4 h-4 text-amber-400" />
+            {/* 4. Hourly Outlook */}
+            <HourlyForecastBar
+              hourly={hourlyForecast}
+              windUnit={windUnit}
+              isLoading={isDashboardLoading}
+            />
+
+            {/* 5. Quick cards: activities + lightning, side by side on desktop */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {riskAssessment && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('activity')}
+                  className="group flex h-full flex-col rounded-2xl border border-slate-800/70 bg-slate-900/60 p-5 text-left transition-colors hover:border-slate-700/70 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-slate-200">
+                        <HardHat
+                          className={`h-4 w-4 shrink-0 ${
+                            elevatedActivities.length > 0 ? 'text-amber-400' : 'text-slate-500'
+                          }`}
+                        />
+                        Activity risk
+                      </h3>
+                      <p className="mt-1 truncate text-xs text-slate-500">
+                        {elevatedActivities.length > 0
+                          ? `${elevatedActivities.length} at elevated risk: ${elevatedActivities
+                              .slice(0, 3)
+                              .map((a) => a.activity)
+                              .join(', ')}${elevatedActivities.length > 3 ? '…' : ''}`
+                          : 'All activities within safe thresholds.'}
+                      </p>
                     </div>
-                    <span className="text-sm font-semibold tracking-tight text-slate-100">Activity Risk Matrix</span>
+                    {elevatedActivities.length > 0 && (
+                      <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-300">
+                        {elevatedActivities.length}
+                      </span>
+                    )}
                   </div>
-                  <span className="text-xs font-medium text-slate-400 group-hover:text-slate-200 transition-colors">
+                  <span className="mt-auto pt-4 text-xs font-medium text-slate-500 transition-colors group-hover:text-slate-300">
                     View full matrix →
                   </span>
-                </div>
-                <p className="mt-2 text-xs text-slate-400">
-                  {elevatedActivities.length > 0
-                    ? `${elevatedActivities.length} activity(ies) at HIGH or CRITICAL risk: ${elevatedActivities
-                        .slice(0, 3)
-                        .map((a) => a.activity)
-                        .join(', ')}${elevatedActivities.length > 3 ? '...' : ''}`
-                    : 'All monitored activities within safe thresholds.'}
-                </p>
-              </button>
-            )}
+                </button>
+              )}
 
-            {/* Lightning & storm quick-tab (jumps to the lightning map layer) */}
-            <LightningQuickCard current={currentWeather} risk={riskAssessment} onOpenMap={openLightningMap} />
+              {/* Lightning & storm quick-tab (jumps to the lightning map layer) */}
+              <LightningQuickCard current={currentWeather} risk={riskAssessment} onOpenMap={openLightningMap} />
+            </div>
 
-      <div className="pt-2 border-t border-slate-800/70 text-xs text-slate-400">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span className="text-slate-300 font-bold uppercase tracking-wider">Status</span>
-          </div>
-          <div className="flex items-center gap-4 flex-wrap">
-            <span>Primary Ref: <strong className="text-emerald-300">{activeProvider}</strong></span>
-            <span>•</span>
-            <span>DB: <strong className="text-emerald-300">{STATIC_MODE ? 'IndexedDB (Browser)' : 'SQLite Local'}</strong></span>
-            <span>•</span>
-            <span>Cycle: <strong className="text-slate-200">{monitorInterval}m Auto</strong></span>
-            <span>•</span>
-            <span>Data: <strong className="text-cyan-300">{dataStatus}</strong></span>
-          </div>
-        </div>
-      </div>
+            {/* 6. Provider cross-reference — compact diagnostics, collapsed by default */}
+            <CrossReferenceCard
+              comparison={providerComparison}
+              hasApiKey={hasWeatherApiKey}
+              activeProvider={activeProvider}
+              onRefresh={handleRunCheckNow}
+              isChecking={monitorStatus.isChecking}
+            />
           </div>
         )}
 
@@ -771,25 +764,17 @@ export default function App() {
       />
 
       {/* Mandatory Section 93 Privacy Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 py-8 px-4 sm:px-6 text-center text-xs font-mono text-slate-500 select-none">
-        <div className="max-w-4xl mx-auto space-y-2">
-          <div className="flex items-center justify-center gap-2 text-slate-400 font-bold uppercase tracking-widest">
-            <ShieldCheck className="w-4 h-4 text-amber-500" />
-            <span>PRIVATE LOCAL SYSTEM</span>
+      <footer className="mt-auto border-t border-slate-900 bg-slate-950 py-6 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-600">
+          <div className="flex items-center gap-1.5 text-slate-500">
+            <ShieldCheck className="h-3.5 w-3.5 text-amber-500/80" />
+            <span>Private local system — no advertising, analytics or tracking.</span>
           </div>
-          <p className="text-slate-500">
+          <p className="text-slate-600 text-center sm:text-right">
             {STATIC_MODE
-              ? 'Weather telemetry retrieved directly from the open Open-Meteo service in your browser.'
-              : 'Weather telemetry retrieved from WeatherAPI (primary reference) with Open-Meteo cross-reference and fallback.'}
+              ? 'Weather from Open-Meteo · data stored in your browser (IndexedDB)'
+              : 'WeatherAPI + Open-Meteo · data stored locally in SQLite with backup rotation'}
           </p>
-          <p className="text-slate-500">
-            {STATIC_MODE
-              ? 'Application data is stored locally in your browser (IndexedDB). No server, no advertising, no analytics, no tracking.'
-              : 'Application data is stored locally in SQLite with automated backup rotation. No advertising, no analytics, no tracking.'}
-          </p>
-          <div className="pt-2 text-[11px] text-slate-600">
-            Construction Weather Monitor · Role-Based Secure Installation
-          </div>
         </div>
       </footer>
     </div>
