@@ -516,7 +516,10 @@ export async function getOwnerInfo(): Promise<{ email: string; isConfigured: boo
   const owners = (await getAllUsers()).filter((u) => u.role === 'OWNER');
   const email = owners[0]?.email || process.env.OWNER_EMAIL || null;
   if (!email) return null;
-  const isConfigured = await isOwnerPasswordConfigured();
+  // An existing OWNER account is itself proof that setup has completed. This
+  // also covers installations migrated from the legacy single-owner table,
+  // which never wrote the `owner_configured` setting.
+  const isConfigured = (await isOwnerPasswordConfigured()) || owners.length > 0;
   return { email, isConfigured };
 }
 
@@ -561,7 +564,7 @@ export async function getUserById(id: string): Promise<UserAccount | null> {
 async function getUserCredentialByEmail(email: string) {
   const db = await getDb();
   const res = db.exec(
-    `SELECT id, email, display_name, role, password_hash, salt, active FROM users WHERE email = ? LIMIT 1`,
+    `SELECT id, email, display_name, role, password_hash, salt, active FROM users WHERE email = ? COLLATE NOCASE LIMIT 1`,
     [email]
   );
   if (!res[0] || !res[0].values[0]) return null;
@@ -660,7 +663,7 @@ export async function createUserAccount(input: {
   db.run(
     `INSERT INTO users (id, email, display_name, role, password_hash, salt, active, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    [id, input.email, input.displayName || null, input.role, hash, salt, now, now]
+    [id, input.email.trim(), input.displayName || null, input.role, hash, salt, now, now]
   );
   persistDb();
 
@@ -708,7 +711,7 @@ export async function updateUserCredentials(id: string, email: string, newPasswo
   const hash = hashPasswordWithSalt(newPassword, salt);
   const now = new Date().toISOString();
   db.run('UPDATE users SET email = ?, password_hash = ?, salt = ?, updated_at = ? WHERE id = ?', [
-    email,
+    email.trim(),
     hash,
     salt,
     now,
@@ -779,7 +782,7 @@ export async function getUserMfaByEmail(
   email: string
 ): Promise<{ id: string; email: string; mfaEnabled: boolean; mfaSecret: string | null } | null> {
   const db = await getDb();
-  const res = db.exec('SELECT id, email, mfa_enabled, mfa_secret FROM users WHERE email = ? LIMIT 1', [email]);
+  const res = db.exec('SELECT id, email, mfa_enabled, mfa_secret FROM users WHERE email = ? COLLATE NOCASE LIMIT 1', [email]);
   if (!res[0] || !res[0].values[0]) return null;
   const v = res[0].values[0];
   return {
@@ -863,6 +866,17 @@ export async function deleteSessionsForUser(userId: string): Promise<number> {
   db.run('DELETE FROM sessions WHERE user_id = ?', [userId]);
   persistDb();
   return count;
+}
+
+/**
+ * Removes every persisted session. Used after restoring a database snapshot:
+ * tokens minted against the replaced database must never become valid again on
+ * a later restart.
+ */
+export async function deleteAllSessions(): Promise<void> {
+  const db = await getDb();
+  db.run('DELETE FROM sessions');
+  persistDb();
 }
 
 export async function loadActiveSessions(): Promise<StoredSession[]> {
