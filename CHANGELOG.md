@@ -8,6 +8,17 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Observable persistence health.** A failed SQLite write is now recorded and
+  surfaced through `GET /api/health` (`databaseStatus`, `databasePersistError`)
+  and the `cwm_database_persist_healthy` Prometheus gauge. Previously the health
+  response asserted `databaseStatus: 'HEALTHY'` unconditionally, which hid the
+  exact silent data-loss case the guide forbids.
+- **Property-based tests.** The risk engine is now checked for determinism
+  (identical inputs → identical assessment), monotonicity (a stronger hazard
+  never ranks safer) and the unconditional safety disclaimer.
+- `docs/guide-compliance.md` — a rule-by-rule record of how the project meets
+  the operating guide, including every deliberate adaptation to a guide rule.
+
 - **CI format check.** A dependency-free hygiene checker
   (`scripts/check-format.mjs`, `npm run format:check`) enforces no CRLF, no
   merge markers, a final newline, spaces-not-tabs in code, and no trailing

@@ -7,6 +7,39 @@ questions live in `docs/project-brief.md` and
 
 ---
 
+## D-20 — Persistence failures are observable (2026-10-23)
+
+`persistDb()` records a failed write (`getPersistenceStatus()`) and exposes it
+through `/api/health.databaseStatus` and the `cwm_database_persist_healthy`
+metric, instead of reporting `HEALTHY` unconditionally.
+
+**Why:** the guide requires "never lose user data" and no fake success. A
+swallowed write failure leaves the SQLite file behind the in-memory database,
+which is exactly the silent data loss the rule forbids — and the previous health
+response asserted `databaseStatus: 'HEALTHY'` regardless.
+
+## D-19 — Use-case layer instead of a command layer (2026-10-23)
+
+The guide prefers command-centric architecture. This app is an HTTP API plus a
+polling loop, so mutations are service functions with explicit inputs
+(`riskEngine`, `alertEngine`, `weatherService`, `monitoringService`) and every
+route handler is a thin adapter.
+
+**Why:** it is the "clear use-case layer" the same rule allows, keeps the domain
+headless and directly testable without HTTP, and avoids a command indirection
+that would add ceremony without a dispatcher to justify it.
+
+## D-18 — Platform targets: web plus all desktop OSes via Node/Docker (2026-10-23)
+
+The guide's default stack is Rust + egui/eframe. Discovery fixed
+TypeScript/React/Express, so "all practical platforms" is delivered as a web
+application (server build and GitHub Pages static build) plus Windows, macOS and
+Linux via Node and the container image, with a CI matrix on all three.
+
+**Why:** the discovery answers are the project's source of truth; re-platforming
+to satisfy a default recommendation would discard a working system. This records
+the adaptation rather than silently overriding the guide.
+
 ## D-17 — Format check via a dependency-free hygiene script (2026-10-23)
 
 `scripts/check-format.mjs` implements the guide's "format check" CI requirement

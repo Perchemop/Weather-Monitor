@@ -40,6 +40,9 @@ Automated verification runs in GitHub Actions (`npm test`): 53 unit/system tests
 | R-26c | Cross-platform build scripts | `package.json`, `vite.config.ts` | Windows/macOS/Linux matrix | Met |
 | R-27 | Operating-guide tracking documents | this file and the `docs/` set | review | Met |
 | R-28 | Licence and attribution recorded | `LICENSE`, `ATTRIBUTION.md` | review | Met |
+| R-29 | Persistence failures are visible (no silent data loss) | `db.ts` persistence status, `server.ts` health + metrics | system + api tests | Met |
+| R-30 | Property-based checks (determinism, monotonicity, disclaimer) | `src/tests/system.test.ts` | system tests | Met |
+| R-31 | Operating-guide rules tracked, with adaptations recorded | `docs/guide-compliance.md`, `DECISIONS.md` | review | Met |
 
 ## Gaps / planned
 
