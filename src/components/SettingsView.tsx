@@ -22,7 +22,7 @@ import {
   LogOut,
   Monitor
 } from 'lucide-react';
-import { OwnerSettings, RiskThresholds, SecretsStatus, SessionInfo } from '../types';
+import { OwnerSettings, RiskThresholds, SecretsStatus, SessionInfo, UserRole } from '../types';
 import { useToast } from './ToastProvider';
 import { apiFetch } from '../utils/api';
 import { STATIC_MODE } from '../static/mode';
@@ -31,6 +31,11 @@ import { emailRelayConfigured } from '../static/emailRelay';
 
 interface SettingsViewProps {
   onSettingsSaved?: () => void;
+  /**
+   * The signed-in role. Only OWNERs may change site configuration; every role
+   * owns its own password, MFA, sessions and push preferences.
+   */
+  userRole?: UserRole;
 }
 
 /**
@@ -56,9 +61,12 @@ function describeUserAgent(ua: string | null): string {
   return os ? `${browser} on ${os}` : browser;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, userRole = 'OWNER' }) => {
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<'general' | 'thresholds' | 'monitoring' | 'smtp' | 'storage' | 'security'>('general');
+  const isOwner = userRole === 'OWNER';
+  const [activeTab, setActiveTab] = useState<'general' | 'thresholds' | 'monitoring' | 'smtp' | 'storage' | 'security'>(
+    isOwner ? 'general' : 'security'
+  );
   const [settings, setSettings] = useState<OwnerSettings | null>(null);
   const [smtpConfigured, setSmtpConfigured] = useState(false);
   const [secretsStatus, setSecretsStatus] = useState<SecretsStatus | null>(null);
@@ -123,12 +131,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
   // Authorized API helper (cookie auth + CSRF handled centrally)
   useEffect(() => {
     fetchSettings();
-    fetchBackups();
+    // Backups are an OWNER-only server resource; requesting them as another
+    // role would only produce noise.
+    if (isOwner) fetchBackups();
     fetchMfaStatus();
     detectPushState();
     fetchPushPreferences();
     fetchSessions();
   }, []);
+
+  // If the account is not an owner, keep it on the self-service Security tab.
+  useEffect(() => {
+    if (!isOwner && activeTab !== 'security') setActiveTab('security');
+  }, [isOwner, activeTab]);
   const fetchSettings = async () => {
     try {
       const res = await apiFetch('/api/settings');
@@ -649,8 +664,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
   };
 
   // SMTP, storage/backup and account security are server concerns; the static
-  // browser build has no such backend, so those tabs are omitted there.
+  // browser build has no such backend, so those tabs are omitted there. Site
+  // configuration tabs are further restricted to the OWNER role, mirroring the
+  // server's OWNER-only settings route.
   const serverOnlyTabs = new Set(['smtp', 'storage', 'security']);
+  const ownerOnlyTabs = new Set(['general', 'thresholds', 'monitoring', 'smtp', 'storage']);
   const tabs = [
     { id: 'general', label: 'General & Units', icon: Sliders },
     { id: 'thresholds', label: 'Safety Thresholds', icon: Shield },
@@ -658,7 +676,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
     { id: 'smtp', label: 'Email Gateway', icon: Mail },
     { id: 'storage', label: 'Storage & Backup', icon: Database },
     { id: 'security', label: 'Security & Auth', icon: Lock }
-  ].filter((tab) => !STATIC_MODE || !serverOnlyTabs.has(tab.id));
+  ].filter(
+    (tab) =>
+      (!STATIC_MODE || !serverOnlyTabs.has(tab.id)) &&
+      (isOwner || !ownerOnlyTabs.has(tab.id))
+  );
 
   return (
     <div className="space-y-6 pb-20">
@@ -672,29 +694,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved }) =
             </h3>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Configure onsite microclimate risk thresholds, autonomous monitoring intervals, and database hygiene.
+            {isOwner
+              ? 'Configure onsite microclimate risk thresholds, autonomous monitoring intervals, and database hygiene.'
+              : 'Manage your own account security, two-factor authentication, push alerts and signed-in devices.'}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleRestoreDefaultsConfirm}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono border border-slate-700 transition-colors cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-            <span>Reset Defaults</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveSettings}
-            disabled={isSaving}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold shadow-sm transition-all disabled:opacity-50 cursor-pointer"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
-          </button>
-        </div>
+        {isOwner && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleRestoreDefaultsConfirm}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono border border-slate-700 transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+              <span>Reset Defaults</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveSettings}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Internal Navigation Tabs */}
