@@ -60,6 +60,52 @@ export function getWeatherDescription(code: number): string {
   return WMO_CODE_MAP[code] || `Condition code ${code}`;
 }
 
+/**
+ * Maps WeatherAPI condition codes onto the WMO codes the safety engines use.
+ *
+ * WeatherAPI's clear-sky code is 1000 and its thunderstorm codes start at 1087,
+ * but the risk engine and alert engine evaluate numeric thresholds such as
+ * `weatherCode >= 95`. Passing WeatherAPI codes through unmapped made every
+ * clear day register as an active thunderstorm whenever the WeatherAPI key was
+ * configured. This mapping is total: unmapped codes collapse to the closest
+ * rain/snow family and never silently into a thunderstorm class.
+ */
+export function weatherApiCodeToWmo(code: number): number {
+  if (typeof code !== 'number' || isNaN(code)) return 0;
+  const map: Record<number, number> = {
+    1000: 0, // Clear / Sunny
+    1003: 2, // Partly cloudy
+    1006: 3, // Cloudy
+    1009: 3, // Overcast
+    1030: 45, // Mist
+    1135: 45, // Fog
+    1147: 48, // Freezing fog
+    // Drizzle family
+    1150: 51, 1153: 53, 1168: 56, 1171: 57, 1072: 56,
+    // Rain (increasing intensity)
+    1063: 61, 1180: 61, 1183: 61, 1186: 63, 1189: 63, 1192: 65, 1195: 65,
+    // Freezing rain
+    1198: 66, 1201: 67, 1204: 66, 1207: 67,
+    // Sleet / freezing rain (WeatherAPI sleet family)
+    1069: 66, 1249: 66, 1252: 67,
+    // Snow (increasing intensity)
+    1066: 71, 1210: 71, 1213: 73, 1216: 75, 1219: 75, 1255: 73,
+    // Snow showers / heavy snow / blowing snow / blizzard
+    1222: 75, 1225: 75, 1114: 75, 1117: 75,
+    // Snow grains / ice pellets
+    1237: 77, 1261: 77, 1264: 77, 1258: 85,
+    // Rain showers
+    1240: 80, 1243: 81, 1246: 82,
+    // Thunderstorm family (must land >= 95 for the safety engines)
+    1087: 95, 1273: 95, 1276: 95, 1279: 96, 1282: 99
+  };
+  const mapped = map[code];
+  if (mapped !== undefined) return mapped;
+  // Conservative fallback: treat unknown heavy-precip codes as light rain and
+  // unknown thunder-adjacent codes (never happens today) as a thunderstorm.
+  return code >= 1270 ? 95 : 61;
+}
+
 const parseSafeNumber = (val: any, fallback = 0): number => {
   if (val === null || val === undefined || isNaN(Number(val))) return fallback;
   return Number(val);
@@ -70,6 +116,24 @@ const validTimestamp = (t: string | undefined): string => {
   const d = new Date(t);
   return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
 };
+
+/**
+ * Interprets an Open-Meteo local-time string as the true instant.
+ *
+ * Open-Meteo returns wall-clock times in the requested (or auto-detected)
+ * timezone plus the location's `utc_offset_seconds`. `new Date("2026-10-23T12:00")`
+ * would parse that wall time in the *server's* timezone, shifting every current
+ * and hourly value whenever the server does not share the site's clock. Parsing
+ * the wall time as UTC and subtracting the offset recovers the real instant.
+ */
+function openMeteoTimestamp(value: unknown, utcOffsetSeconds: number, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?/);
+  if (!match) return fallback;
+  const wallMs = Date.parse(`${match[1]}T${match[2]}:${match[3] || '00'}Z`);
+  if (isNaN(wallMs)) return fallback;
+  return new Date(wallMs - utcOffsetSeconds * 1000).toISOString();
+}
 
 /**
  * 1. Fetch from WeatherAPI (User's Main Reference Provider)
@@ -140,7 +204,7 @@ export function normalizeWeatherApiData(
     rainAmount: Math.max(0, parseSafeNumber(c.precip_mm, 0)),
     rainProbability: parseSafeNumber(c.chance_of_rain, 0),
     uvIndex: parseSafeNumber(c.uv, 0),
-    weatherCode: parseSafeNumber(c.condition?.code, 1000),
+    weatherCode: weatherApiCodeToWmo(parseSafeNumber(c.condition?.code, 1000)),
     weatherDescription: c.condition?.text || 'Clear',
     pressure: parseSafeNumber(c.pressure_mb, 1013),
     visibility: parseSafeNumber(c.vis_km, 10) * 1000,
@@ -171,8 +235,10 @@ export function normalizeWeatherApiData(
         }
       }
 
+      const dayWmo = weatherApiCodeToWmo(parseSafeNumber(dayData.condition?.code, 1000));
+
       let dayRisk: RiskLevel = 'LOW';
-      if (maxGust >= 65 || precipSum >= 25 || maxTemp >= 40) {
+      if (maxGust >= 65 || precipSum >= 25 || maxTemp >= 40 || dayWmo >= 95) {
         dayRisk = 'CRITICAL';
       } else if (maxGust >= 50 || precipSum >= 10 || maxTemp >= 35 || rainProb >= 80) {
         dayRisk = 'HIGH';
@@ -188,7 +254,7 @@ export function normalizeWeatherApiData(
         precipitationSum: precipSum,
         maxWindSpeed: maxWind,
         maxWindGust: maxGust,
-        weatherCode: parseSafeNumber(dayData.condition?.code, 1000),
+        weatherCode: weatherApiCodeToWmo(parseSafeNumber(dayData.condition?.code, 1000)),
         weatherDescription: dayData.condition?.text || 'Clear',
         riskLevel: dayRisk
       });
@@ -202,9 +268,10 @@ export function normalizeWeatherApiData(
           const hRainProb = parseSafeNumber(h.chance_of_rain, 0);
           const precip = parseSafeNumber(h.precip_mm, 0);
           const uv = parseSafeNumber(h.uv, 0);
+          const wmo = weatherApiCodeToWmo(parseSafeNumber(h.condition?.code, 1000));
 
           let risk: RiskLevel = 'LOW';
-          if (gusts >= 65 || precip >= 15 || temp >= 40) {
+          if (gusts >= 65 || precip >= 15 || temp >= 40 || wmo >= 95) {
             risk = 'CRITICAL';
           } else if (gusts >= 50 || precip >= 6 || temp >= 35 || hRainProb >= 80) {
             risk = 'HIGH';
@@ -226,7 +293,7 @@ export function normalizeWeatherApiData(
             windGusts: gusts,
             rainProbability: hRainProb,
             precipitation: precip,
-            weatherCode: parseSafeNumber(h.condition?.code, 1000),
+            weatherCode: wmo,
             weatherDescription: h.condition?.text || 'Clear',
             uvIndex: uv,
             riskLevel: risk
@@ -319,9 +386,12 @@ export function validateAndNormalizeOpenMeteoData(
 
   const currentRaw = raw.current;
   const weatherCode = parseSafeNumber(currentRaw.weather_code, 0);
+  // Open-Meteo reports local wall-clock times plus the site's UTC offset.
+  const utcOffsetSeconds = parseSafeNumber(raw.utc_offset_seconds, 0);
+  const nowIso = new Date().toISOString();
 
   const current: CurrentWeather = {
-    timestamp: validTimestamp(currentRaw.time),
+    timestamp: openMeteoTimestamp(currentRaw.time, utcOffsetSeconds, nowIso),
     temperature: parseSafeNumber(currentRaw.temperature_2m, 20),
     feelsLike: parseSafeNumber(currentRaw.apparent_temperature, parseSafeNumber(currentRaw.temperature_2m, 20)),
     humidity: Math.min(100, Math.max(0, parseSafeNumber(currentRaw.relative_humidity_2m, 50))),
@@ -349,7 +419,7 @@ export function validateAndNormalizeOpenMeteoData(
 
     for (let i = 0; i < count; i++) {
       const timeStr = times[i];
-      const timeDate = new Date(timeStr);
+      const timeDate = new Date(openMeteoTimestamp(timeStr, utcOffsetSeconds, nowIso));
       if (isNaN(timeDate.getTime())) continue;
 
       const temp = parseSafeNumber(hourlyRaw.temperature_2m?.[i], current.temperature);
