@@ -55,12 +55,21 @@ same policy by hiding tabs an operator cannot use.
 | View dashboard, forecast, history, reports, alerts | ✅ | ✅ | ✅ |
 | Run manual checks, dismiss alerts, manage locations | — | ✅ | ✅ |
 | System health diagnostics | — | ✅ | ✅ |
-| Settings, safety thresholds, email gateway | — | — | ✅ |
-| User & role management, data purge, backups | — | — | ✅ |
+| Own password, TOTP MFA, active sessions, push preferences | ✅ | ✅ | ✅ |
+| Safety thresholds, monitor cycle, email gateway, storage & backups | — | — | ✅ |
+| User & role management, data purge | — | — | ✅ |
 
 - Accounts are stored per-user in SQLite with individual Scrypt-hashed passwords.
 - The **last active Owner** cannot be demoted, deactivated, or deleted.
 - Owners may reset any operator's password; operators may change their own.
+- **Settings is available to every signed-in role**: the Security & Auth tab
+  (password, MFA, sessions, push) is self-service, while the site-configuration
+  tabs are hidden for Manager and Viewer to mirror the server's OWNER-only
+  settings route.
+- Role, activation and password changes take effect on live sessions
+  immediately; a password change signs out the account's other devices.
+- Initial setup is a **one-time bootstrap**: after it completes,
+  `POST /api/auth/setup` returns `409` and cannot be replayed.
 - Existing single-user installations are migrated automatically: the legacy
   `auth_owner` record becomes the first `OWNER` account on first boot. The
   legacy table is retired (dropped) once migrated.
@@ -360,24 +369,29 @@ The server will start on port 3000 (`http://localhost:3000`).
 ### Running the Test Suites
 ```bash
 npm test              # both suites
-npm run test:unit     # deterministic engine + utilities (34 checks)
-npm run test:api      # HTTP integration surface (22 checks)
+npm run test:unit     # deterministic engine + utilities (53 checks)
+npm run test:api      # HTTP integration surface (28 checks)
 ```
-The suite is now a **56-point** verification run split across two layers:
+The suite is now an **81-point** verification run split across two layers:
 
-- **Unit suite** — deterministic risk calculation, secret redaction, daylight
-  savings timezone alignment, data freshness, Scrypt hashing, snapshot backups,
-  security headers, rate limiting, role hierarchy, the multi-user lifecycle,
-  password policy, TOTP, persistent sessions, the TTL cache, data retention, and
-  per-user push preferences.
+- **Unit suite** — deterministic risk calculation (including UV level handling
+  and next-6-hour forecast windowing), WeatherAPI→WMO condition mapping,
+  Open-Meteo timezone-correct timestamps, secret redaction, data freshness,
+  Scrypt hashing, snapshot backups, security headers, rate limiting, role
+  hierarchy, the multi-user lifecycle, password policy, TOTP, persistent
+  sessions, the TTL cache, data retention, rain accumulation, and per-user push
+  preferences.
 - **HTTP integration suite** — boots the real Express app in-process against an
   isolated temporary data directory and exercises the security surface over
   real HTTP: `/healthz`, account-enumeration resistance, cookie-only sessions,
-  CSRF double-submit enforcement, header-token CSRF exemption, per-account
-  lockout, the full TOTP login flow, RBAC 401/403 gates, active-session listing
-  and revocation (including cross-user isolation), settings validation, the Web
-  Push subscription lifecycle and preference access control, traversal-safe backup
-  restore, retention, and Prometheus `/metrics` access control.
+  CSRF double-submit enforcement, header-token CSRF exemption, the one-time
+  setup guard, case-insensitive login, per-account lockout, the full TOTP login
+  flow, RBAC 401/403 gates, immediate role-change enforcement, active-session
+  listing and revocation (including cross-user isolation), password-change
+  device revocation, settings validation, the Web Push subscription lifecycle
+  and preference access control, traversal-safe backup restore, retention,
+  integrity checks that unknown alerts/locations/data targets are rejected
+  rather than silently accepted, and Prometheus `/metrics` access control.
 
 Tests never touch your working `./data` directory — they run in a fresh temp
 directory via the `DATA_DIR` override.

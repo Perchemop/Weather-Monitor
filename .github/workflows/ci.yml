@@ -6,9 +6,24 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: CI only needs to read the repository.
+permissions:
+  contents: read
+
+# A new push to the same ref supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    name: build-test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -33,9 +48,7 @@ jobs:
 
       - name: Verify build output
         run: |
-          test -f dist/server.cjs
-          test -f dist/index.html
-          test -f dist/sw.js
+          node -e "const fs=require('fs');for (const f of ['dist/server.cjs','dist/index.html','dist/sw.js']) { if(!fs.existsSync(f)) { console.error('missing '+f); process.exit(1);} }"
 
       - name: Static build (GitHub Pages variant)
         env:
@@ -44,12 +57,38 @@ jobs:
 
       - name: Verify static build output
         run: |
-          test -f dist-static/index.html
-          test -d dist-static/assets
+          node -e "const fs=require('fs');if(!fs.existsSync('dist-static/index.html')||!fs.existsSync('dist-static/assets')){console.error('missing static output');process.exit(1);}"
+
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### build-test — ${{ matrix.os }}"
+            echo ""
+            echo "| Step | Outcome |"
+            echo "| --- | --- |"
+            echo "| type-check, tests, build, static build | see job logs |"
+            echo ""
+            echo "Test suite: 53 system + 28 integration = 81 automated checks."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build artefacts (Linux)
+        if: always() && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: |
+            dist/
+            dist-static/
+          if-no-files-found: warn
+          retention-days: 7
 
   docker:
+    name: docker
     runs-on: ubuntu-latest
     needs: build-test
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
