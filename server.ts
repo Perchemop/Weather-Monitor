@@ -63,6 +63,8 @@ import {
   loadActiveSessions,
   pruneExpiredSessions,
   touchSession,
+  // Persistence health
+  getPersistenceStatus,
   // Web push
   countPushSubscriptions,
   // Metrics aggregates
@@ -454,7 +456,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
 
   // ----------------- LIVENESS (UNAUTHENTICATED) -----------------
   // Deliberately minimal and unauthenticated so container orchestrators and
-  // load balancers can probe the process without credentials.
+  // load balancers can probe the process without credentials. Readiness is
+  // reported separately by /api/health, which also exposes persistence state.
   app.get('/healthz', (_req: Request, res: Response) => {
     res.json({ status: 'ok', uptimeSeconds: Math.floor(process.uptime()) });
   });
@@ -540,6 +543,11 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         weatherApiConfigured ? 1 : 0
       );
       gauge('cwm_smtp_configured', '1 when SMTP delivery is configured, else 0.', smtpConfigured ? 1 : 0);
+      gauge(
+        'cwm_database_persist_healthy',
+        '1 while the SQLite file is being written successfully, else 0 (data-loss risk).',
+        getPersistenceStatus().healthy ? 1 : 0
+      );
       gauge(
         'cwm_settings_monitor_interval_minutes',
         'Configured monitoring interval in minutes.',
@@ -1412,10 +1420,15 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
 
     const mem = process.memoryUsage();
     const uptimeSec = Math.floor(process.uptime());
+    // Database health is reported from the real write path. A failed persist
+    // must never be reported as HEALTHY: the on-disk file would be missing the
+    // latest changes (guide §3: never lose user data; no fake success).
+    const persistence = getPersistenceStatus();
 
     res.json({
       weatherApiStatus: monitor.status === 'ERROR' ? 'DEGRADED' : 'HEALTHY',
-      databaseStatus: 'HEALTHY',
+      databaseStatus: persistence.healthy ? 'HEALTHY' : 'ERROR',
+      databasePersistError: persistence.lastError,
       monitorStatus: monitor.status,
       emailStatus: smtpConfigured ? 'CONFIGURED' : 'NOT_CONFIGURED',
       lastCheckTime: monitor.lastCheckTime,
