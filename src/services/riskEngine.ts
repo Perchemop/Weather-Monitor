@@ -197,7 +197,9 @@ export function calculateDeterministicRisk(
       severity: 'HIGH'
     });
     highestScore = Math.max(highestScore, 60);
-    if (highestLevel === 'LOW') highestLevel = 'MODERATE';
+    // Extreme UV is a HIGH health hazard; it must not be flattened to MODERATE,
+    // nor may it override an already-critical wind or storm condition.
+    if (highestLevel !== 'CRITICAL') highestLevel = 'HIGH';
   } else if (current.uvIndex >= thresholds.uvWarning) {
     factors.push({
       id: 'uv-very-high',
@@ -207,6 +209,10 @@ export function calculateDeterministicRisk(
       threshold: `>= ${thresholds.uvWarning}`,
       severity: 'MODERATE'
     });
+    // A listed factor must also move the overall level/score, otherwise the
+    // dashboard shows a hazard the headline risk level hides.
+    highestScore = Math.max(highestScore, 40);
+    if (highestLevel === 'LOW') highestLevel = 'MODERATE';
   }
 
   // 7. Thunderstorm / Severe Weather Codes (WMO 95, 96, 99)
