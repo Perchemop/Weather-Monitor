@@ -5,11 +5,14 @@ detailed history lives in `CHANGELOG.md`.
 
 ## Where we are
 
-- **Branch:** `opencode/ci` (2 commits ahead of `main` at the start of this
-  work, now further ahead), open pull request into `main`.
-- **CI:** green in GitHub Actions on every slice (type-check, 81 tests,
-  production build, static build, Docker build). All verification runs in CI,
-  never on the developer machine.
+- **Branch:** `opencode/ci`, with an open pull request (#1) into `main`. Nothing
+  is merged until a human reviews it.
+- **CI:** green on every slice. The workflow now runs `format-check`, a
+  multi-OS `build-test` matrix (Windows, macOS, Linux — type-check, 81 tests,
+  production build, static build with artefact upload), and `docker`.
+- **Operating model:** the guide's CTO.new-style flow —
+  **Chat (plan) → Task (execute) → Pull Request (review)**; see
+  `docs/development.md`.
 - **Release readiness:** feature-complete against `IMPLEMENTATION_PLAN.md`;
   current focus is correctness, security hardening and documentation.
 
@@ -36,8 +39,10 @@ UI permission mirroring.
 
 ## Next
 
-1. Merge the open PR once the reviewer is satisfied.
-2. Optional follow-ups recorded in `docs/assumptions-and-questions.md`.
+1. Merge the open PR once a human has reviewed it (guide §9: trust but verify).
+2. Optional follow-ups recorded in `docs/assumptions-and-questions.md`
+   (licence confirmation, multi-arch images, SMS channel, CSV export, proxy hop
+   count).
 3. Keep `docs/parity.md` and `REQUIREMENTS_TRACEABILITY.md` current as slices land.
 
 ## Active provider / model map
