@@ -3,12 +3,15 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
   // The static (serverless) build targets GitHub Pages and runs entirely in the
   // browser. It is emitted to a separate output directory so it never clobbers
   // the server-hosted `dist/` bundle, and it honours a configurable base path
   // (e.g. '/Weather-Monitor/' when served from a project subpath).
-  const isStatic = process.env.VITE_APP_MODE === 'static';
+  //
+  // `--mode static` is the portable trigger (works on Windows too); the
+  // VITE_APP_MODE env var is still honoured for existing CI/pages setups.
+  const isStatic = mode === 'static' || process.env.VITE_APP_MODE === 'static';
   const base = process.env.VITE_BASE || '/';
 
   return {
