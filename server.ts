@@ -8,6 +8,9 @@ import { createServer as createViteServer } from 'vite';
 import {
   getDb,
   getOwnerInfo,
+  isOwnerPasswordConfigured,
+  persistDb,
+  deleteAllSessions,
   getAllLocations,
   getDefaultLocation,
   saveLocation,
@@ -201,6 +204,43 @@ function getSession(token?: string): SessionEntry | undefined {
   return entry;
 }
 
+/**
+ * Mirrors account changes into live sessions so a role change, deactivation or
+ * rename takes effect on the very next request instead of after the session
+ * expires. Deactivated or deleted accounts have every session revoked.
+ */
+async function reconcileUserSessions(userId: string): Promise<void> {
+  const user = await getUserById(userId);
+  if (!user || !user.active) {
+    for (const [token, entry] of activeSessions) {
+      if (entry.userId === userId) activeSessions.delete(token);
+    }
+    await deleteSessionsForUser(userId);
+    return;
+  }
+  for (const [token, entry] of activeSessions) {
+    if (entry.userId !== userId) continue;
+    entry.email = user.email;
+    entry.role = user.role;
+    entry.displayName = user.displayName;
+    saveSession({ token, ...entry }).catch((err) =>
+      logger.warn('session_sync_failed', { error: String(err) })
+    );
+  }
+}
+
+/** Revokes every live session for a user except an optional current token. */
+async function revokeUserSessions(userId: string, keepToken?: string): Promise<void> {
+  const doomed: string[] = [];
+  for (const [token, entry] of activeSessions) {
+    if (entry.userId === userId && token !== keepToken) doomed.push(token);
+  }
+  for (const token of doomed) {
+    activeSessions.delete(token);
+    await deleteSession(token).catch(() => {});
+  }
+}
+
 // Authentication middleware - verifies signed session cookie, x-session-token, or Bearer auth
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const session = getSession(extractSessionToken(req));
@@ -323,9 +363,15 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
 
   const app = express();
 
-  // Disable fingerprinting and trust the first proxy hop for accurate client IPs.
+  // Disable fingerprinting. Proxy trust is opt-in: trusting a forwarded header
+  // by default would let any direct client spoof its IP and evade the
+  // per-account lockout and rate limits. Set TRUST_PROXY when (and only when)
+  // the app actually sits behind a trusted reverse proxy.
   app.disable('x-powered-by');
-  app.set('trust proxy', 1);
+  const trustProxy = process.env.TRUST_PROXY;
+  if (trustProxy && trustProxy.trim()) {
+    app.set('trust proxy', /^\d+$/.test(trustProxy.trim()) ? Number(trustProxy.trim()) : trustProxy.trim());
+  }
 
   // Apply baseline security headers to every response. HSTS is opt-in because
   // the default deployment is a plain-HTTP local enclave.
@@ -365,11 +411,19 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     await pruneExpiredSessions();
     const stored = await loadActiveSessions();
     for (const s of stored) {
+      // A persisted session is only valid while its account still exists and is
+      // active; roles are re-read so a downgrade applied while the process was
+      // down cannot be carried forward from a stale snapshot.
+      const user = await getUserById(s.userId);
+      if (!user || !user.active) {
+        await deleteSession(s.token).catch(() => {});
+        continue;
+      }
       activeSessions.set(s.token, {
-        userId: s.userId,
-        email: s.email,
-        role: s.role,
-        displayName: s.displayName,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        displayName: user.displayName,
         createdAt: s.createdAt,
         expiresAt: s.expiresAt,
         userAgent: s.userAgent,
@@ -534,6 +588,15 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   });
 
   app.post('/api/auth/setup', authLimiter, async (req: Request, res: Response) => {
+    // Setup is a one-time bootstrap. Without this guard an unauthenticated
+    // caller could re-run it at any time and overwrite the primary OWNER's
+    // credentials (a full account takeover).
+    const existingOwners = (await getAllUsers()).filter((u) => u.role === 'OWNER');
+    if ((await isOwnerPasswordConfigured()) || existingOwners.length > 0) {
+      res.status(409).json({ error: 'Initial setup is already complete. Sign in instead.' });
+      return;
+    }
+
     const { password, email } = req.body;
     const strength = validatePasswordStrength(password);
     if (!strength.valid) {
@@ -734,18 +797,29 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       return;
     }
 
-    await updateUserCredentials(session.userId, newEmail || session.email, newPassword);
-    // Keep the live session in sync with the new email.
-    const token = extractSessionToken(req);
-    const entry = token ? activeSessions.get(token) : undefined;
-    if (entry && newEmail) {
-      entry.email = newEmail;
-      const stored = { token, ...entry };
-      saveSession(stored).catch(() => {});
+    const nextEmail = typeof newEmail === 'string' && newEmail.trim() ? newEmail.trim() : undefined;
+    if (nextEmail) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+        res.status(400).json({ error: 'A valid email address is required.' });
+        return;
+      }
+      const clash = (await getAllUsers()).find(
+        (u) => u.id !== session.userId && u.email.toLowerCase() === nextEmail.toLowerCase()
+      );
+      if (clash) {
+        res.status(409).json({ error: 'Another account already uses that email address.' });
+        return;
+      }
     }
 
+    await updateUserCredentials(session.userId, nextEmail || session.email, newPassword);
+    // Keep the current device signed in with fresh account data, and revoke
+    // every other session: a credential change must invalidate stale devices.
+    await reconcileUserSessions(session.userId);
+    await revokeUserSessions(session.userId, extractSessionToken(req));
+
     await addAuditLog('PASSWORD_CHANGED', `Password updated for ${session.email}`);
-    res.json({ success: true, message: 'Password updated successfully.' });
+    res.json({ success: true, message: 'Password updated successfully. Other devices were signed out.' });
   });
 
   // ----------------- MULTI-FACTOR AUTHENTICATION (TOTP) -----------------
@@ -857,6 +931,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         res.status(409).json({ error: 'Cannot demote the last remaining OWNER account.' });
         return;
       }
+      await reconcileUserSessions(id);
       await addAuditLog('USER_ROLE_CHANGED', `${actor.email} set ${target.email} role to ${role}`);
     }
 
@@ -870,6 +945,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         res.status(409).json({ error: 'Cannot deactivate the last remaining OWNER account.' });
         return;
       }
+      await reconcileUserSessions(id);
       await addAuditLog('USER_STATUS_CHANGED', `${actor.email} set ${target.email} active=${Boolean(active)}`);
     }
 
@@ -881,6 +957,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         new Date().toISOString(),
         id
       ]);
+      persistDb();
+      await reconcileUserSessions(id);
     }
 
     const updated = await getUserById(id);
@@ -901,6 +979,9 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       return;
     }
     await updateUserPassword(id, newPassword);
+    // A reset must invalidate every existing session for that account. If an
+    // owner resets their own password, keep the current device signed in.
+    await revokeUserSessions(id, id === (req as AuthedRequest).session!.userId ? extractSessionToken(req) : undefined);
     const actor = (req as AuthedRequest).session!;
     await addAuditLog('USER_PASSWORD_RESET', `${actor.email} reset the password for ${target.email}`);
     res.json({ success: true, message: `Password reset for ${target.email}.` });
@@ -923,6 +1004,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       res.status(409).json({ error: 'Cannot delete the last remaining OWNER account.' });
       return;
     }
+    await reconcileUserSessions(id);
     await addAuditLog('USER_DELETED', `${actor.email} deleted ${target.email}`);
     res.json({ success: true });
   });
@@ -1371,9 +1453,10 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         res.status(404).json({ error: 'Backup not found or invalid filename.' });
         return;
       }
-      // Sessions may reference users that no longer exist in the restored file.
+      // Sessions may reference users that no longer exist in the restored file,
+      // and tokens minted before the restore must not survive it.
       activeSessions.clear();
-      await pruneExpiredSessions();
+      await deleteAllSessions();
       await addAuditLog('BACKUP_RESTORED', `${actor.email} restored database from ${filename}`);
       res.clearCookie('cwm_session');
       res.clearCookie('cwm_csrf');
