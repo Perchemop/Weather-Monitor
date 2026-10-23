@@ -590,9 +590,9 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   app.post('/api/auth/setup', authLimiter, async (req: Request, res: Response) => {
     // Setup is a one-time bootstrap. Without this guard an unauthenticated
     // caller could re-run it at any time and overwrite the primary OWNER's
-    // credentials (a full account takeover).
-    const existingOwners = (await getAllUsers()).filter((u) => u.role === 'OWNER');
-    if ((await isOwnerPasswordConfigured()) || existingOwners.length > 0) {
+    // credentials (a full account takeover). Legacy databases without the
+    // marker are backfilled to "configured" by getDb().
+    if (await isOwnerPasswordConfigured()) {
       res.status(409).json({ error: 'Initial setup is already complete. Sign in instead.' });
       return;
     }
