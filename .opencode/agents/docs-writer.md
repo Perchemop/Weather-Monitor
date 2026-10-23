@@ -5,7 +5,7 @@ model: opencode/big-pickle
 permissions:
   - action: edit
     resource: "*"
-    effect: deny
+    effect: allow
   - action: shell
     resource: "git status*"
     effect: allow
