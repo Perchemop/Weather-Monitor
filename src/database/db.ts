@@ -1156,6 +1156,9 @@ export async function saveLocation(loc: Omit<LocationItem, 'id' | 'createdAt'>):
 
 export async function setDefaultLocation(id: string): Promise<boolean> {
   const db = await getDb();
+  // A non-existent id must not silently clear the existing default.
+  const exists = db.exec('SELECT COUNT(*) FROM locations WHERE id = ?', [id]);
+  if (((exists[0]?.values[0]?.[0] as number) || 0) === 0) return false;
   db.run('UPDATE locations SET is_default = 0');
   db.run('UPDATE locations SET is_default = 1 WHERE id = ?', [id]);
   persistDb();
@@ -1164,9 +1167,12 @@ export async function setDefaultLocation(id: string): Promise<boolean> {
 
 export async function deleteLocation(id: string): Promise<boolean> {
   const db = await getDb();
+  // The default location is protected; deleting a non-existent id must not
+  // report success.
   db.run('DELETE FROM locations WHERE id = ? AND is_default = 0', [id]);
+  const deleted = db.getRowsModified() > 0;
   persistDb();
-  return true;
+  return deleted;
 }
 
 // Weather Observations
@@ -1482,15 +1488,21 @@ export async function getActiveAlerts(locId?: string): Promise<AlertItem[]> {
   }));
 }
 
-export async function getAlertHistory(limit = 50): Promise<AlertItem[]> {
+export async function getAlertHistory(limit = 50, locationId?: string): Promise<AlertItem[]> {
   const db = await getDb();
-  const res = db.exec(
-    `SELECT id, location_id, location_name, alert_type, severity, title,
-            message, trigger_condition, observed_value, threshold_value,
-            start_time, expected_duration, status, created_at, cleared_at
-     FROM alerts ORDER BY created_at DESC LIMIT ?`,
-    [limit]
-  );
+  // When a location is supplied, history is scoped to that site. The alert
+  // engine uses this so a busy site cannot suppress the same alert type at
+  // another site through the shared cooldown window.
+  const query = locationId
+    ? `SELECT id, location_id, location_name, alert_type, severity, title,
+              message, trigger_condition, observed_value, threshold_value,
+              start_time, expected_duration, status, created_at, cleared_at
+       FROM alerts WHERE location_id = ? ORDER BY created_at DESC LIMIT ?`
+    : `SELECT id, location_id, location_name, alert_type, severity, title,
+              message, trigger_condition, observed_value, threshold_value,
+              start_time, expected_duration, status, created_at, cleared_at
+       FROM alerts ORDER BY created_at DESC LIMIT ?`;
+  const res = db.exec(query, locationId ? [locationId, limit] : [limit]);
   if (!res[0]) return [];
 
   return res[0].values.map((v) => ({
@@ -1512,11 +1524,12 @@ export async function getAlertHistory(limit = 50): Promise<AlertItem[]> {
   }));
 }
 
-export async function updateAlertStatus(alertId: string, status: 'CLEARED' | 'DISMISSED'): Promise<void> {
+export async function updateAlertStatus(alertId: string, status: 'CLEARED' | 'DISMISSED'): Promise<boolean> {
   const db = await getDb();
   const now = new Date().toISOString();
   db.run(`UPDATE alerts SET status = ?, cleared_at = ? WHERE id = ?`, [status, now, alertId]);
   persistDb();
+  return db.getRowsModified() > 0;
 }
 
 export async function recordAlertDelivery(delivery: {
@@ -1630,7 +1643,7 @@ export async function updateAlertDeliveryAttempt(
 
 // Monitor Runs
 export async function recordMonitorRun(
-  status: 'SUCCESS' | 'FAILED' | 'RUNNING',
+  status: MonitorRun['status'],
   itemsProcessed = 0,
   errorMessage?: string,
   startedAt?: string
