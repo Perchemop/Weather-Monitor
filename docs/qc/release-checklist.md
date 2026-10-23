@@ -7,7 +7,7 @@ Complete before tagging or merging a release-worthy branch.
 - [ ] GitHub Actions `build-test` job is green on the exact commit.
 - [ ] `docker` job is green.
 - [ ] Type-check passes (`npm run lint` in CI).
-- [ ] Both suites pass: 53 system + 28 integration tests.
+- [ ] Both suites pass: 57 system + 29 integration tests.
 - [ ] Production build artefacts exist (`dist/server.cjs`, `dist/index.html`,
       `dist/sw.js`).
 - [ ] Static build artefacts exist (`dist-static/index.html`,
