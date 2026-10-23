@@ -3,9 +3,9 @@
 Maps each requirement to where it is implemented and how it is verified.
 Status: **Met** (implemented and covered), **Partial**, or **Planned**.
 
-Automated verification runs in GitHub Actions (`npm test`): 53 unit/system tests
-(`src/tests/system.test.ts`) and 28 HTTP integration tests
-(`src/tests/api.test.ts`), 81 total.
+Automated verification runs in GitHub Actions (`npm test`): 57 unit/system tests
+(`src/tests/system.test.ts`) and 29 HTTP integration tests
+(`src/tests/api.test.ts`), 86 total.
 
 | # | Requirement | Implementation | Verification | Status |
 | --- | --- | --- | --- | --- |
