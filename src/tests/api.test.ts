@@ -387,6 +387,33 @@ async function main(): Promise<void> {
     assert.equal(read.body.settings.dataRetentionDays, 45);
   });
 
+  await test('Integrity: alert, location and data-clear operations report real outcomes', async () => {
+    // Dismissing an alert that does not exist is a 404, not a silent success.
+    assert.equal((await anon.postCsrf('/api/alerts/no-such-alert/dismiss')).status, 404);
+
+    const locations = (await anon.get('/api/locations')).body.locations as any[];
+    const defaultLoc = locations.find((l) => l.isDefault);
+    assert.ok(defaultLoc, 'a seeded default location exists');
+
+    // Unknown location ids are rejected rather than silently accepted.
+    assert.equal((await anon.postCsrf('/api/locations/no-such-location/default')).status, 404);
+    assert.equal((await anon.deleteCsrf('/api/locations/no-such-location')).status, 404);
+    assert.equal(
+      (await anon.get('/api/weather/current?locationId=no-such-location')).status,
+      404,
+      'weather for an unknown location must not silently fall back'
+    );
+
+    // The default location is protected from deletion.
+    assert.equal((await anon.deleteCsrf(`/api/locations/${defaultLoc.id}`)).status, 400);
+
+    // Data clears validate their target.
+    assert.equal((await anon.postCsrf('/api/data/clear', { target: 'everything' })).status, 400);
+
+    // A manual check for an unknown location is a 404 before any cycle runs.
+    assert.equal((await anon.postCsrf('/api/monitor/check-now', { locationId: 'no-such-location' })).status, 404);
+  });
+
   await test('Push: public key is exposed and the subscription lifecycle works', async () => {
     const key = await anon.get('/api/push/public-key');
     assert.equal(key.status, 200);
