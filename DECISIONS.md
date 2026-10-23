@@ -7,6 +7,44 @@ questions live in `docs/project-brief.md` and
 
 ---
 
+## D-17 — Format check via a dependency-free hygiene script (2026-10-23)
+
+`scripts/check-format.mjs` implements the guide's "format check" CI requirement
+without adding an opinionated formatter.
+
+- Whole repository: no CRLF, no merge-conflict markers, a final newline, spaces
+  (not tabs) for indentation in code files.
+- Changed lines only: no trailing whitespace. Markdown is exempt because two
+  trailing spaces are a meaningful hard line break there.
+- A dedicated `format-check` GitHub Actions job runs it against the PR base ref.
+
+**Why:** adopting Prettier would force a whole-repository reformat — a large,
+unreviewable diff — while a no-op check would not satisfy the requirement.
+Enforcing trailing whitespace only on lines a change introduces keeps legacy
+files from failing the gate.
+
+## D-16 — Coder may commit, push and open the PR (2026-10-23)
+
+The `coder` subagent now has permissions for `git add/commit/push` and for the
+repository's `ci.sh`; the `ci-runner` subagent remains available but is no longer
+required.
+
+**Why:** the guide's Task mode (§5.5) defines the Coder as owning commit and push
+so the free Task Runner (GitHub Actions) can verify immediately; the previous
+"never commit" rule added a routing hop with no safety benefit, since the
+CI-first rule is enforced independently.
+
+## D-15 — CI hardened and multi-OS (2026-10-23)
+
+The build/test job runs as a `fail-fast: false` matrix on Windows, macOS and
+Linux, with `permissions: contents: read`, concurrency cancellation, job
+timeouts, a job summary and artefact upload. `npm run build:static` uses
+`vite build --mode static` instead of a POSIX-only `VAR=value command` prefix.
+
+**Why:** the guide's required CI design (multi-OS, caching, summaries,
+artefacts), and the static build was silently broken on Windows — the matrix
+caught it on its first run.
+
 ## D-14 — One-time bootstrap setup (2026-10-23)
 
 `POST /api/auth/setup` may run only while setup has not completed. A fresh

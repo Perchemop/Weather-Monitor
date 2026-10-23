@@ -35,6 +35,9 @@ Automated verification runs in GitHub Actions (`npm test`): 53 unit/system tests
 | R-24 | Honest failure reporting (no fake success) | `server.ts` routes, `src/App.tsx`, `LocationModal.tsx` | api tests (integrity) | Met |
 | R-25 | Role-mirrored UI | `Navbar.tsx`, `SettingsView.tsx`, `LocationModal.tsx` | CI build; manual QC checklist | Met |
 | R-26 | CI-first verification, no heavy local work | `.github/workflows/ci.yml` | every CI run | Met |
+| R-26a | CI format check (guide §4) | `scripts/check-format.mjs`, `format-check` job | every CI run | Met |
+| R-26b | CI: multi-OS matrix, permissions, caching, summaries, artefacts | `.github/workflows/ci.yml` | every CI run | Met |
+| R-26c | Cross-platform build scripts | `package.json`, `vite.config.ts` | Windows/macOS/Linux matrix | Met |
 | R-27 | Operating-guide tracking documents | this file and the `docs/` set | review | Met |
 | R-28 | Licence and attribution recorded | `LICENSE`, `ATTRIBUTION.md` | review | Met |
 
@@ -42,5 +45,8 @@ Automated verification runs in GitHub Actions (`npm test`): 53 unit/system tests
 
 - No browser-level (DOM) test harness; UI behaviour is verified by type-check,
   production build and the manual QC checklist in `docs/qc/`.
-- Multi-architecture container build matrix is not yet configured (single
-  `ubuntu-latest` job).
+- The format check is a hygiene script (line endings, tabs, conflict markers,
+  final newline, trailing whitespace on added lines) rather than an opinionated
+  formatter; adopting Prettier would require a one-off whole-repository reformat.
+- Container images are built for a single architecture; a multi-arch matrix is
+  not yet configured.

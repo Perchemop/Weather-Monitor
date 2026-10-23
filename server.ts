@@ -1239,7 +1239,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
 
   app.post('/api/locations', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     const { name, latitude, longitude, timezone, isDefault } = req.body;
-    
+
     // Strict input validation
     if (!name || typeof name !== 'string' || name.trim().length === 0 || name.trim().length > 100) {
       res.status(400).json({ error: 'Location name must be a string between 1 and 100 characters.' });
@@ -1311,7 +1311,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
 
   app.put('/api/settings', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const updates = req.body;
-    
+
     // Validate monitor interval
     if (updates.monitorIntervalMinutes !== undefined) {
       const interval = Number(updates.monitorIntervalMinutes);
