@@ -1,13 +1,5 @@
-import React, { useState } from 'react';
-import {
-  Calendar,
-  Wind,
-  CloudRain,
-  Sun,
-  Thermometer,
-  TrendingUp,
-  ChevronRight
-} from 'lucide-react';
+import React, { useState } from 'react'
+import { Calendar, Wind, CloudRain, Sun, Thermometer, TrendingUp, ChevronRight } from 'lucide-react'
 import {
   ResponsiveContainer,
   AreaChart,
@@ -17,25 +9,21 @@ import {
   Tooltip,
   BarChart,
   Bar,
-  CartesianGrid
-} from 'recharts';
-import { HourlyForecastItem, DailyForecastItem, RiskLevel } from '../types';
+  CartesianGrid,
+} from 'recharts'
+import { HourlyForecastItem, DailyForecastItem, RiskLevel } from '../types'
 
 interface ForecastViewProps {
-  hourly: HourlyForecastItem[];
-  daily: DailyForecastItem[];
-  locationName: string;
+  hourly: HourlyForecastItem[]
+  daily: DailyForecastItem[]
+  locationName: string
 }
 
-export const ForecastView: React.FC<ForecastViewProps> = ({
-  hourly,
-  daily,
-  locationName
-}) => {
-  const [chartMode, setChartMode] = useState<'wind' | 'rain' | 'temp'>('wind');
+export const ForecastView: React.FC<ForecastViewProps> = ({ hourly, daily, locationName }) => {
+  const [chartMode, setChartMode] = useState<'wind' | 'rain' | 'temp'>('wind')
 
   const chartData = hourly.slice(0, 36).map((item) => {
-    const d = new Date(item.time);
+    const d = new Date(item.time)
     return {
       time: d.toLocaleTimeString([], { hour: 'numeric' }),
       windSpeed: Math.round(item.windSpeed),
@@ -43,23 +31,23 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
       rainProb: Math.round(item.rainProbability),
       rainAmount: Number(item.precipitation.toFixed(1)),
       temp: Math.round(item.temperature),
-      uv: item.uvIndex
-    };
-  });
+      uv: item.uvIndex,
+    }
+  })
 
   const getRiskBadge = (level: RiskLevel) => {
     switch (level) {
       case 'CRITICAL':
-        return 'bg-red-500 text-white';
+        return 'bg-red-500 text-white'
       case 'HIGH':
-        return 'bg-orange-500 text-slate-950 font-bold';
+        return 'bg-orange-500 text-slate-950 font-bold'
       case 'MODERATE':
-        return 'bg-amber-400 text-slate-950 font-bold';
+        return 'bg-amber-400 text-slate-950 font-bold'
       case 'LOW':
       default:
-        return 'bg-emerald-600 text-white';
+        return 'bg-emerald-600 text-white'
     }
-  };
+  }
 
   return (
     <div className="space-y-6">
@@ -81,7 +69,9 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
             <button
               onClick={() => setChartMode('wind')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors ${
-                chartMode === 'wind' ? 'bg-slate-800 text-orange-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                chartMode === 'wind'
+                  ? 'bg-slate-800 text-orange-400 font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Wind className="w-3.5 h-3.5" />
@@ -90,7 +80,9 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
             <button
               onClick={() => setChartMode('rain')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors ${
-                chartMode === 'rain' ? 'bg-slate-800 text-sky-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                chartMode === 'rain'
+                  ? 'bg-slate-800 text-sky-400 font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <CloudRain className="w-3.5 h-3.5" />
@@ -99,7 +91,9 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
             <button
               onClick={() => setChartMode('temp')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors ${
-                chartMode === 'temp' ? 'bg-slate-800 text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+                chartMode === 'temp'
+                  ? 'bg-slate-800 text-amber-400 font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Thermometer className="w-3.5 h-3.5" />
@@ -127,11 +121,30 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
                 <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#64748b" tick={{ fontSize: 11 }} unit=" km/h" />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{
+                    backgroundColor: '#0f172a',
+                    borderColor: '#334155',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
                   itemStyle={{ color: '#f8fafc' }}
                 />
-                <Area type="monotone" dataKey="windGusts" name="Peak Gust (km/h)" stroke="#f97316" strokeWidth={2} fill="url(#gustGrad)" />
-                <Area type="monotone" dataKey="windSpeed" name="Sustained Wind (km/h)" stroke="#3b82f6" strokeWidth={2} fill="url(#windGrad)" />
+                <Area
+                  type="monotone"
+                  dataKey="windGusts"
+                  name="Peak Gust (km/h)"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  fill="url(#gustGrad)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="windSpeed"
+                  name="Sustained Wind (km/h)"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  fill="url(#windGrad)"
+                />
               </AreaChart>
             ) : chartMode === 'rain' ? (
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -139,7 +152,12 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
                 <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#64748b" tick={{ fontSize: 11 }} unit="%" />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{
+                    backgroundColor: '#0f172a',
+                    borderColor: '#334155',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
                 />
                 <Bar dataKey="rainProb" name="Rain Probability (%)" fill="#0284c7" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -155,9 +173,21 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
                 <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#64748b" tick={{ fontSize: 11 }} unit="°C" />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{
+                    backgroundColor: '#0f172a',
+                    borderColor: '#334155',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
                 />
-                <Area type="monotone" dataKey="temp" name="Temperature (°C)" stroke="#eab308" strokeWidth={2} fill="url(#tempGrad)" />
+                <Area
+                  type="monotone"
+                  dataKey="temp"
+                  name="Temperature (°C)"
+                  stroke="#eab308"
+                  strokeWidth={2}
+                  fill="url(#tempGrad)"
+                />
               </AreaChart>
             )}
           </ResponsiveContainer>
@@ -175,8 +205,13 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
 
         <div className="space-y-2.5">
           {daily.map((day, idx) => {
-            const dateObj = new Date(day.date + 'T12:00:00');
-            const dayName = idx === 0 ? 'Today' : idx === 1 ? 'Tomorrow' : dateObj.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+            const dateObj = new Date(day.date + 'T12:00:00')
+            const dayName =
+              idx === 0
+                ? 'Today'
+                : idx === 1
+                  ? 'Tomorrow'
+                  : dateObj.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
 
             return (
               <div
@@ -185,7 +220,9 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
               >
                 <div className="flex items-center gap-3 sm:w-48">
                   <div className="text-sm font-bold text-slate-200">{dayName}</div>
-                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${getRiskBadge(day.riskLevel)}`}>
+                  <span
+                    className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${getRiskBadge(day.riskLevel)}`}
+                  >
                     {day.riskLevel}
                   </span>
                 </div>
@@ -196,7 +233,8 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
                   <div className="flex items-center gap-1.5" title="Max Wind Speed / Max Gust">
                     <Wind className="w-3.5 h-3.5 text-slate-400" />
                     <span>
-                      {Math.round(day.maxWindSpeed)} / <strong className="text-orange-400">{Math.round(day.maxWindGust)} km/h</strong>
+                      {Math.round(day.maxWindSpeed)} /{' '}
+                      <strong className="text-orange-400">{Math.round(day.maxWindGust)} km/h</strong>
                     </span>
                   </div>
 
@@ -210,15 +248,16 @@ export const ForecastView: React.FC<ForecastViewProps> = ({
                   <div className="flex items-center gap-1.5 font-bold" title="Min / Max Temperature">
                     <Thermometer className="w-3.5 h-3.5 text-amber-400" />
                     <span>
-                      {Math.round(day.minTemp)}° / <span className="text-amber-400">{Math.round(day.maxTemp)}°C</span>
+                      {Math.round(day.minTemp)}° /{' '}
+                      <span className="text-amber-400">{Math.round(day.maxTemp)}°C</span>
                     </span>
                   </div>
                 </div>
               </div>
-            );
+            )
           })}
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

@@ -1,57 +1,57 @@
-import React, { useState, useEffect } from 'react';
-import { Clock, Database, Download } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { CurrentWeather, LocationItem } from '../types';
-import { EmptyState } from './EmptyState';
+import React, { useState, useEffect } from 'react'
+import { Clock, Database, Download } from 'lucide-react'
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
+import { CurrentWeather, LocationItem } from '../types'
+import { EmptyState } from './EmptyState'
 
 interface HistoricalViewProps {
-  location: LocationItem | null;
+  location: LocationItem | null
 }
 
 export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
-  const [range, setRange] = useState<'today' | 'yesterday' | '7days' | '30days'>('today');
-  const [observations, setObservations] = useState<CurrentWeather[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [range, setRange] = useState<'today' | 'yesterday' | '7days' | '30days'>('today')
+  const [observations, setObservations] = useState<CurrentWeather[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    if (!location) return;
-    fetchHistory(range);
-  }, [location, range]);
+    if (!location) return
+    fetchHistory(range)
+  }, [location, range])
 
   const fetchHistory = async (selectedRange: string) => {
-    if (!location) return;
-    setIsLoading(true);
+    if (!location) return
+    setIsLoading(true)
     try {
-      const res = await fetch(`/api/weather/history?locationId=${location.id}&range=${selectedRange}`);
+      const res = await fetch(`/api/weather/history?locationId=${location.id}&range=${selectedRange}`)
       if (res.ok) {
-        const data = await res.json();
-        setObservations(data.observations || []);
+        const data = await res.json()
+        setObservations(data.observations || [])
       }
     } catch (err) {
-      console.error('Failed to fetch historical observations:', err);
+      console.error('Failed to fetch historical observations:', err)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   const chartData = observations.map((obs) => {
-    const d = new Date(obs.timestamp);
+    const d = new Date(obs.timestamp)
     const label =
       range === 'today' || range === 'yesterday'
         ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        : d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit' });
+        : d.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit' })
 
     return {
       time: label,
       temp: Math.round(obs.temperature),
       wind: Math.round(obs.windSpeed),
       gusts: Math.round(obs.windGusts),
-      rain: obs.rainAmount
-    };
-  });
+      rain: obs.rainAmount,
+    }
+  })
 
   const exportCsv = () => {
-    if (observations.length === 0) return;
+    if (observations.length === 0) return
     const headers = [
       'Timestamp',
       'Temperature_C',
@@ -63,8 +63,8 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
       'Humidity_pct',
       'Pressure_hPa',
       'UV_Index',
-      'Description'
-    ];
+      'Description',
+    ]
     const rows = observations.map((o) => [
       o.timestamp,
       o.temperature,
@@ -76,17 +76,17 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
       o.humidity,
       o.pressure,
       o.uvIndex,
-      `"${(o.weatherDescription || '').replace(/"/g, '""')}"`
-    ]);
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `weather-observations-${(location?.name || 'site').replace(/[^a-z0-9]/gi, '_')}-${range}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+      `"${(o.weatherDescription || '').replace(/"/g, '""')}"`,
+    ])
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `weather-observations-${(location?.name || 'site').replace(/[^a-z0-9]/gi, '_')}-${range}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="space-y-6">
@@ -108,7 +108,9 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
                   key={r}
                   onClick={() => setRange(r)}
                   className={`px-3 py-1.5 rounded-lg transition-all capitalize cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
-                    range === r ? 'bg-slate-800 text-amber-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+                    range === r
+                      ? 'bg-slate-800 text-amber-400 font-semibold'
+                      : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   {r === '7days' ? '7 Days' : r === '30days' ? '30 Days' : r}
@@ -162,9 +164,25 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                   <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 11 }} />
                   <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 8 }} />
-                  <Line type="monotone" dataKey="gusts" name="Peak Gusts" stroke="#f97316" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="wind" name="Sustained Wind" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 8 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="gusts"
+                    name="Peak Gusts"
+                    stroke="#f97316"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="wind"
+                    name="Sustained Wind"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dot={false}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -192,19 +210,22 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                  {observations.slice(-20).reverse().map((obs, idx) => (
-                    <tr key={idx} className="hover:bg-slate-800/40">
-                      <td className="p-3 whitespace-nowrap text-slate-400">
-                        {new Date(obs.timestamp).toLocaleString()}
-                      </td>
-                      <td className="p-3 font-semibold text-amber-300">{Math.round(obs.temperature)}°C</td>
-                      <td className="p-3">{Math.round(obs.windSpeed)} km/h</td>
-                      <td className="p-3 text-orange-400 font-bold">{Math.round(obs.windGusts)} km/h</td>
-                      <td className="p-3 text-sky-400">{obs.rainAmount.toFixed(1)} mm</td>
-                      <td className="p-3">{Math.round(obs.humidity)}%</td>
-                      <td className="p-3 text-slate-400">{obs.weatherDescription}</td>
-                    </tr>
-                  ))}
+                  {observations
+                    .slice(-20)
+                    .reverse()
+                    .map((obs, idx) => (
+                      <tr key={idx} className="hover:bg-slate-800/40">
+                        <td className="p-3 whitespace-nowrap text-slate-400">
+                          {new Date(obs.timestamp).toLocaleString()}
+                        </td>
+                        <td className="p-3 font-semibold text-amber-300">{Math.round(obs.temperature)}°C</td>
+                        <td className="p-3">{Math.round(obs.windSpeed)} km/h</td>
+                        <td className="p-3 text-orange-400 font-bold">{Math.round(obs.windGusts)} km/h</td>
+                        <td className="p-3 text-sky-400">{obs.rainAmount.toFixed(1)} mm</td>
+                        <td className="p-3">{Math.round(obs.humidity)}%</td>
+                        <td className="p-3 text-slate-400">{obs.weatherDescription}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -212,5 +233,5 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
         </div>
       )}
     </div>
-  );
-};
+  )
+}

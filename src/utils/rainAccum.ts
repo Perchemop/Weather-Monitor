@@ -5,7 +5,7 @@
  * sparse data) can be unit tested directly.
  */
 
-export type RainDirection = 'past' | 'next';
+export type RainDirection = 'past' | 'next'
 
 /**
  * Sums hourly precipitation (mm/h buckets) over an accumulation window.
@@ -22,32 +22,32 @@ export function sumPrecipitationWindow(
   hourlyPrecip: readonly number[],
   startHourIdx: number,
   hours: number,
-  direction: RainDirection
+  direction: RainDirection,
 ): number {
   if (!Array.isArray(hourlyPrecip) || hourlyPrecip.length === 0 || hours <= 0) {
-    return 0;
+    return 0
   }
 
-  const start = Math.max(0, Math.floor(startHourIdx));
-  const window = Math.max(0, Math.floor(hours));
+  const start = Math.max(0, Math.floor(startHourIdx))
+  const window = Math.max(0, Math.floor(hours))
 
-  let from: number;
-  let to: number; // exclusive
+  let from: number
+  let to: number // exclusive
   if (direction === 'next') {
-    from = start;
-    to = start + window;
+    from = start
+    to = start + window
   } else {
-    from = Math.max(0, start - window + 1);
-    to = start + 1;
+    from = Math.max(0, start - window + 1)
+    to = start + 1
   }
 
-  let sum = 0;
-  const end = Math.min(hourlyPrecip.length, to);
+  let sum = 0
+  const end = Math.min(hourlyPrecip.length, to)
   for (let i = from; i < end; i++) {
-    const v = hourlyPrecip[i];
+    const v = hourlyPrecip[i]
     if (typeof v === 'number' && Number.isFinite(v) && v > 0) {
-      sum += v;
+      sum += v
     }
   }
-  return sum;
+  return sum
 }

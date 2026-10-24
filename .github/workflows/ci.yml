@@ -31,6 +31,7 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: '.nvmrc'
+          cache: npm
 
       - name: Format check (hygiene)
         shell: bash
@@ -38,6 +39,12 @@ jobs:
           BASE_REF="${{ github.base_ref || 'main' }}"
           git fetch --no-tags origin "$BASE_REF" --depth=50 || true
           node scripts/check-format.mjs --changed-from "origin/$BASE_REF"
+
+      - name: Style check (Prettier)
+        shell: bash
+        run: |
+          npm ci
+          npx prettier --check .
 
   build-test:
     name: build-test (${{ matrix.os }})

@@ -1,93 +1,103 @@
-import React, { useState } from 'react';
-import { HardHat, Lock, ShieldCheck, Key, Eye, EyeOff, AlertCircle, ArrowRight, Smartphone } from 'lucide-react';
-import { UserRole } from '../types';
-import { apiFetch } from '../utils/api';
+import React, { useState } from 'react'
+import {
+  HardHat,
+  Lock,
+  ShieldCheck,
+  Key,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  ArrowRight,
+  Smartphone,
+} from 'lucide-react'
+import { UserRole } from '../types'
+import { apiFetch } from '../utils/api'
 
 interface LoginScreenProps {
-  isFirstRun?: boolean;
-  ownerEmail?: string;
-  onAuthenticated: (email: string, role: UserRole) => void;
+  isFirstRun?: boolean
+  ownerEmail?: string
+  onAuthenticated: (email: string, role: UserRole) => void
 }
 
-const PASSWORD_MIN_LENGTH = 10;
-const PASSWORD_HINT = 'At least 10 characters, including a letter and a number.';
+const PASSWORD_MIN_LENGTH = 10
+const PASSWORD_HINT = 'At least 10 characters, including a letter and a number.'
 
 function isStrongEnough(password: string): boolean {
-  return (
-    password.length >= PASSWORD_MIN_LENGTH && /[A-Za-z]/.test(password) && /[0-9]/.test(password)
-  );
+  return password.length >= PASSWORD_MIN_LENGTH && /[A-Za-z]/.test(password) && /[0-9]/.test(password)
 }
 
-export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', onAuthenticated }: LoginScreenProps) {
-  const [email, setEmail] = useState(ownerEmail);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [mfaCode, setMfaCode] = useState('');
-  const [mfaRequired, setMfaRequired] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+export function LoginScreen({
+  isFirstRun = false,
+  ownerEmail = 'owner@local',
+  onAuthenticated,
+}: LoginScreenProps) {
+  const [email, setEmail] = useState(ownerEmail)
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaRequired, setMfaRequired] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
+    e.preventDefault()
+    setErrorMessage(null)
 
     if (!password) {
-      setErrorMessage('Master password is required.');
-      return;
+      setErrorMessage('Master password is required.')
+      return
     }
 
     if (isFirstRun) {
       if (!isStrongEnough(password)) {
-        setErrorMessage(
-          `Password must be ${PASSWORD_HINT.toLowerCase()}`
-        );
-        return;
+        setErrorMessage(`Password must be ${PASSWORD_HINT.toLowerCase()}`)
+        return
       }
       if (password !== confirmPassword) {
-        setErrorMessage('Passwords do not match. Please re-enter.');
-        return;
+        setErrorMessage('Passwords do not match. Please re-enter.')
+        return
       }
     }
 
     if (mfaRequired && mfaCode.trim().length !== 6) {
-      setErrorMessage('Enter the 6-digit code from your authenticator app.');
-      return;
+      setErrorMessage('Enter the 6-digit code from your authenticator app.')
+      return
     }
 
-    setIsLoading(true);
+    setIsLoading(true)
 
     try {
-      const endpoint = isFirstRun ? '/api/auth/setup' : '/api/auth/login';
-      const payload: Record<string, string> = { email, password };
-      if (mfaRequired && mfaCode) payload.mfaCode = mfaCode.trim();
+      const endpoint = isFirstRun ? '/api/auth/setup' : '/api/auth/login'
+      const payload: Record<string, string> = { email, password }
+      if (mfaRequired && mfaCode) payload.mfaCode = mfaCode.trim()
 
       const res = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+        body: JSON.stringify(payload),
+      })
 
-      const data = await res.json();
+      const data = await res.json()
 
       if (!res.ok) {
         if (data?.mfaRequired) {
-          setMfaRequired(true);
-          setErrorMessage(mfaCode ? data.error : null);
-          return;
+          setMfaRequired(true)
+          setErrorMessage(mfaCode ? data.error : null)
+          return
         }
-        throw new Error(data.error || 'Authentication failed. Please verify credentials.');
+        throw new Error(data.error || 'Authentication failed. Please verify credentials.')
       }
 
       // The session lives in an HttpOnly cookie set by the server; nothing is
       // persisted to JavaScript-accessible storage.
-      onAuthenticated(data.email || email, (data.role as UserRole) || 'OWNER');
+      onAuthenticated(data.email || email, (data.role as UserRole) || 'OWNER')
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Connection error. Please try again.');
+      setErrorMessage(err?.message || 'Connection error. Please try again.')
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 sm:p-6 relative overflow-hidden">
@@ -107,16 +117,18 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
               </span>
               <span className="text-2xs font-mono uppercase text-slate-500">Local-First</span>
             </div>
-            <h1 className="text-lg font-bold text-white tracking-wide mt-1">
-              Construction Weather Monitor
-            </h1>
+            <h1 className="text-lg font-bold text-white tracking-wide mt-1">Construction Weather Monitor</h1>
           </div>
         </div>
 
         {/* Status description */}
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-            {isFirstRun ? <Key className="w-4 h-4 text-cyan-400" /> : <Lock className="w-4 h-4 text-amber-400" />}
+            {isFirstRun ? (
+              <Key className="w-4 h-4 text-cyan-400" />
+            ) : (
+              <Lock className="w-4 h-4 text-amber-400" />
+            )}
             <span>{isFirstRun ? 'Initial Master Password Setup' : 'Site Supervisor Lock'}</span>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
@@ -242,5 +254,5 @@ export function LoginScreen({ isFirstRun = false, ownerEmail = 'owner@local', on
         </div>
       </div>
     </div>
-  );
+  )
 }

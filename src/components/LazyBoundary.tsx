@@ -1,5 +1,5 @@
-import React, { Suspense } from 'react';
-import { HardHat } from 'lucide-react';
+import React, { Suspense } from 'react'
+import { HardHat } from 'lucide-react'
 
 /**
  * Adapts a lazily-imported module with a named export into a React.lazy
@@ -7,12 +7,12 @@ import { HardHat } from 'lucide-react';
  */
 export function lazyNamed<T extends Record<string, React.ComponentType<any>>>(
   factory: () => Promise<T>,
-  exportName: keyof T
+  exportName: keyof T,
 ) {
   return React.lazy(async () => {
-    const mod = await factory();
-    return { default: mod[exportName] };
-  });
+    const mod = await factory()
+    return { default: mod[exportName] }
+  })
 }
 
 /** Lightweight, on-brand fallback shown while a split view chunk loads. */
@@ -30,10 +30,10 @@ export function ViewLoadingFallback({ label = 'Loading module' }: { label?: stri
         <span className="text-xs font-mono text-slate-400 animate-pulse">{label}...</span>
       </div>
     </div>
-  );
+  )
 }
 
 /** Convenience boundary that renders the branded fallback for its subtree. */
 export function LazyBoundary({ children, label }: { children: React.ReactNode; label?: string }) {
-  return <Suspense fallback={<ViewLoadingFallback label={label} />}>{children}</Suspense>;
+  return <Suspense fallback={<ViewLoadingFallback label={label} />}>{children}</Suspense>
 }

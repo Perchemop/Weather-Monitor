@@ -10,11 +10,11 @@
  * the HTTP API exactly as before.
  */
 export const STATIC_MODE: boolean =
-  import.meta.env.VITE_APP_MODE === 'static' || import.meta.env.MODE === 'static';
+  import.meta.env.VITE_APP_MODE === 'static' || import.meta.env.MODE === 'static'
 
 /**
  * Application base path. On GitHub Pages the app is served from
  * `/<repo>/`, so any runtime-built absolute URL (service worker, icons) must
  * be prefixed with this value. Vite sets `BASE_URL` to `/` for normal builds.
  */
-export const BASE_PATH: string = import.meta.env.BASE_URL || '/';
+export const BASE_PATH: string = import.meta.env.BASE_URL || '/'

@@ -16,6 +16,8 @@
     "lint": "tsc --noEmit",
     "format:check": "node scripts/check-format.mjs",
     "format:check:changed": "node scripts/check-format.mjs --changed-from origin/main",
+    "prettier:check": "prettier --check .",
+    "prettier:fix": "prettier --write .",
     "test": "tsx src/tests/system.test.ts && tsx src/tests/api.test.ts",
     "test:unit": "tsx src/tests/system.test.ts",
     "test:api": "tsx src/tests/api.test.ts"
@@ -48,6 +50,7 @@
     "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "prettier": "^3.9.10",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

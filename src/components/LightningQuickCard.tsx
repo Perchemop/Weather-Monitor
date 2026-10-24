@@ -1,19 +1,19 @@
-import React from 'react';
-import { CloudLightning, ArrowRight } from 'lucide-react';
-import { CurrentWeather, RiskAssessment, RiskLevel } from '../types';
+import React from 'react'
+import { CloudLightning, ArrowRight } from 'lucide-react'
+import { CurrentWeather, RiskAssessment, RiskLevel } from '../types'
 
 interface LightningQuickCardProps {
-  current: CurrentWeather | null;
-  risk: RiskAssessment | null;
-  onOpenMap: () => void;
+  current: CurrentWeather | null
+  risk: RiskAssessment | null
+  onOpenMap: () => void
 }
 
 const LEVEL_STYLES: Record<RiskLevel, { text: string; dot: string; label: string }> = {
   LOW: { text: 'text-slate-300', dot: 'bg-slate-500', label: 'No storm activity' },
   MODERATE: { text: 'text-amber-300', dot: 'bg-amber-400', label: 'Developing storm energy' },
   HIGH: { text: 'text-orange-300', dot: 'bg-orange-400', label: 'Elevated lightning risk' },
-  CRITICAL: { text: 'text-red-300', dot: 'bg-red-400', label: 'Severe lightning risk' }
-};
+  CRITICAL: { text: 'text-red-300', dot: 'bg-red-400', label: 'Severe lightning risk' },
+}
 
 /**
  * Compact dashboard quick-card for lightning/storm status. Reads the STORM
@@ -21,20 +21,20 @@ const LEVEL_STYLES: Record<RiskLevel, { text: string; dot: string; label: string
  * CAPE and WMO thunderstorm codes, and jumps straight to the lightning map.
  */
 export const LightningQuickCard: React.FC<LightningQuickCardProps> = ({ current, risk, onOpenMap }) => {
-  const stormFactors = (risk?.factors || []).filter((f) => f.category === 'STORM');
+  const stormFactors = (risk?.factors || []).filter((f) => f.category === 'STORM')
   const level: RiskLevel = stormFactors.some((f) => f.severity === 'CRITICAL')
     ? 'CRITICAL'
     : stormFactors.some((f) => f.severity === 'HIGH')
       ? 'HIGH'
       : stormFactors.some((f) => f.severity === 'MODERATE')
         ? 'MODERATE'
-        : 'LOW';
+        : 'LOW'
 
-  const style = LEVEL_STYLES[level];
-  const thunderstorm = (current?.weatherCode ?? 0) >= 95;
-  const lpi = Math.round(current?.lightningPotential ?? 0);
-  const cape = Math.round(current?.cape ?? 0);
-  const summaryFactor = stormFactors.sort((a, b) => b.severity.localeCompare(a.severity))[0];
+  const style = LEVEL_STYLES[level]
+  const thunderstorm = (current?.weatherCode ?? 0) >= 95
+  const lpi = Math.round(current?.lightningPotential ?? 0)
+  const cape = Math.round(current?.cape ?? 0)
+  const summaryFactor = stormFactors.sort((a, b) => b.severity.localeCompare(a.severity))[0]
 
   return (
     <div
@@ -50,7 +50,11 @@ export const LightningQuickCard: React.FC<LightningQuickCardProps> = ({ current,
             Lightning & storm
           </h3>
           <p className="mt-1 truncate text-xs text-slate-500">
-            {thunderstorm ? 'Thunderstorm detected on site' : summaryFactor ? summaryFactor.label : style.label}
+            {thunderstorm
+              ? 'Thunderstorm detected on site'
+              : summaryFactor
+                ? summaryFactor.label
+                : style.label}
           </p>
         </div>
 
@@ -86,7 +90,7 @@ export const LightningQuickCard: React.FC<LightningQuickCardProps> = ({ current,
         <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
       </button>
     </div>
-  );
-};
+  )
+}
 
-export default LightningQuickCard;
+export default LightningQuickCard

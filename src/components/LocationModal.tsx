@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { MapPin, Plus, Check, Trash2, Search, X, Star, AlertCircle } from 'lucide-react';
-import { LocationItem, UserRole } from '../types';
-import { useToast } from './ToastProvider';
-import { apiFetch } from '../utils/api';
-import { STATIC_MODE } from '../static/mode';
+import React, { useState, useEffect } from 'react'
+import { MapPin, Plus, Check, Trash2, Search, X, Star, AlertCircle } from 'lucide-react'
+import { LocationItem, UserRole } from '../types'
+import { useToast } from './ToastProvider'
+import { apiFetch } from '../utils/api'
+import { STATIC_MODE } from '../static/mode'
 
 interface LocationModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  locations: LocationItem[];
-  currentLocation: LocationItem | null;
-  onSelectLocation: (loc: LocationItem) => void;
-  onLocationAdded: () => void;
+  isOpen: boolean
+  onClose: () => void
+  locations: LocationItem[]
+  currentLocation: LocationItem | null
+  onSelectLocation: (loc: LocationItem) => void
+  onLocationAdded: () => void
   /** Mirrors the server-side gate: adding, deleting and defaulting need MANAGER+. */
-  userRole?: UserRole;
+  userRole?: UserRole
 }
 
 const LocationModalComponent: React.FC<LocationModalProps> = ({
@@ -23,56 +23,56 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
   currentLocation,
   onSelectLocation,
   onLocationAdded,
-  userRole = 'VIEWER'
+  userRole = 'VIEWER',
 }) => {
-  const toast = useToast();
+  const toast = useToast()
   // The static browser build has no roles; every control is local. In the
   // server build the UI must mirror the MANAGER+ route gate so VIEWERs never
   // see controls that the server would reject.
-  const canManage = STATIC_MODE || userRole === 'OWNER' || userRole === 'MANAGER';
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isAddingCustom, setIsAddingCustom] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const canManage = STATIC_MODE || userRole === 'OWNER' || userRole === 'MANAGER'
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [isAddingCustom, setIsAddingCustom] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   // Custom coordinate input state
-  const [customName, setCustomName] = useState('');
-  const [customLat, setCustomLat] = useState('');
-  const [customLon, setCustomLon] = useState('');
-  const [customTimezone, setCustomTimezone] = useState('auto');
+  const [customName, setCustomName] = useState('')
+  const [customLat, setCustomLat] = useState('')
+  const [customLon, setCustomLon] = useState('')
+  const [customTimezone, setCustomTimezone] = useState('auto')
 
   // Confirmation state for deleting
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Debounced search
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
+      setSearchResults([])
+      return
     }
     const timer = setTimeout(async () => {
-      setIsSearching(true);
+      setIsSearching(true)
       try {
-        const res = await apiFetch(`/api/locations/search?query=${encodeURIComponent(searchQuery)}`);
+        const res = await apiFetch(`/api/locations/search?query=${encodeURIComponent(searchQuery)}`)
         if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data.results || []);
+          const data = await res.json()
+          setSearchResults(data.results || [])
         }
       } catch (err) {
-        console.error('Search failed:', err);
+        console.error('Search failed:', err)
       } finally {
-        setIsSearching(false);
+        setIsSearching(false)
       }
-    }, 350);
+    }, 350)
 
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   const handleAddLocation = async (name: string, latitude: number, longitude: number, timezone?: string) => {
-    setFormError(null);
+    setFormError(null)
     try {
       const res = await apiFetch('/api/locations', {
         method: 'POST',
@@ -81,77 +81,77 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
           name,
           latitude,
           longitude,
-          timezone: timezone || 'auto'
-        })
-      });
+          timezone: timezone || 'auto',
+        }),
+      })
       if (res.ok) {
-        toast.success(`Monitored site added: ${name}`);
-        onLocationAdded();
-        setSearchQuery('');
-        setSearchResults([]);
-        setIsAddingCustom(false);
-        setCustomName('');
-        setCustomLat('');
-        setCustomLon('');
+        toast.success(`Monitored site added: ${name}`)
+        onLocationAdded()
+        setSearchQuery('')
+        setSearchResults([])
+        setIsAddingCustom(false)
+        setCustomName('')
+        setCustomLat('')
+        setCustomLon('')
       } else {
-        const err = await res.json();
-        setFormError(err.error || 'Failed to add location.');
+        const err = await res.json()
+        setFormError(err.error || 'Failed to add location.')
       }
     } catch {
-      setFormError('Connection error while adding site location.');
+      setFormError('Connection error while adding site location.')
     }
-  };
+  }
 
   const handleDeleteLocation = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation()
     try {
-      const res = await apiFetch(`/api/locations/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/locations/${id}`, { method: 'DELETE' })
       if (res.ok) {
-        toast.info('Location removed.');
-        setDeletingId(null);
-        onLocationAdded();
+        toast.info('Location removed.')
+        setDeletingId(null)
+        onLocationAdded()
       } else {
-        const err = await res.json().catch(() => null);
-        toast.error(err?.error || 'Cannot delete this location.');
+        const err = await res.json().catch(() => null)
+        toast.error(err?.error || 'Cannot delete this location.')
       }
     } catch {
-      toast.error('Failed to delete location.');
+      toast.error('Failed to delete location.')
     }
-  };
+  }
 
   const handleSetDefault = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation()
     try {
-      const res = await apiFetch(`/api/locations/${id}/default`, { method: 'POST' });
+      const res = await apiFetch(`/api/locations/${id}/default`, { method: 'POST' })
       if (res.ok) {
-        toast.success('Default monitored site updated.');
-        onLocationAdded();
+        toast.success('Default monitored site updated.')
+        onLocationAdded()
       }
     } catch {
-      toast.error('Failed to update default location.');
+      toast.error('Failed to update default location.')
     }
-  };
+  }
 
   const handleCustomSubmit = () => {
-    setFormError(null);
-    const lat = parseFloat(customLat);
-    const lon = parseFloat(customLon);
+    setFormError(null)
+    const lat = parseFloat(customLat)
+    const lon = parseFloat(customLon)
 
     if (!customName.trim()) {
-      setFormError('Please enter a site name.');
-      return;
+      setFormError('Please enter a site name.')
+      return
     }
     if (isNaN(lat) || lat < -90 || lat > 90) {
-      setFormError('Latitude must be between -90 and +90.');
-      return;
+      setFormError('Latitude must be between -90 and +90.')
+      return
     }
     if (isNaN(lon) || lon < -180 || lon > 180) {
-      setFormError('Longitude must be between -180 and +180.');
-      return;
+      setFormError('Longitude must be between -180 and +180.')
+      return
     }
 
-    handleAddLocation(customName.trim(), lat, lon, customTimezone);
-  };
+    handleAddLocation(customName.trim(), lat, lon, customTimezone)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
@@ -197,15 +197,15 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
             </div>
             <div className="space-y-2">
               {locations.map((loc) => {
-                const isSelected = currentLocation?.id === loc.id;
-                const isConfirmingDelete = deletingId === loc.id;
+                const isSelected = currentLocation?.id === loc.id
+                const isConfirmingDelete = deletingId === loc.id
 
                 return (
                   <div
                     key={loc.id}
                     onClick={() => {
-                      onSelectLocation(loc);
-                      onClose();
+                      onSelectLocation(loc)
+                      onClose()
                     }}
                     className={`p-3 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
                       isSelected
@@ -214,7 +214,9 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'bg-amber-400 ring-2 ring-amber-400/20' : 'bg-slate-600'}`} />
+                      <div
+                        className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'bg-amber-400 ring-2 ring-amber-400/20' : 'bg-slate-600'}`}
+                      />
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono font-bold text-slate-200">{loc.name}</span>
@@ -242,8 +244,10 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                         </button>
                       )}
 
-                      {canManage && locations.length > 1 && !loc.isDefault && (
-                        isConfirmingDelete ? (
+                      {canManage &&
+                        locations.length > 1 &&
+                        !loc.isDefault &&
+                        (isConfirmingDelete ? (
                           <div className="flex items-center gap-1 bg-red-950 border border-red-800 rounded px-1.5 py-0.5">
                             <span className="text-2xs text-red-300 font-mono">Delete?</span>
                             <button
@@ -270,132 +274,131 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
-                        )
-                      )}
+                        ))}
 
                       {isSelected && <Check className="w-4 h-4 text-amber-400 ml-1 shrink-0" />}
                     </div>
                   </div>
-                );
+                )
               })}
             </div>
           </div>
 
           {/* Add Site Section (operators only) */}
           {canManage && (
-          <div className="border-t border-slate-800 pt-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-mono font-semibold uppercase text-slate-400">
-                Add Construction Site
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddingCustom(!isAddingCustom);
-                  setFormError(null);
-                }}
-                className="text-2xs font-mono text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                {isAddingCustom ? 'Search by City Name' : 'Enter Lat/Long Coordinates'}
-              </button>
-            </div>
+            <div className="border-t border-slate-800 pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-semibold uppercase text-slate-400">
+                  Add Construction Site
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingCustom(!isAddingCustom)
+                    setFormError(null)
+                  }}
+                  className="text-2xs font-mono text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  {isAddingCustom ? 'Search by City Name' : 'Enter Lat/Long Coordinates'}
+                </button>
+              </div>
 
-            {!isAddingCustom ? (
-              /* City Geocoding Search (Debounced 350ms) */
-              <div className="space-y-2">
-                <div className="relative">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    placeholder="Search city, suburb, or site landmark (e.g. Brisbane, Sydney)..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500"
-                  />
-                  {isSearching && (
-                    <div className="absolute right-3 top-2.5">
-                      <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              {!isAddingCustom ? (
+                /* City Geocoding Search (Debounced 350ms) */
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Search city, suburb, or site landmark (e.g. Brisbane, Sydney)..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                    />
+                    {isSearching && (
+                      <div className="absolute right-3 top-2.5">
+                        <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  {searchResults.length > 0 && (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto bg-slate-950/80 rounded-lg border border-slate-800 p-2">
+                      {searchResults.map((r, i) => (
+                        <div
+                          key={i}
+                          className="p-2.5 rounded-md hover:bg-slate-900 border border-transparent hover:border-slate-800 flex items-center justify-between text-xs font-mono transition-colors"
+                        >
+                          <div>
+                            <div className="font-bold text-slate-200">
+                              {r.name}, {r.admin1 || ''} {r.country || ''}
+                            </div>
+                            <div className="text-2xs text-slate-500">
+                              {r.latitude.toFixed(3)}, {r.longitude.toFixed(3)} · {r.timezone || 'auto'}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const fullName = `${r.name}, ${r.admin1 || r.country || ''}`
+                              handleAddLocation(fullName, r.latitude, r.longitude, r.timezone)
+                            }}
+                            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-300 font-bold text-2xs transition-colors cursor-pointer"
+                          >
+                            Add Site
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
-
-                {searchResults.length > 0 && (
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto bg-slate-950/80 rounded-lg border border-slate-800 p-2">
-                    {searchResults.map((r, i) => (
-                      <div
-                        key={i}
-                        className="p-2.5 rounded-md hover:bg-slate-900 border border-transparent hover:border-slate-800 flex items-center justify-between text-xs font-mono transition-colors"
-                      >
-                        <div>
-                          <div className="font-bold text-slate-200">
-                            {r.name}, {r.admin1 || ''} {r.country || ''}
-                          </div>
-                          <div className="text-2xs text-slate-500">
-                            {r.latitude.toFixed(3)}, {r.longitude.toFixed(3)} · {r.timezone || 'auto'}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const fullName = `${r.name}, ${r.admin1 || r.country || ''}`;
-                            handleAddLocation(fullName, r.latitude, r.longitude, r.timezone);
-                          }}
-                          className="px-2.5 py-1 rounded bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-300 font-bold text-2xs transition-colors cursor-pointer"
-                        >
-                          Add Site
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* Custom Coordinates Input */
-              <div className="space-y-3 text-xs font-mono bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
-                <div>
-                  <label className="text-slate-400 block mb-1">Site / Project Title:</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Adelaide Pier 4 Crane Site"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+              ) : (
+                /* Custom Coordinates Input */
+                <div className="space-y-3 text-xs font-mono bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
                   <div>
-                    <label className="text-slate-400 block mb-1">Latitude (-90 to +90):</label>
+                    <label className="text-slate-400 block mb-1">Site / Project Title:</label>
                     <input
-                      type="number"
-                      step="any"
-                      placeholder="-34.9285"
-                      value={customLat}
-                      onChange={(e) => setCustomLat(e.target.value)}
+                      type="text"
+                      placeholder="e.g. Adelaide Pier 4 Crane Site"
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
                     />
                   </div>
-                  <div>
-                    <label className="text-slate-400 block mb-1">Longitude (-180 to +180):</label>
-                    <input
-                      type="number"
-                      step="any"
-                      placeholder="138.6007"
-                      value={customLon}
-                      onChange={(e) => setCustomLon(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-slate-400 block mb-1">Latitude (-90 to +90):</label>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="-34.9285"
+                        value={customLat}
+                        onChange={(e) => setCustomLat(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-400 block mb-1">Longitude (-180 to +180):</label>
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="138.6007"
+                        value={customLon}
+                        onChange={(e) => setCustomLon(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleCustomSubmit}
+                    className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs font-mono transition-colors shadow-sm cursor-pointer"
+                  >
+                    Save Coordinates Monitored Site
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCustomSubmit}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs font-mono transition-colors shadow-sm cursor-pointer"
-                >
-                  Save Coordinates Monitored Site
-                </button>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
           )}
 
           {!canManage && (
@@ -406,7 +409,7 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export const LocationModal = React.memo(LocationModalComponent);
+export const LocationModal = React.memo(LocationModalComponent)

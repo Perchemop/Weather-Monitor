@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
    Motion & scrollbar primitives.
@@ -131,7 +131,6 @@ header[data-app-header] {
     min-height: 44px;
   }
 }
-
 
 /* Respect users who prefer reduced motion: neutralise entrance animations and
    the perpetual pulse/spin loops so the interface stays calm. */
