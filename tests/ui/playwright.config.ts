@@ -18,7 +18,7 @@ export default defineConfig({
     serviceWorkers: 'block',
   },
   webServer: {
-    command: `cd ../../ && npm run build && NODE_ENV=production DATA_DIR=${dataDir} node dist/server.cjs`,
+    command: `npm run build && NODE_ENV=production DATA_DIR=${dataDir} node dist/server.cjs`,
     url: `http://localhost:${port}/healthz`,
     reuseExistingServer: false,
     stdout: 'pipe',
