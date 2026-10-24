@@ -6,7 +6,25 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_Nothing yet — changes land here between tagged releases._
+### Added
+
+- **Research phase complete (guide §2.3).** Five research notes drafted in
+  `docs/research/` — in-app crash report submission (device-flow user token,
+  memory-only), multi-architecture container images, Prettier adoption,
+  Playwright DOM smoke tests, and Prometheus alert examples + runbook. Each
+  note is an original summary with acceptance criteria, edge cases, and source
+  URLs only.
+- `docs/current-model-map.md` now documents the research method (guide §2.4):
+  orchestrator web access first, CI fetch assist second, human-pasted excerpts
+  last; notes human-gated before dependent implementation.
+- `ROADMAP.md` expanded into the exhaustive completion plan: staged
+  0.1.x → 0.2.x → 1.0.0 with feature-breadth and ready-for-work percentages
+  updated from evidence only, plus an explicit out-of-scope record.
+
+### Known limitations
+
+- All five research notes are **awaiting the human gate**; no dependent
+  implementation exists yet.
 
 ## [0.1.0] — 2026-10-24
 
