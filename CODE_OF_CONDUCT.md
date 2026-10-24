@@ -33,10 +33,11 @@ outside those spaces.
 
 ## Reporting
 
-Report unacceptable behaviour to the maintainer at
-**conduct@weathermonitor.local** (see `SECURITY.md` for security reports,
-which follow a separate private path). All reports will be reviewed and
-investigated promptly and fairly.
+Report unacceptable behaviour privately to the maintainer
+([@Perchemop](https://github.com/Perchemop)) via GitHub, or to the email address
+listed on their GitHub profile. Security reports follow a separate private path
+(see `SECURITY.md`). All reports will be reviewed and investigated promptly and
+fairly.
 
 Reports are handled privately, and the reporter's identity is not shared
 with the person reported. Confidentiality extends to any details shared

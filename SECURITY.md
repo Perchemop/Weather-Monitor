@@ -2,7 +2,13 @@
 
 ## Reporting a vulnerability privately
 
-Report security vulnerabilities by email to **security@weathermonitor.local**.
+**Preferred:** use GitHub **private vulnerability reporting** for this
+repository — open
+<https://github.com/Perchemop/Weather-Monitor/security/advisories/new>. It
+creates a private draft advisory visible only to you and the maintainer.
+
+**Alternative:** contact the maintainer ([@Perchemop](https://github.com/Perchemop))
+privately via GitHub, or use the email address listed on their GitHub profile.
 
 Please **do not** open a public issue, discussion, or pull request for a
 security problem. If you believe public disclosure is already happening or
