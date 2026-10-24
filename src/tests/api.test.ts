@@ -124,6 +124,8 @@ async function main(): Promise<void> {
     assert.equal(res.status, 200);
     assert.equal(res.body.status, 'ok');
     assert.equal(typeof res.body.uptimeSeconds, 'number');
+    assert.equal(typeof res.body.version, 'string', 'health exposes the running version');
+    assert.match(res.body.version, /^\d+\.\d+\.\d+$/, 'version is a plain semver string');
   });
 
   await test('Auth: /api/auth/status is unauthenticated and leaks no owner email', async () => {

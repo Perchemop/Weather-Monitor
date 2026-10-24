@@ -3,9 +3,9 @@
 Maps each requirement to where it is implemented and how it is verified.
 Status: **Met** (implemented and covered), **Partial**, or **Planned**.
 
-Automated verification runs in GitHub Actions (`npm test`): 57 unit/system tests
+Automated verification runs in GitHub Actions (`npm test`): 59 unit/system tests
 (`src/tests/system.test.ts`) and 29 HTTP integration tests
-(`src/tests/api.test.ts`), 86 total.
+(`src/tests/api.test.ts`), 88 total.
 
 | # | Requirement | Implementation | Verification | Status |
 | --- | --- | --- | --- | --- |
@@ -43,6 +43,11 @@ Automated verification runs in GitHub Actions (`npm test`): 57 unit/system tests
 | R-29 | Persistence failures are visible (no silent data loss) | `db.ts` persistence status, `server.ts` health + metrics | system + api tests | Met |
 | R-30 | Property-based checks (determinism, monotonicity, disclaimer) | `src/tests/system.test.ts` | system tests | Met |
 | R-31 | Operating-guide rules tracked, with adaptations recorded | `docs/guide-compliance.md`, `DECISIONS.md` | review | Met |
+| R-32 | Crash stub: never silent, never loses unsaved data | `ErrorBoundary` (wired in `main.tsx`), `server.ts` process handlers + graceful flush | review + CI; manual QC | Met |
+| R-33 | Update check vs GitHub Releases, fail-soft, rate-courteous | `src/utils/updateCheck.ts`, Settings → About | system tests (comparison) + manual QC | Met |
+| R-34 | Running version surfaced | `src/version.ts`, `/healthz`, `/api/health`, About panel | api test (health version) | Met |
+| R-35 | Release path: tag → artefacts + checksums + changelog notes | `.github/workflows/release.yml` | release workflow run for `v0.1.0` | Met |
+| R-36 | PR template, CONTRIBUTING, ROADMAP, brand doc, research gate | `.github/PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, `ROADMAP.md`, `docs/design/brand.md`, `docs/research/README.md` | files + review | Met |
 
 ## Gaps / planned
 

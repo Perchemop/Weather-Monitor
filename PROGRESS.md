@@ -5,11 +5,14 @@ detailed history lives in `CHANGELOG.md`.
 
 ## Where we are
 
-- **Branch:** `opencode/ci`, with an open pull request (#1) into `main`. Nothing
-  is merged until a human reviews it.
+- **Branch:** `opencode/ci`, with pull requests into `main` reviewed and
+  rebase-merged to keep history linear.
 - **CI:** green on every slice. The workflow now runs `format-check`, a
-  multi-OS `build-test` matrix (Windows, macOS, Linux — type-check, 86 tests,
+  multi-OS `build-test` matrix (Windows, macOS, Linux — type-check, 88 tests,
   production build, static build with artefact upload), and `docker`.
+- **Releases:** `release.yml` turns `v*` tags into GitHub Releases with
+  checksummed artefacts and CHANGELOG-derived notes; `v0.1.0` is the first
+  tagged release. The app checks for updates in Settings → About.
 - **Operating model:** the guide's CTO.new-style flow —
   **Chat (plan) → Task (execute) → Pull Request (review)**; see
   `docs/development.md`.

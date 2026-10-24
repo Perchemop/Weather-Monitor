@@ -21,7 +21,7 @@ Autonomous, local-first microclimate risk evaluation and automated safety alerti
 - **Lightning Forecasting**: Open-Meteo Lightning Potential Index and CAPE raise a dedicated **LIGHTNING** alert ahead of a WMO thunderstorm code, in both the server and static engines.
 - **Keep Screen Awake**: A Screen Wake Lock toggle stops a phone/tablet left on the dashboard from sleeping, and polling pauses while the tab is hidden to save mobile battery.
 - **Optional Severe-Weather Email**: The server build emails via SMTP; the static build can POST severe alerts to a free, open-source Cloudflare Worker relay you own (`integrations/cloudflare-worker-email-relay`).
-- **Operational Delivery**: Structured JSON logging, an unauthenticated `/healthz` liveness probe, an auth-or-token-gated Prometheus `/metrics` endpoint, GitHub Actions CI, and a Dockerfile + Compose stack.
+- **Operational Delivery**: Structured JSON logging, an unauthenticated `/healthz` liveness probe, an auth-or-token-gated Prometheus `/metrics` endpoint, GitHub Actions CI, a Dockerfile + Compose stack, and tagged GitHub Releases with checksummed artefacts.
 
 ---
 
@@ -369,10 +369,10 @@ The server will start on port 3000 (`http://localhost:3000`).
 ### Running the Test Suites
 ```bash
 npm test              # both suites
-npm run test:unit     # deterministic engine + utilities (57 checks)
+npm run test:unit     # deterministic engine + utilities (59 checks)
 npm run test:api      # HTTP integration surface (29 checks)
 ```
-The suite is now an **86-point** verification run split across two layers:
+The suite is now an **88-point** verification run split across two layers:
 
 - **Unit suite** — deterministic risk calculation (including UV level handling
   and next-6-hour forecast windowing), WeatherAPI→WMO condition mapping,
@@ -412,6 +412,18 @@ cp .env.example .env   # then edit your credentials
 docker compose up --build
 ```
 State (SQLite database, backups, and generated secrets) persists in `./data`.
+
+### Staying current
+
+- **Releases:** every `v*.*.*` tag publishes a GitHub Release with build
+  artefacts and SHA-256 checksums (`.github/workflows/release.yml`).
+- **Update check:** Settings → About shows the running version and can check
+  GitHub Releases on demand (cached hourly, fails soft offline, sends nothing
+  from your device).
+- **Bug reports:** Settings → About → "Open a GitHub issue" pre-fills a report
+  you review and submit yourself.
+- **Contributing:** see `CONTRIBUTING.md`; the public plan lives in
+  `ROADMAP.md`.
 
 ---
 

@@ -94,6 +94,7 @@ import { maskSecret } from './src/utils/security.js';
 import { securityHeaders } from './src/utils/securityHeaders.js';
 import { createRateLimiter } from './src/utils/rateLimiter.js';
 import { logger, requestLogger } from './src/utils/logger.js';
+import { APP_VERSION } from './src/version.js';
 import { validatePasswordStrength, describePasswordPolicy } from './src/utils/password.js';
 import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from './src/utils/totp.js';
 import { loadOrCreateSessionSecret } from './src/utils/secretStore.js';
@@ -459,7 +460,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   // load balancers can probe the process without credentials. Readiness is
   // reported separately by /api/health, which also exposes persistence state.
   app.get('/healthz', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', uptimeSeconds: Math.floor(process.uptime()) });
+    res.json({ status: 'ok', version: APP_VERSION, uptimeSeconds: Math.floor(process.uptime()) });
   });
 
   // ----------------- METRICS (PROMETHEUS) -----------------
@@ -1426,6 +1427,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     const persistence = getPersistenceStatus();
 
     res.json({
+      version: APP_VERSION,
       weatherApiStatus: monitor.status === 'ERROR' ? 'DEGRADED' : 'HEALTHY',
       databaseStatus: persistence.healthy ? 'HEALTHY' : 'ERROR',
       databasePersistError: persistence.lastError,
@@ -1619,9 +1621,45 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
  */
 async function startServer(): Promise<void> {
   const app = await createApp();
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info('server_listening', { url: `http://localhost:${PORT}`, port: PORT });
   });
+
+  // ----------------- CRASH STUB (guide §6.1 / §7.1) -----------------
+  // A crash must never be silent and must never take unsaved data with it.
+  // Rejections are logged and the process keeps serving; a genuine uncaught
+  // exception is logged, the in-memory database is flushed to disk, and the
+  // process exits so the container orchestrator can restart it cleanly.
+  // (In-app crash report submission via GitHub is a 0.2.x roadmap item.)
+  process.on('unhandledRejection', (reason) => {
+    logger.error('unhandled_rejection', { reason: String(reason instanceof Error ? reason.stack || reason.message : reason) });
+  });
+  process.on('uncaughtException', (err) => {
+    logger.error('uncaught_exception', { message: err.message, stack: err.stack });
+    try {
+      persistDb();
+    } catch {
+      // Nothing more can be done; exit below regardless.
+    }
+    process.exit(1);
+  });
+
+  // ----------------- GRACEFUL SHUTDOWN -----------------
+  // Orchestrators send SIGTERM; interactive runs send SIGINT. Flush the
+  // database, stop accepting connections, and exit within a bounded time.
+  const shutdown = (signal: string) => {
+    logger.info('server_shutdown', { signal });
+    try {
+      persistDb();
+    } catch (err) {
+      logger.error('shutdown_persist_failed', { message: String(err) });
+    }
+    server.close(() => process.exit(0));
+    // Force the exit if close hangs (open keep-alive sockets).
+    setTimeout(() => process.exit(0), 3000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 export { createApp, startServer };

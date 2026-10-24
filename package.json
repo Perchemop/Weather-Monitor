@@ -1,7 +1,7 @@
 {
   "name": "construction-weather-monitor",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Local-first construction site weather monitoring and safety alerting enclave.",
   "type": "module",
   "engines": {
