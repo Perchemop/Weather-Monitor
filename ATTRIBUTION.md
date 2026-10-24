@@ -29,12 +29,12 @@ Type packages (`@types/*`) are used at build time only.
 
 ## Data sources
 
-| Source                                        | Terms                                                       | Use                        |
-| --------------------------------------------- | ----------------------------------------------------------- | -------------------------- |
-| **Open-Meteo** (<https://open-meteo.com>)     | **CC BY 4.0** — attribution required next to displayed data | Weather + geocoding        |
-| **WeatherAPI** (<https://www.weatherapi.com>) | User-supplied key, provider terms                           | Optional primary reference |
-| **RainViewer** (<https://www.rainviewer.com>) | Free tier                                                   | Radar tiles for the map    |
-| **Leaflet/OpenStreetMap**                     | ODbL (OSM data)                                             | Base map tiles             |
+| Source                                        | Terms                                                                        | Use                                                                 |
+| --------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Open-Meteo** (<https://open-meteo.com>)     | **CC BY 4.0** — attribution required next to displayed data                  | Weather + geocoding                                                 |
+| **WeatherAPI** (<https://www.weatherapi.com>) | User-supplied key, provider terms                                            | Optional primary reference                                          |
+| **RainViewer** (<https://www.rainviewer.com>) | Free tier is **non-commercial only**; commercial use needs a RainViewer plan | Optional radar tiles (degradable; not required for risk assessment) |
+| **Leaflet/OpenStreetMap**                     | ODbL (OSM data)                                                              | Base map tiles                                                      |
 
 ## Referenced standards
 
