@@ -2,7 +2,8 @@ import { test, expect, type Page } from '@playwright/test'
 
 const OWNER_PASSWORD = 'StrongPass123'
 const OWNER_EMAIL = 'owner@local'
-const VIEWER_EMAIL = 'viewer@local'
+// The user-creation API requires a dotted domain (`/api/users` email policy).
+const VIEWER_EMAIL = 'viewer@local.host'
 const VIEWER_PASSWORD = 'ViewerPass123'
 
 /**
