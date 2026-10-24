@@ -1,0 +1,66 @@
+# Prometheus alerting rules for Construction Weather Monitor
+# Copy into your Prometheus rules directory and reload.
+#
+# All rules reference metrics exposed at /metrics with METRICS_TOKEN auth.
+# Adjust 'for:' durations if you change cwm_settings_monitor_interval_minutes.
+
+groups:
+  - name: weather_monitor
+    rules:
+      - alert: CwmDatabasePersistUnhealthy
+        expr: cwm_database_persist_healthy == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Weather Monitor database persistence unhealthy'
+          description: 'cwm_database_persist_healthy is 0 for >5m. Writes may be failing; data loss risk.'
+          runbook_url: 'https://github.com/Perchemop/Weather-Monitor/blob/main/docs/runbook.md#CwmDatabasePersistUnhealthy'
+
+      - alert: CwmMonitorStalled
+        expr: time() - cwm_monitor_last_check_timestamp_seconds > 3 * cwm_settings_monitor_interval_minutes * 60
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Weather monitoring loop stalled'
+          description: 'No monitoring cycle completed within 3 intervals. cwm_monitor_last_check_timestamp_seconds is stale.'
+          runbook_url: 'https://github.com/Perchemop/Weather-Monitor/blob/main/docs/runbook.md#CwmMonitorStalled'
+
+      - alert: CwmMonitorConsecutiveFailures
+        expr: cwm_monitor_consecutive_failures > 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Monitoring loop failing consecutively'
+          description: 'cwm_monitor_consecutive_failures > 3 for >10m.'
+          runbook_url: 'https://github.com/Perchemop/Weather-Monitor/blob/main/docs/runbook.md#CwmMonitorStalled'
+
+      - alert: CwmMemoryHigh
+        expr: cwm_memory_rss_bytes / 1e9 > 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Weather Monitor RSS memory high'
+          description: 'RSS > 1GiB for >15m. Check for leaks or growing observation store.'
+          runbook_url: 'https://github.com/Perchemop/Weather-Monitor/blob/main/docs/runbook.md#process-health'
+
+      - alert: CwmWeatherApiConfigured
+        expr: changes(cwm_weather_api_configured[1h]) != 0
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: 'WeatherAPI configuration changed'
+          description: 'cwm_weather_api_configured changed; verify provider behaviour.'
+
+      - alert: CwmSmtpNotConfigured
+        expr: cwm_smtp_configured == 0
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: 'SMTP not configured'
+          description: 'Email alerts will not be sent. Configure SMTP if email alerts are required.'
