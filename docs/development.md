@@ -81,6 +81,17 @@ without SMTP it skips email. Notable variables:
 - `METRICS_TOKEN` — shared token for `/metrics`.
 - `DATA_DIR` — relocate the SQLite database and generated secrets.
 
+## Git identity (required)
+
+Every commit in app repositories must be authored as
+`"Construction Weather Monitor Dev" <dev@example.com>` (guide §5.5).
+`ci.sh` enforces this; set it locally:
+
+```bash
+git config --local user.name  "Construction Weather Monitor Dev"
+git config --local user.email "dev@example.com"
+```
+
 ## Format & style checks
 
 ```bash

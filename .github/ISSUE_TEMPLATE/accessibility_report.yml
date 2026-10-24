@@ -1,0 +1,65 @@
+name: Accessibility report
+description: Report a barrier for people using assistive technology
+title: '[A11y]: '
+labels: ['accessibility']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Accessibility issues are treated as functional bugs. Please provide details about assistive technology so we can reproduce.
+  - type: textarea
+    id: barrier
+    attributes:
+      label: Barrier experienced
+      description: What could you not do or understand?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: How should it work accessibly?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps to trigger the barrier.
+    validations:
+      required: true
+  - type: input
+    id: at
+    attributes:
+      label: Assistive technology
+      description: e.g. NVDA 2025.x, JAWS, VoiceOver, TalkBack, switch control
+      placeholder: 'NVDA 2024.4 + Firefox'
+    validations:
+      required: true
+  - type: input
+    id: browser-os
+    attributes:
+      label: Browser and OS
+      placeholder: 'Firefox 131 on Windows 11'
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - 'Critical — cannot complete a safety task'
+        - 'High — significant barrier'
+        - 'Medium — workaround exists'
+        - 'Low — minor issue'
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots/recordings
+      description: If possible, include a recording or screenshots.
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context

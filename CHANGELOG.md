@@ -8,6 +8,17 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Open-source project readiness (Part II of operating guide).** Added
+  `CODE_OF_CONDUCT.md`, `SECURITY.md`, `ACCESSIBILITY.md`, `VISION.md`,
+  `GOVERNANCE.md`, `CONTRIBUTORS.md`, `CITATION.cff`; GitHub issue templates
+  (bug, feature, accessibility) with private security reporting; `dependabot.yml`,
+  `CodeQL` workflow; licence policy checker (`scripts/check-licences.mjs`); PR
+  template expanded with accessibility checklist and git-identity reminder;
+  `CONTRIBUTING.md` expanded with local setup, identity instructions and
+  response expectations.
+- **Legal/compliance.** Open-Meteo data attribution added to the UI footer and
+  map (CC BY 4.0); `ATTRIBUTION.md` extended with dependency classes, AI/model
+  provenance and deliberate MIT-only licensing. Map tiles attribution clarified.
 - **Research phase complete (guide §2.3).** Five research notes in
   `docs/research/` — in-app crash report submission (device-flow user token,
   memory-only), multi-architecture container images, Prettier adoption,

@@ -13,7 +13,7 @@ Versions are declared in `package.json`.
 | `cookie-parser`                    | MIT          | Cookie parsing                 |
 | `dotenv`                           | BSD-2-Clause | Environment loading            |
 | `nodemailer`                       | MIT-0        | SMTP email                     |
-| `web-push`                         | MIT          | Web Push / VAPID               |
+| `web-push`                         | MPL-2.0      | Web Push / VAPID               |
 | `leaflet`                          | BSD-2-Clause | Map rendering                  |
 | `lucide-react`                     | ISC          | Icons                          |
 | `recharts`                         | MIT          | Charts                         |
@@ -29,12 +29,12 @@ Type packages (`@types/*`) are used at build time only.
 
 ## Data sources
 
-| Source                                        | Terms                             | Use                        |
-| --------------------------------------------- | --------------------------------- | -------------------------- |
-| **Open-Meteo** (<https://open-meteo.com>)     | Free, open, attribution requested | Weather + geocoding        |
-| **WeatherAPI** (<https://www.weatherapi.com>) | User-supplied key, provider terms | Optional primary reference |
-| **RainViewer** (<https://www.rainviewer.com>) | Free tier                         | Radar tiles for the map    |
-| **Leaflet/OpenStreetMap**                     | ODbL (OSM data)                   | Base map tiles             |
+| Source                                        | Terms                                                       | Use                        |
+| --------------------------------------------- | ----------------------------------------------------------- | -------------------------- |
+| **Open-Meteo** (<https://open-meteo.com>)     | **CC BY 4.0** — attribution required next to displayed data | Weather + geocoding        |
+| **WeatherAPI** (<https://www.weatherapi.com>) | User-supplied key, provider terms                           | Optional primary reference |
+| **RainViewer** (<https://www.rainviewer.com>) | Free tier                                                   | Radar tiles for the map    |
+| **Leaflet/OpenStreetMap**                     | ODbL (OSM data)                                             | Base map tiles             |
 
 ## Referenced standards
 
@@ -48,7 +48,23 @@ Type packages (`@types/*`) are used at build time only.
   operator deploys themselves for the static build's email delivery. Covered by
   this repository's licence.
 
+## Dependency licence classes (policy)
+
+Dependencies are classified as permissive where possible (MIT/ISC/BSD/Apache-2.0).
+**MPL-2.0** (e.g. `web-push`, `lightningcss`) is weak copyleft (file-level); usage is
+tracked and compliant with the licence terms. `caniuse-lite` uses **CC-BY-4.0** for
+usage data only (not compiled into redistributed binaries as artwork). All licences are
+checked in CI by `scripts/check-licences.mjs`.
+
+## AI / model / API terms used during build (provenance)
+
+This project was built with OpenCode using free-tier models (see
+`docs/current-model-map.md`). Use of free model tiers is subject to each provider's
+terms of service. No API keys or privileged bot tokens are embedded in the client;
+only user-supplied credentials are used at runtime. Weather provider terms apply to
+data requests made by operators.
+
 ## This project
 
-Released under the MIT licence (see `LICENSE`; confirm in
-`docs/assumptions-and-questions.md`, question Q-01).
+Released under the **MIT** licence (see `LICENSE`). Dual-licence (MIT OR Apache-2.0) was
+considered; **MIT-only** was chosen deliberately and recorded here for clarity.
