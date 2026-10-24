@@ -177,9 +177,73 @@ known limitations documented ✅ (`docs/scope.md`, assumptions and questions).
 | Evidence-based report at the end of a phase | Met | this file plus `docs/qc/release-checklist.md` |
 | Secret scanning / leak protection | Met | GitHub push protection + secret scanning; PR checklist line |
 
+## Part II — §15 Coverage map & §16 required files
+
+| Rule | Status | Where |
+| --- | --- | --- |
+| Required repository files present | Met | `LICENSE`, `README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `ACCESSIBILITY.md`, `VISION.md`, `GOVERNANCE.md`, `CONTRIBUTORS.md`, `CITATION.cff`, `CHANGELOG.md`, `ATTRIBUTION.md`, `docs/qc/` |
+| Issue templates (bug, feature, accessibility) | Met | `.github/ISSUE_TEMPLATE/{bug_report,feature_request,accessibility_report,config}.yml` |
+| Licence choice deliberate | Met | MIT-only, recorded in `ATTRIBUTION.md` and D-28 (§26.6) |
+
+## Part II — §17–§18 community, naming
+
+| Rule | Status | Where |
+| --- | --- | --- |
+| Contributor funnel, README for a stranger | Met | `README.md` (what/why/how/help + Community & policies) |
+| CONTRIBUTING beyond mechanics (bug/feature/setup/tests/tone) | Met | `CONTRIBUTING.md` (incl. §26.1 resolution) |
+| Expectations & boundaries (7 days, few hours/week) | Met | `CONTRIBUTING.md`, `GOVERNANCE.md` |
+| Labels that invite contribution | Met | `good first issue`, `help wanted`, `documentation`, `first-timers-only`, plus area labels |
+| Keep discussion public; name conflict check | Met | `GOVERNANCE.md`, `docs/product-name.md` conflict record |
+
+## Part II — §19 legal
+
+| Rule | Status | Where |
+| --- | --- | --- |
+| Dependency licence classes recorded | Met | `ATTRIBUTION.md` (D-24) |
+| Non-code asset licences (icons, data, map) | Met | `ATTRIBUTION.md`; Open-Meteo CC BY 4.0 shown in UI footer + map |
+| Automated licence + SBOM checks | Met | `scripts/check-licences.mjs`; `security-compliance` job (CycloneDX SBOM) |
+| Contributor agreement / DCO decision | Met | inbound=outbound via MIT; recorded in `CONTRIBUTING.md` |
+| Employer/IP check recorded | Adapted | assumed unchecked; `docs/assumptions-and-questions.md` A-07 |
+| AI/model terms recorded | Met | `ATTRIBUTION.md` provenance section |
+
+## Part II — §20 security
+
+| Rule | Status | Where |
+| --- | --- | --- |
+| MFA + two admins | Human action | recorded in `docs/assumptions-and-questions.md`, `GOVERNANCE.md` |
+| SAST | Met | CodeQL workflow (JS/TS) on push/PR/weekly |
+| Protected branch + required checks | Met | branch protection on `main` (6 required checks; no force-push/deletion) |
+| SCA / dependency updates | Met | Dependabot (npm/actions/docker) + Dependabot security updates; `dependency-review` job |
+| Pin build inputs | Met | all `uses:` pinned to commit SHAs |
+| Private vulnerability reporting + threat model | Met | enabled on GitHub; `SECURITY.md` threat model + incident response |
+| Secret scanning | Met | secret scanning + push protection enabled (validity/non-provider patterns need GHAS) |
+
+## Part II — §21–§25 accessibility, governance, launch, sustainability, DoD
+
+| Rule | Status | Where |
+| --- | --- | --- |
+| Accessibility statement + separate report path | Met | `ACCESSIBILITY.md`, `accessibility_report.yml`, `accessibility` label |
+| A11y PR checklist + DoD + release smoke test | Met | `.github/PULL_REQUEST_TEMPLATE.md`, `docs/qc/release-checklist.md` |
+| Governance roles, decision model, tiebreaker | Met | `GOVERNANCE.md` |
+| Vision/message, one home URL, metrics recorded | Met | `VISION.md`, Pages site, `docs/assumptions-and-questions.md` A-08/A-09 |
+| Sustainability (response expectations, pause policy) | Met | `GOVERNANCE.md`, `CONTRIBUTING.md` |
+| Updated DoD + pre-launch checklist | Met | `docs/qc/release-checklist.md` (Part II gates + a11y smoke test) |
+| Tracking files updated | Met | `CHANGELOG.md`, `PROGRESS.md`, `REQUIREMENTS_TRACEABILITY.md` (R-37…R-44) |
+| Git identity `"<App Name> Dev"` | Met | `ci.sh` asserts; PR template + `docs/development.md` (D-23) |
+
+## Part II — §26 conflicts (resolved, recorded)
+
+All six conflicts recorded in `DECISIONS.md` D-28: local tests documented with
+CI authoritative; public-from-day-one kept with hard gates; PR flow + protected
+branch adopted; agent credentials least-privilege with two-admins flagged;
+guide stays local with process mirrored publicly; MIT-only licence confirmed.
+
+**Remaining human decisions (not silently resolved):** enabling MFA and adding a
+second admin; whether to pursue a domain/handles beyond GitHub; and the
+employer/IP check (A-07).
+
 ## Deferred
 
 - In-app crash report submission via user token / device flow (0.2.x, research-gated — the pre-filled issue URL is the shipped fallback).
-- Browser-level (DOM) UI tests — covered today by type-check, build and manual QC.
-- Multi-architecture container images.
-- Opinionated formatter adoption (see the §4 adaptation).
+- Browser-level (DOM) UI tests (Playwright) — covered today by type-check, build and manual QC; research slice 4 of 5.
+- Repository secret-scanning validity checks / non-provider patterns (need GitHub Advanced Security).
