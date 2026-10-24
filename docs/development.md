@@ -96,8 +96,9 @@ Both run in CI's `format-check` job. Two layers, distinct jobs:
   whitespace on lines *you* added (Markdown is exempt — two trailing spaces
   there are a hard line break).
 - **Style** (Prettier): formatting of code, Markdown prose, JSON and YAML.
-  `docs/`, generated output, lockfiles, `public/sw.js` and `opencode.jsonc`
-  are excluded via `.prettierignore` (see the file for why).
+  `docs/`, generated output, lockfiles, `public/sw.js` and the harness config
+  (`.opencode/`, `opencode.jsonc`) are excluded via `.prettierignore` — the
+  harness owns and rewrites those files, so they are not ours to reformat.
 
 ## Running the suites (in CI)
 

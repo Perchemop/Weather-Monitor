@@ -11,6 +11,7 @@ public/sw.js
 # Harness config (agent/tooling-facing): keep its hand-authored formatting;
 # a formatter-imposed trailing comma would break a strict JSON parser.
 opencode.jsonc
+.opencode/
 
 # Prose is hand-formatted (two-space hard breaks in the style of Keep a Changelog)
 docs/
