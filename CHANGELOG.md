@@ -6,8 +6,33 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+_Nothing yet — changes land here between tagged releases._
+
+## [0.1.0] — 2026-10-24
+
+First tagged release: a deterministic construction weather risk monitor with
+autonomous alerting, hardened multi-user auth, and a local-first SQLite store.
+Includes the initial baseline (risk engine, dual-provider weather, alerting,
+multi-user auth, monitoring loop, backups, PWA and static build) plus the
+hardening and governance work below.
+
 ### Added
 
+- **About panel with update check** (Settings → About, all roles): shows the
+  running version, checks GitHub Releases on demand (cached hourly, fails soft
+  offline) and offers a pre-filled GitHub issue form for bug reports — the
+  crash/bug-report fallback that sends nothing automatically (guide §7).
+- **Crash stub and graceful shutdown** (server): structured logging on
+  `unhandledRejection`, log + database flush + bounded exit on
+  `uncaughtException`, and SIGTERM/SIGINT handlers that persist the database
+  before closing (guide §6.1/§7.1).
+- **Version surfacing:** `/healthz` and `/api/health` now report the running
+  `version`, verified by tests.
+- **Dashboard design pass:** reordered by operator priority (risk hero →
+  alerts → conditions → hourly → quick-cards → diagnostics), provider
+  cross-reference collapsed to a one-line summary with an expandable table,
+  engineering status strip removed, consistent card anatomy and typography,
+  per-hour weather icons, and semantic colour reserved for risk state.
 - **Observable persistence health.** A failed SQLite write is now recorded and
   surfaced through `GET /api/health` (`databaseStatus`, `databasePersistError`)
   and the `cwm_database_persist_healthy` Prometheus gauge. Previously the health
@@ -80,8 +105,3 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   false success.
 - **Tooling:** the `docs-writer` subagent's edit permission was corrected from
   deny to allow.
-
-## [1.0.0]
-
-Initial baseline: deterministic risk engine, dual-provider weather, alerting,
-multi-user auth, monitoring loop, backups, PWA and static build.

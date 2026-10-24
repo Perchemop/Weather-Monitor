@@ -20,7 +20,7 @@ recorded deviation; **Deferred** = tracked gap with rationale.
 | Rule | Status | Where |
 | --- | --- | --- |
 | Real data models, persistence, validation, error handling | Met | `src/database/db.ts`, route validation in `server.ts` |
-| Runnable/testable/buildable from a clean checkout | Met | CI: install → type-check → 86 tests → server build → static build |
+| Runnable/testable/buildable from a clean checkout | Met | CI: install → type-check → 88 tests → server build → static build |
 | Free and open-source tools and dependencies | Met | `ATTRIBUTION.md`; no proprietary runtime |
 | Traceability capability → implementation + tests | Met | `REQUIREMENTS_TRACEABILITY.md` |
 | No proprietary code, assets or reverse-engineered internals | Met | `docs/inspiration.md` (clean-room statement) |
@@ -48,7 +48,7 @@ runs on all three OSes. Recorded as D-18.
 | Lightweight local persistence | Met | SQLite via `sql.js`, single file, `DATA_DIR` overridable |
 | Command-centric or clear use-case layer | **Adapted** | see below |
 | No panics in non-test code; never lose user data | Met | errors caught per route/location; persistence failures surfaced, never swallowed silently |
-| Testing: unit, property-based, integration, manual QC | Met | 57 system (incl. property tests + persistence health), 29 HTTP integration, `docs/qc/` |
+| Testing: unit, property-based, integration, manual QC | Met | 59 system (incl. property tests + persistence health), 29 HTTP integration, `docs/qc/` |
 | CI on multiple OS runners | Met | `format-check` + matrix `build-test` (Windows/macOS/Linux) + `docker` |
 
 **Adapted — command-centric.** The guide prefers a command layer. This app is an
@@ -71,7 +71,7 @@ reported as healthy. Recorded as D-20.
 | Commit and push after every meaningful change; CI is the source of truth | Met | every slice pushed and verified; `ci.sh run "…"` |
 | CI: format check | Met | `scripts/check-format.mjs`, `format-check` job |
 | CI: lint with warnings denied | Met | `npm run lint` (`tsc --noEmit`) fails on any diagnostic |
-| CI: full test suite | Met | 86 tests in both suites |
+| CI: full test suite | Met | 88 tests in both suites |
 | CI: dependency + build caching | Met | `actions/setup-node` with `cache: npm` |
 | CI: clear summaries and artefacts | Met | job summary step, `upload-artifact` for `dist/` + `dist-static/` |
 
@@ -100,13 +100,37 @@ deviation from it.
 
 ## §6 Source of truth and tracking files
 
-All fifteen required paths exist: `docs/project-brief.md`, `docs/scope.md`,
+All required paths exist: `docs/project-brief.md`, `docs/scope.md`,
 `docs/inspiration.md`, `docs/product-name.md`, `docs/architecture.md`,
 `docs/parity.md`, `docs/assumptions-and-questions.md`,
 `docs/current-model-map.md`, `IMPLEMENTATION_PLAN.md`,
 `REQUIREMENTS_TRACEABILITY.md`, `DECISIONS.md`, `PROGRESS.md`,
-`CHANGELOG.md`, `ATTRIBUTION.md`, `docs/qc/`, `docs/development.md`
-(plus `LICENSE`). Facts, assumptions and decisions are kept apart.
+`CHANGELOG.md`, `ATTRIBUTION.md`, `docs/qc/`, `docs/development.md`,
+`docs/design/brand.md`, `docs/research/README.md`, `ROADMAP.md`,
+`CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md` (plus `LICENSE`).
+Facts, assumptions and decisions are kept apart.
+
+## §6a Progressive releases & roadmap (guide §6)
+
+| Rule | Status | Where |
+| --- | --- | --- |
+| Release workflow from day one | Met | `.github/workflows/release.yml` — tag `v*.*.*` → gated build, artefacts, checksums, CHANGELOG-derived notes |
+| Hard v0.1.0 gate (installable, real workflow, crash stub, update-check stub, CI, docs, legal baseline, tag) | Met | `v0.1.0` release; crash stub = ErrorBoundary + server process handlers; update-check stub = Settings → About |
+| Release notes standard (summary, Added/Changed/Fixed, limitations, checksums) | Met | `release.yml` extraction step + standard recorded in `docs/qc/release-checklist.md` |
+| Readiness % only from evidence | Met | `ROADMAP.md` ties every Done claim to CI runs/tests |
+| Human gate on research before dependent feature work | Met | `docs/research/README.md` rules; 0.2.x research-gated items marked "Blocked on research" in `ROADMAP.md` |
+
+## §6b Suite infrastructure — crash reporting & update check (guide §7)
+
+**Adapted to the web/TS stack** (recorded as D-22). The guide's shared Rust
+crates are delivered as first-party TypeScript:
+
+| Rule | Status | Where |
+| --- | --- | --- |
+| Crash stub (log, minimal surface; full submit later OK) | Met | React `ErrorBoundary` (wired in `main.tsx`); server `unhandledRejection` structured log; `uncaughtException` → log + SQLite flush + bounded exit; graceful SIGTERM/SIGINT flush |
+| Update check (GitHub Releases, compare, fail soft, no API abuse) | Met | `src/utils/updateCheck.ts` (pure, unit-tested) + Settings → About (hourly cache, manual button, honest `unknown` state) |
+| Fallback: pre-filled New Issue URL, never a privileged token | Met | About → "Open a GitHub issue" (user reviews before sending) |
+| Privacy documented | Met | README "Staying current" + About copy ("never sends any information from this device") |
 
 ## §7 Architecture principles
 
@@ -146,13 +170,16 @@ known limitations documented ✅ (`docs/scope.md`, assumptions and questions).
 | Rule | Status | Where |
 | --- | --- | --- |
 | Every visible control works or is explained | Met | role-mirrored UI; deleted/disabled controls removed |
-| Original visual design | Met | own Tailwind token set, no third-party look-and-feel |
+| Original visual design; marks described in `docs/design/brand.md`; SVG icons | Met | own Tailwind token set; `docs/design/brand.md`; `public/icon*.svg` are agent-authored; Lucide (ISC) in `ATTRIBUTION.md` |
+| PR template with review checklist | Met | `.github/PULL_REQUEST_TEMPLATE.md` (guide §8.3) |
 | Suggested repository structure | Met | matches §11 layout |
 | Create public repo, don't push the guide, then CI + agents + tracking | Met | history shows skeleton → CI → agents → docs → slices |
 | Evidence-based report at the end of a phase | Met | this file plus `docs/qc/release-checklist.md` |
+| Secret scanning / leak protection | Met | GitHub push protection + secret scanning; PR checklist line |
 
 ## Deferred
 
+- In-app crash report submission via user token / device flow (0.2.x, research-gated — the pre-filled issue URL is the shipped fallback).
 - Browser-level (DOM) UI tests — covered today by type-check, build and manual QC.
 - Multi-architecture container images.
 - Opinionated formatter adoption (see the §4 adaptation).
