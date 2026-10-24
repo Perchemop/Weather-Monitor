@@ -20,6 +20,26 @@ requirements.
   that their site coordinates are sent to that provider.
 - **A-06 Time model.** All stored timestamps are UTC ISO-8601; display converts
   to the site timezone.
+- **A-07 Employer / IP policy.** Per guide §19.6, the human collaborator's
+  employer/IP policy **has not been checked** as of 2026-10-24; the project is
+  assumed to be independent work. Topics to confirm: third-party material, trade
+  secrets, patents (public disclosure), trademarks, privacy/data collection,
+  AI-model terms, and SBOM obligations.
+- **A-08 Hosting / handles.** The canonical home URL is the GitHub repository and
+  Pages site (`https://perchemop.github.io/Weather-Monitor/`). No separate domain
+  is reserved; the repository name is the single home URL (§23.2).
+- **A-09 Metrics.** The project tracks repository-level metrics only (stars,
+  clones, issues/PR responsiveness from GitHub Insights). **No in-app telemetry**
+  is collected by design — the privacy commitment forbids it (§23.5).
+
+## Human action items (security, Part II §20.1)
+
+- **MFA** must be enabled on every privileged account (repository owner and any
+  future maintainer).
+- **At least two admins** should hold repository access (bus factor); currently
+  one owner (recorded here rather than assumed done).
+- Repository secret-scanning validity checks and non-provider patterns require
+  GitHub Advanced Security and remain **disabled** (platform limitation).
 
 ## Questions for the owner
 
