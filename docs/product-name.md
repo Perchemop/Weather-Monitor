@@ -2,6 +2,16 @@
 
 **Construction Weather Monitor**
 
+## Conflict check (done 2026-10-24)
+
+- Searched GitHub public repositories for exact name "Construction Weather Monitor" — no obvious
+  conflicts found.
+- Searched npm package names — `construction-weather-monitor` is used by this project.
+- WIPO Global Brand Database reviewed for obvious marks — no clear blocking conflicts found.
+- Name is descriptive (common-word combination), not distinctive of a single commercial product. We have
+  not filed trademarks. If a conflict arises we will rename via §2.2.
+
+
 ## Notes
 
 - The name is descriptive and is used as a working name, not a trademark claim.
