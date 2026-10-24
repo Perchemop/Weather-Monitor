@@ -184,8 +184,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright smoke tests
-        working-directory: tests/ui
-        run: npx playwright test
+        run: npx playwright test --config tests/ui/playwright.config.ts
 
       - name: Upload Playwright report
         if: always()
