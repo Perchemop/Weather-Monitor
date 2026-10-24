@@ -64,6 +64,22 @@ agent-authored changes land through pull requests. Automation credentials are
 kept to the minimum scope required; they are revocable accounts like any
 other, and they receive no special trust.
 
+## Maintainer sustainability (Part II §24)
+
+This project is maintained in the maintainer's own time — realistically a few
+hours a week. To keep it sustainable:
+
+- **Response expectations** are published (see `CONTRIBUTING.md`: aim to reply
+  within 7 days). Acknowledging a request early counts as responding.
+- **It is okay to pause.** The maintainer may step back temporarily; the
+  documentation and automations are written so the project can continue without
+  constant attention, and a permanent step-away will point to an active fork.
+- **The human's role is judgement, not drudgery.** CI does the heavy
+  verification and agents do the repetitive work, keeping the human on
+  decisions, review and direction.
+- **Repeated declines are written down** (here or in `VISION.md`) so "no" never
+  has to be explained twice.
+
 ## Changes to this document
 
 Governance changes go through the normal PR flow. A dispute about governance
