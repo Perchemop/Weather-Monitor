@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Observability — Prometheus runbook + example alerts (slice 0.2.x).** Added
+  `docs/runbook.md` documenting every `cwm_*` metric, scrape config with `METRICS_TOKEN`,
+  normal ranges, and per-alert first actions. Added `deploy/prometheus/alerts.example.yml`
+  with copy-ready rules (`CwmDatabasePersistUnhealthy`, `CwmMonitorStalled`, `CwmMonitorConsecutiveFailures`,
+  `CwmMemoryHigh`, etc.) and `runbook_url` annotations. Rules validate the app's single-node
+  semantics and auth-gated `/metrics` endpoint.
+
 - **Open-source project readiness (Part II of operating guide).** Added
   `CODE_OF_CONDUCT.md`, `SECURITY.md`, `ACCESSIBILITY.md`, `VISION.md`,
   `GOVERNANCE.md`, `CONTRIBUTORS.md`, `CITATION.cff`; GitHub issue templates
