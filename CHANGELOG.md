@@ -26,6 +26,16 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - All five research notes are **awaiting the human gate**; no dependent
   implementation exists yet.
 
+### Changed
+
+- **Prettier is now the style authority** (research-gated slice 1 of 5). One
+  dedicated reformat across code, Markdown, JSON and YAML with no behavioural
+  change — the whole-repository formatting is the only change in this PR.
+  Config in `.prettierrc.json` (no semicolons, single quotes, width 110);
+  `npm run prettier:check` runs in CI alongside the unchanged hygiene checker
+  (`scripts/check-format.mjs`); `.prettierignore` keeps docs, generated output,
+  lockfiles, the service worker and the harness config out of the formatter.
+
 ## [0.1.0] — 2026-10-24
 
 First tagged release: a deterministic construction weather risk monitor with
@@ -108,6 +118,7 @@ hardening and governance work below.
   using the response's `utc_offset_seconds`, fixing misaligned current and
 
   hourly values when the server timezone differs from the site.
+
 - **Risk:** extremely high UV now raises the overall risk level to `HIGH`, and
   very-high UV moves the level and score instead of being displayed without
   affecting the headline level.

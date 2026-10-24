@@ -22,21 +22,21 @@
  *   * set exactly one provider key.
  */
 
-const MAX_SUBJECT = 200;
-const MAX_BODY = 20000;
+const MAX_SUBJECT = 200
+const MAX_BODY = 20000
 
 function json(obj, status, cors) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { ...cors, 'Content-Type': 'application/json' }
-  });
+    headers: { ...cors, 'Content-Type': 'application/json' },
+  })
 }
 
 async function safeText(res) {
   try {
-    return (await res.text()).slice(0, 500);
+    return (await res.text()).slice(0, 500)
   } catch {
-    return '';
+    return ''
   }
 }
 
@@ -46,32 +46,32 @@ export default {
       'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN || '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, X-Relay-Secret',
-      'Access-Control-Max-Age': '86400'
-    };
+      'Access-Control-Max-Age': '86400',
+    }
 
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405, cors);
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
+    if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405, cors)
 
     // Optional shared-secret gate.
     if (env.RELAY_SECRET) {
       const provided =
-        request.headers.get('X-Relay-Secret') || new URL(request.url).searchParams.get('secret');
-      if (provided !== env.RELAY_SECRET) return json({ error: 'Unauthorized' }, 401, cors);
+        request.headers.get('X-Relay-Secret') || new URL(request.url).searchParams.get('secret')
+      if (provided !== env.RELAY_SECRET) return json({ error: 'Unauthorized' }, 401, cors)
     }
 
-    let body;
+    let body
     try {
-      body = await request.json();
+      body = await request.json()
     } catch {
-      return json({ error: 'Invalid JSON body' }, 400, cors);
+      return json({ error: 'Invalid JSON body' }, 400, cors)
     }
 
-    const to = body.to || env.ALERT_TO;
-    const subject = String(body.subject || 'Weather alert').slice(0, MAX_SUBJECT);
-    const text = String(body.text || '').slice(0, MAX_BODY);
+    const to = body.to || env.ALERT_TO
+    const subject = String(body.subject || 'Weather alert').slice(0, MAX_SUBJECT)
+    const text = String(body.text || '').slice(0, MAX_BODY)
 
-    if (!to) return json({ error: 'No recipient (set ALERT_TO or include `to`)' }, 400, cors);
-    if (!env.EMAIL_FROM) return json({ error: 'EMAIL_FROM is not configured' }, 500, cors);
+    if (!to) return json({ error: 'No recipient (set ALERT_TO or include `to`)' }, 400, cors)
+    if (!env.EMAIL_FROM) return json({ error: 'EMAIL_FROM is not configured' }, 500, cors)
 
     try {
       if (env.RESEND_API_KEY) {
@@ -79,11 +79,12 @@ export default {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, text })
-        });
-        if (!res.ok) return json({ error: 'Resend rejected the message', detail: await safeText(res) }, 502, cors);
+          body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, text }),
+        })
+        if (!res.ok)
+          return json({ error: 'Resend rejected the message', detail: await safeText(res) }, 502, cors)
       } else if (env.BREVO_API_KEY) {
         const res = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
@@ -92,17 +93,18 @@ export default {
             sender: { email: env.EMAIL_FROM },
             to: [{ email: to }],
             subject,
-            textContent: text
-          })
-        });
-        if (!res.ok) return json({ error: 'Brevo rejected the message', detail: await safeText(res) }, 502, cors);
+            textContent: text,
+          }),
+        })
+        if (!res.ok)
+          return json({ error: 'Brevo rejected the message', detail: await safeText(res) }, 502, cors)
       } else {
-        return json({ error: 'No provider configured (set RESEND_API_KEY or BREVO_API_KEY)' }, 500, cors);
+        return json({ error: 'No provider configured (set RESEND_API_KEY or BREVO_API_KEY)' }, 500, cors)
       }
     } catch (err) {
-      return json({ error: 'Relay failed', detail: String(err) }, 502, cors);
+      return json({ error: 'Relay failed', detail: String(err) }, 502, cors)
     }
 
-    return json({ ok: true }, 200, cors);
-  }
-};
+    return json({ ok: true }, 200, cors)
+  },
+}

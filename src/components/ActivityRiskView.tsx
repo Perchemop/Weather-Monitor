@@ -1,20 +1,43 @@
-import React from 'react';
-import { AlertTriangle, Clock, ShieldCheck, ShieldAlert, Zap, HardHat } from 'lucide-react';
-import { ConstructionImpacts } from './ConstructionImpacts';
-import { RiskAssessment, RiskLevel } from '../types';
+import React from 'react'
+import { AlertTriangle, Clock, ShieldCheck, ShieldAlert, Zap, HardHat } from 'lucide-react'
+import { ConstructionImpacts } from './ConstructionImpacts'
+import { RiskAssessment, RiskLevel } from '../types'
 
 interface ActivityRiskViewProps {
-  risk: RiskAssessment | null;
-  locationName: string;
-  isLoading: boolean;
+  risk: RiskAssessment | null
+  locationName: string
+  isLoading: boolean
 }
 
-const LEVEL_STYLES: Record<RiskLevel, { badge: string; ring: string; label: string; icon: React.ComponentType<{ className?: string }> }> = {
-  CRITICAL: { badge: 'bg-red-500/15 text-red-300 border-red-500/40', ring: 'ring-red-500/30', label: 'Critical', icon: Zap },
-  HIGH: { badge: 'bg-orange-500/15 text-orange-300 border-orange-500/40', ring: 'ring-orange-500/30', label: 'High', icon: ShieldAlert },
-  MODERATE: { badge: 'bg-amber-500/15 text-amber-300 border-amber-500/40', ring: 'ring-amber-500/30', label: 'Moderate', icon: AlertTriangle },
-  LOW: { badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40', ring: 'ring-emerald-500/30', label: 'Low', icon: ShieldCheck }
-};
+const LEVEL_STYLES: Record<
+  RiskLevel,
+  { badge: string; ring: string; label: string; icon: React.ComponentType<{ className?: string }> }
+> = {
+  CRITICAL: {
+    badge: 'bg-red-500/15 text-red-300 border-red-500/40',
+    ring: 'ring-red-500/30',
+    label: 'Critical',
+    icon: Zap,
+  },
+  HIGH: {
+    badge: 'bg-orange-500/15 text-orange-300 border-orange-500/40',
+    ring: 'ring-orange-500/30',
+    label: 'High',
+    icon: ShieldAlert,
+  },
+  MODERATE: {
+    badge: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
+    ring: 'ring-amber-500/30',
+    label: 'Moderate',
+    icon: AlertTriangle,
+  },
+  LOW: {
+    badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
+    ring: 'ring-emerald-500/30',
+    label: 'Low',
+    icon: ShieldCheck,
+  },
+}
 
 /**
  * Dedicated page for the construction activity risk matrix.
@@ -31,7 +54,7 @@ export const ActivityRiskView: React.FC<ActivityRiskViewProps> = ({ risk, locati
         <div className="h-28 rounded-xl bg-slate-900 border border-slate-800 animate-pulse" />
         <div className="h-64 rounded-xl bg-slate-900 border border-slate-800 animate-pulse" />
       </div>
-    );
+    )
   }
 
   if (!risk) {
@@ -42,17 +65,16 @@ export const ActivityRiskView: React.FC<ActivityRiskViewProps> = ({ risk, locati
           Activity Risk Matrix Unavailable
         </h3>
         <p className="text-xs text-slate-500">
-          No deterministic risk assessment is available for {locationName} yet. Run a weather check to populate the matrix.
+          No deterministic risk assessment is available for {locationName} yet. Run a weather check to
+          populate the matrix.
         </p>
       </div>
-    );
+    )
   }
 
-  const style = LEVEL_STYLES[risk.level] || LEVEL_STYLES.LOW;
-  const LevelIcon = style.icon;
-  const elevated = risk.affectedActivities.filter(
-    (a) => a.riskLevel === 'HIGH' || a.riskLevel === 'CRITICAL'
-  );
+  const style = LEVEL_STYLES[risk.level] || LEVEL_STYLES.LOW
+  const LevelIcon = style.icon
+  const elevated = risk.affectedActivities.filter((a) => a.riskLevel === 'HIGH' || a.riskLevel === 'CRITICAL')
 
   return (
     <div className="animate-fadeIn space-y-5">
@@ -85,12 +107,17 @@ export const ActivityRiskView: React.FC<ActivityRiskViewProps> = ({ risk, locati
           </span>
           <span>
             Elevated (HIGH / CRITICAL):{' '}
-            <strong className={elevated.length > 0 ? 'text-orange-400' : 'text-emerald-400'}>{elevated.length}</strong>
+            <strong className={elevated.length > 0 ? 'text-orange-400' : 'text-emerald-400'}>
+              {elevated.length}
+            </strong>
           </span>
           {risk.peakPeriod && (
             <span className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-amber-400" />
-              Peak window: <strong className="text-amber-300">{risk.peakPeriod.start}–{risk.peakPeriod.end}</strong>
+              Peak window:{' '}
+              <strong className="text-amber-300">
+                {risk.peakPeriod.start}–{risk.peakPeriod.end}
+              </strong>
             </span>
           )}
           <span>Calculated: {new Date(risk.calculatedAt).toLocaleString()}</span>
@@ -103,5 +130,5 @@ export const ActivityRiskView: React.FC<ActivityRiskViewProps> = ({ risk, locati
       {/* Safety disclaimer */}
       <p className="text-[11px] leading-relaxed text-slate-500 font-mono">{risk.safetyDisclaimer}</p>
     </div>
-  );
-};
+  )
+}

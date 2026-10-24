@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
-import { HardHat, ChevronRight, AlertTriangle, ShieldCheck, ShieldAlert, Zap } from 'lucide-react';
-import { ActivityImpact, RiskLevel } from '../types';
+import React, { useState } from 'react'
+import { HardHat, ChevronRight, AlertTriangle, ShieldCheck, ShieldAlert, Zap } from 'lucide-react'
+import { ActivityImpact, RiskLevel } from '../types'
 
 interface ConstructionImpactsProps {
-  impacts: ActivityImpact[];
+  impacts: ActivityImpact[]
 }
 
 export const ConstructionImpacts: React.FC<ConstructionImpactsProps> = ({ impacts }) => {
-  const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<string | null>(null)
 
   if (!impacts || impacts.length === 0) {
-    return null;
+    return null
   }
 
   const getRiskBadge = (level: RiskLevel) => {
@@ -19,29 +19,29 @@ export const ConstructionImpacts: React.FC<ConstructionImpactsProps> = ({ impact
         return {
           bg: 'bg-red-500/20 text-red-400 border-red-500/40',
           icon: Zap,
-          text: 'CRITICAL'
-        };
+          text: 'CRITICAL',
+        }
       case 'HIGH':
         return {
           bg: 'bg-orange-500/20 text-orange-400 border-orange-500/40',
           icon: ShieldAlert,
-          text: 'HIGH'
-        };
+          text: 'HIGH',
+        }
       case 'MODERATE':
         return {
           bg: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
           icon: AlertTriangle,
-          text: 'MODERATE'
-        };
+          text: 'MODERATE',
+        }
       case 'LOW':
       default:
         return {
           bg: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
           icon: ShieldCheck,
-          text: 'LOW'
-        };
+          text: 'LOW',
+        }
     }
-  };
+  }
 
   return (
     <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-5 shadow-md">
@@ -53,17 +53,15 @@ export const ConstructionImpacts: React.FC<ConstructionImpactsProps> = ({ impact
             CONSTRUCTION ACTIVITY RISK MATRIX
           </h3>
         </div>
-        <span className="text-xs font-mono text-slate-400">
-          Deterministic Rule Engine
-        </span>
+        <span className="text-xs font-mono text-slate-400">Deterministic Rule Engine</span>
       </div>
 
       {/* Grid of activities */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {impacts.map((act) => {
-          const badge = getRiskBadge(act.riskLevel);
-          const Icon = badge.icon;
-          const isSelected = selectedActivity === act.activity;
+          const badge = getRiskBadge(act.riskLevel)
+          const Icon = badge.icon
+          const isSelected = selectedActivity === act.activity
 
           return (
             <div
@@ -82,9 +80,7 @@ export const ConstructionImpacts: React.FC<ConstructionImpactsProps> = ({ impact
                   >
                     <Icon className="w-4 h-4" />
                   </div>
-                  <span className="text-sm font-bold text-slate-200 truncate">
-                    {act.activity}
-                  </span>
+                  <span className="text-sm font-bold text-slate-200 truncate">{act.activity}</span>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -112,9 +108,9 @@ export const ConstructionImpacts: React.FC<ConstructionImpactsProps> = ({ impact
                 )}
               </div>
             </div>
-          );
+          )
         })}
       </div>
     </div>
-  );
-};
+  )
+}

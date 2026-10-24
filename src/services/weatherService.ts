@@ -3,23 +3,23 @@ import {
   HourlyForecastItem,
   DailyForecastItem,
   RiskLevel,
-  ProviderComparison
-} from '../types.js';
-import { redactSecretsInError } from '../utils/redact.js';
+  ProviderComparison,
+} from '../types.js'
+import { redactSecretsInError } from '../utils/redact.js'
 
 export interface WeatherDataPayload {
-  locationId: string;
-  locationName: string;
-  latitude: number;
-  longitude: number;
-  timezone: string;
-  fetchedAt: string;
-  current: CurrentWeather;
-  hourly: HourlyForecastItem[];
-  daily: DailyForecastItem[];
-  provider: string;
-  comparison?: ProviderComparison;
-  fallbackActive?: boolean;
+  locationId: string
+  locationName: string
+  latitude: number
+  longitude: number
+  timezone: string
+  fetchedAt: string
+  current: CurrentWeather
+  hourly: HourlyForecastItem[]
+  daily: DailyForecastItem[]
+  provider: string
+  comparison?: ProviderComparison
+  fallbackActive?: boolean
 }
 
 // WMO Weather interpretation codes
@@ -52,12 +52,12 @@ const WMO_CODE_MAP: Record<number, string> = {
   86: 'Heavy snow showers',
   95: 'Thunderstorm',
   96: 'Thunderstorm with slight hail',
-  99: 'Thunderstorm with heavy hail'
-};
+  99: 'Thunderstorm with heavy hail',
+}
 
 export function getWeatherDescription(code: number): string {
-  if (typeof code !== 'number' || isNaN(code)) return 'Unavailable';
-  return WMO_CODE_MAP[code] || `Condition code ${code}`;
+  if (typeof code !== 'number' || isNaN(code)) return 'Unavailable'
+  return WMO_CODE_MAP[code] || `Condition code ${code}`
 }
 
 /**
@@ -71,7 +71,7 @@ export function getWeatherDescription(code: number): string {
  * rain/snow family and never silently into a thunderstorm class.
  */
 export function weatherApiCodeToWmo(code: number): number {
-  if (typeof code !== 'number' || isNaN(code)) return 0;
+  if (typeof code !== 'number' || isNaN(code)) return 0
   const map: Record<number, number> = {
     1000: 0, // Clear / Sunny
     1003: 2, // Partly cloudy
@@ -81,41 +81,73 @@ export function weatherApiCodeToWmo(code: number): number {
     1135: 45, // Fog
     1147: 48, // Freezing fog
     // Drizzle family
-    1150: 51, 1153: 53, 1168: 56, 1171: 57, 1072: 56,
+    1150: 51,
+    1153: 53,
+    1168: 56,
+    1171: 57,
+    1072: 56,
     // Rain (increasing intensity)
-    1063: 61, 1180: 61, 1183: 61, 1186: 63, 1189: 63, 1192: 65, 1195: 65,
+    1063: 61,
+    1180: 61,
+    1183: 61,
+    1186: 63,
+    1189: 63,
+    1192: 65,
+    1195: 65,
     // Freezing rain
-    1198: 66, 1201: 67, 1204: 66, 1207: 67,
+    1198: 66,
+    1201: 67,
+    1204: 66,
+    1207: 67,
     // Sleet / freezing rain (WeatherAPI sleet family)
-    1069: 66, 1249: 66, 1252: 67,
+    1069: 66,
+    1249: 66,
+    1252: 67,
     // Snow (increasing intensity)
-    1066: 71, 1210: 71, 1213: 73, 1216: 75, 1219: 75, 1255: 73,
+    1066: 71,
+    1210: 71,
+    1213: 73,
+    1216: 75,
+    1219: 75,
+    1255: 73,
     // Snow showers / heavy snow / blowing snow / blizzard
-    1222: 75, 1225: 75, 1114: 75, 1117: 75,
+    1222: 75,
+    1225: 75,
+    1114: 75,
+    1117: 75,
     // Snow grains / ice pellets
-    1237: 77, 1261: 77, 1264: 77, 1258: 85,
+    1237: 77,
+    1261: 77,
+    1264: 77,
+    1258: 85,
     // Rain showers
-    1240: 80, 1243: 81, 1246: 82,
+    1240: 80,
+    1243: 81,
+    1246: 82,
     // Thunderstorm family (must land >= 95 for the safety engines)
-    1087: 95, 1273: 95, 1276: 95, 1279: 96, 1282: 99
-  };
-  const mapped = map[code];
-  if (mapped !== undefined) return mapped;
+    1087: 95,
+    1273: 95,
+    1276: 95,
+    1279: 96,
+    1282: 99,
+  }
+  const mapped = map[code]
+  if (mapped !== undefined) return mapped
   // Conservative fallback: treat unknown heavy-precip codes as light rain and
   // unknown thunder-adjacent codes (never happens today) as a thunderstorm.
-  return code >= 1270 ? 95 : 61;
+  return code >= 1270 ? 95 : 61
 }
 
 const parseSafeNumber = (val: any, fallback = 0): number => {
-  if (val === null || val === undefined || isNaN(Number(val))) return fallback;
-  return Number(val);
-};
+  if (val === null || val === undefined || isNaN(Number(val))) return fallback
+  return Number(val)
+}
 
 const validTimestamp = (t: string | undefined): string => {
-  if (!t) return new Date().toISOString();
-  const d = new Date(t);
-  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
-};
+  if (!t) return new Date().toISOString()
+  const d = new Date(t)
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString()
+}
 
 /**
  * Interprets an Open-Meteo local-time string as the true instant.
@@ -127,12 +159,12 @@ const validTimestamp = (t: string | undefined): string => {
  * the wall time as UTC and subtracting the offset recovers the real instant.
  */
 function openMeteoTimestamp(value: unknown, utcOffsetSeconds: number, fallback: string): string {
-  if (typeof value !== 'string') return fallback;
-  const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?/);
-  if (!match) return fallback;
-  const wallMs = Date.parse(`${match[1]}T${match[2]}:${match[3] || '00'}Z`);
-  if (isNaN(wallMs)) return fallback;
-  return new Date(wallMs - utcOffsetSeconds * 1000).toISOString();
+  if (typeof value !== 'string') return fallback
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2}))?/)
+  if (!match) return fallback
+  const wallMs = Date.parse(`${match[1]}T${match[2]}:${match[3] || '00'}Z`)
+  if (isNaN(wallMs)) return fallback
+  return new Date(wallMs - utcOffsetSeconds * 1000).toISOString()
 }
 
 /**
@@ -144,36 +176,36 @@ export async function fetchWeatherApiData(
   longitude: number,
   locationId: string,
   locationName: string,
-  _timezone = 'auto'
+  _timezone = 'auto',
 ): Promise<WeatherDataPayload> {
-  const url = new URL('https://api.weatherapi.com/v1/forecast.json');
-  url.searchParams.set('key', apiKey.trim());
-  url.searchParams.set('q', `${latitude.toFixed(4)},${longitude.toFixed(4)}`);
-  url.searchParams.set('days', '7');
-  url.searchParams.set('aqi', 'no');
-  url.searchParams.set('alerts', 'yes');
+  const url = new URL('https://api.weatherapi.com/v1/forecast.json')
+  url.searchParams.set('key', apiKey.trim())
+  url.searchParams.set('q', `${latitude.toFixed(4)},${longitude.toFixed(4)}`)
+  url.searchParams.set('days', '7')
+  url.searchParams.set('aqi', 'no')
+  url.searchParams.set('alerts', 'yes')
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 9000);
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 9000)
 
   try {
     const res = await fetch(url.toString(), {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'ConstructionWeatherMonitor/1.0 (Safety Monitoring System)'
-      }
-    });
+        'User-Agent': 'ConstructionWeatherMonitor/1.0 (Safety Monitoring System)',
+      },
+    })
 
     if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      const safeErrorMsg = redactSecretsInError(errText || res.statusText, [apiKey]);
-      throw new Error(`WeatherAPI error (${res.status}): ${safeErrorMsg}`);
+      const errText = await res.text().catch(() => '')
+      const safeErrorMsg = redactSecretsInError(errText || res.statusText, [apiKey])
+      throw new Error(`WeatherAPI error (${res.status}): ${safeErrorMsg}`)
     }
 
-    const data = await res.json();
-    return normalizeWeatherApiData(data, locationId, locationName, latitude, longitude);
+    const data = await res.json()
+    return normalizeWeatherApiData(data, locationId, locationName, latitude, longitude)
   } finally {
-    clearTimeout(timeoutId);
+    clearTimeout(timeoutId)
   }
 }
 
@@ -185,13 +217,13 @@ export function normalizeWeatherApiData(
   locationId: string,
   locationName: string,
   latitude: number,
-  longitude: number
+  longitude: number,
 ): WeatherDataPayload {
   if (!raw || !raw.current) {
-    throw new Error('WeatherAPI returned invalid structure: missing current node.');
+    throw new Error('WeatherAPI returned invalid structure: missing current node.')
   }
 
-  const c = raw.current;
+  const c = raw.current
   const current: CurrentWeather = {
     timestamp: c.last_updated_epoch
       ? new Date(c.last_updated_epoch * 1000).toISOString()
@@ -208,42 +240,42 @@ export function normalizeWeatherApiData(
     weatherDescription: c.condition?.text || 'Clear',
     pressure: parseSafeNumber(c.pressure_mb, 1013),
     visibility: parseSafeNumber(c.vis_km, 10) * 1000,
-    isDay: c.is_day === 1
-  };
+    isDay: c.is_day === 1,
+  }
 
-  const hourly: HourlyForecastItem[] = [];
-  const daily: DailyForecastItem[] = [];
+  const hourly: HourlyForecastItem[] = []
+  const daily: DailyForecastItem[] = []
 
   if (raw.forecast && Array.isArray(raw.forecast.forecastday)) {
-    const forecastDays = raw.forecast.forecastday;
+    const forecastDays = raw.forecast.forecastday
 
     for (let dayIdx = 0; dayIdx < forecastDays.length; dayIdx++) {
-      const fDay = forecastDays[dayIdx];
-      const dayData = fDay.day || {};
+      const fDay = forecastDays[dayIdx]
+      const dayData = fDay.day || {}
 
-      const maxTemp = parseSafeNumber(dayData.maxtemp_c, current.temperature);
-      const minTemp = parseSafeNumber(dayData.mintemp_c, current.temperature);
-      const rainProb = parseSafeNumber(dayData.daily_chance_of_rain, 0);
-      const precipSum = parseSafeNumber(dayData.totalprecip_mm, 0);
-      const maxWind = parseSafeNumber(dayData.maxwind_kph, 0);
+      const maxTemp = parseSafeNumber(dayData.maxtemp_c, current.temperature)
+      const minTemp = parseSafeNumber(dayData.mintemp_c, current.temperature)
+      const rainProb = parseSafeNumber(dayData.daily_chance_of_rain, 0)
+      const precipSum = parseSafeNumber(dayData.totalprecip_mm, 0)
+      const maxWind = parseSafeNumber(dayData.maxwind_kph, 0)
       // Real-world maximum gust derived directly from meteorological hourly forecasts
-      let maxGust = maxWind;
+      let maxGust = maxWind
       if (Array.isArray(fDay.hour) && fDay.hour.length > 0) {
         for (const h of fDay.hour) {
-          const hGust = parseSafeNumber(h.gust_kph, parseSafeNumber(h.wind_kph, 0));
-          if (hGust > maxGust) maxGust = hGust;
+          const hGust = parseSafeNumber(h.gust_kph, parseSafeNumber(h.wind_kph, 0))
+          if (hGust > maxGust) maxGust = hGust
         }
       }
 
-      const dayWmo = weatherApiCodeToWmo(parseSafeNumber(dayData.condition?.code, 1000));
+      const dayWmo = weatherApiCodeToWmo(parseSafeNumber(dayData.condition?.code, 1000))
 
-      let dayRisk: RiskLevel = 'LOW';
+      let dayRisk: RiskLevel = 'LOW'
       if (maxGust >= 65 || precipSum >= 25 || maxTemp >= 40 || dayWmo >= 95) {
-        dayRisk = 'CRITICAL';
+        dayRisk = 'CRITICAL'
       } else if (maxGust >= 50 || precipSum >= 10 || maxTemp >= 35 || rainProb >= 80) {
-        dayRisk = 'HIGH';
+        dayRisk = 'HIGH'
       } else if (maxGust >= 40 || precipSum >= 3 || rainProb >= 50) {
-        dayRisk = 'MODERATE';
+        dayRisk = 'MODERATE'
       }
 
       daily.push({
@@ -256,34 +288,34 @@ export function normalizeWeatherApiData(
         maxWindGust: maxGust,
         weatherCode: weatherApiCodeToWmo(parseSafeNumber(dayData.condition?.code, 1000)),
         weatherDescription: dayData.condition?.text || 'Clear',
-        riskLevel: dayRisk
-      });
+        riskLevel: dayRisk,
+      })
 
       // Hourly forecast items
       if (Array.isArray(fDay.hour)) {
         for (const h of fDay.hour) {
-          const temp = parseSafeNumber(h.temp_c, current.temperature);
-          const windSpd = parseSafeNumber(h.wind_kph, 0);
-          const gusts = Math.max(windSpd, parseSafeNumber(h.gust_kph, windSpd));
-          const hRainProb = parseSafeNumber(h.chance_of_rain, 0);
-          const precip = parseSafeNumber(h.precip_mm, 0);
-          const uv = parseSafeNumber(h.uv, 0);
-          const wmo = weatherApiCodeToWmo(parseSafeNumber(h.condition?.code, 1000));
+          const temp = parseSafeNumber(h.temp_c, current.temperature)
+          const windSpd = parseSafeNumber(h.wind_kph, 0)
+          const gusts = Math.max(windSpd, parseSafeNumber(h.gust_kph, windSpd))
+          const hRainProb = parseSafeNumber(h.chance_of_rain, 0)
+          const precip = parseSafeNumber(h.precip_mm, 0)
+          const uv = parseSafeNumber(h.uv, 0)
+          const wmo = weatherApiCodeToWmo(parseSafeNumber(h.condition?.code, 1000))
 
-          let risk: RiskLevel = 'LOW';
+          let risk: RiskLevel = 'LOW'
           if (gusts >= 65 || precip >= 15 || temp >= 40 || wmo >= 95) {
-            risk = 'CRITICAL';
+            risk = 'CRITICAL'
           } else if (gusts >= 50 || precip >= 6 || temp >= 35 || hRainProb >= 80) {
-            risk = 'HIGH';
+            risk = 'HIGH'
           } else if (gusts >= 40 || precip >= 2 || hRainProb >= 50 || uv >= 8) {
-            risk = 'MODERATE';
+            risk = 'MODERATE'
           }
 
-          let isoTime = new Date().toISOString();
+          let isoTime = new Date().toISOString()
           if (h.time_epoch) {
-            isoTime = new Date(h.time_epoch * 1000).toISOString();
+            isoTime = new Date(h.time_epoch * 1000).toISOString()
           } else if (h.time) {
-            isoTime = new Date(h.time.replace(' ', 'T')).toISOString();
+            isoTime = new Date(h.time.replace(' ', 'T')).toISOString()
           }
 
           hourly.push({
@@ -296,8 +328,8 @@ export function normalizeWeatherApiData(
             weatherCode: wmo,
             weatherDescription: h.condition?.text || 'Clear',
             uvIndex: uv,
-            riskLevel: risk
-          });
+            riskLevel: risk,
+          })
         }
       }
     }
@@ -305,8 +337,8 @@ export function normalizeWeatherApiData(
 
   // Supplement current rain probability and UV if needed
   if (hourly.length > 0 && current.rainProbability === 0) {
-    current.rainProbability = hourly[0].rainProbability;
-    current.uvIndex = hourly[0].uvIndex;
+    current.rainProbability = hourly[0].rainProbability
+    current.uvIndex = hourly[0].uvIndex
   }
 
   return {
@@ -319,8 +351,8 @@ export function normalizeWeatherApiData(
     current,
     hourly: hourly.slice(0, 48),
     daily: daily.slice(0, 7),
-    provider: 'WeatherAPI (Main Reference)'
-  };
+    provider: 'WeatherAPI (Main Reference)',
+  }
 }
 
 /**
@@ -331,45 +363,45 @@ export async function fetchOpenMeteoData(
   longitude: number,
   locationId: string,
   locationName: string,
-  timezone = 'auto'
+  timezone = 'auto',
 ): Promise<WeatherDataPayload> {
-  const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.searchParams.set('latitude', latitude.toFixed(4));
-  url.searchParams.set('longitude', longitude.toFixed(4));
+  const url = new URL('https://api.open-meteo.com/v1/forecast')
+  url.searchParams.set('latitude', latitude.toFixed(4))
+  url.searchParams.set('longitude', longitude.toFixed(4))
   url.searchParams.set(
     'current',
-    'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day,cape,lightning_potential'
-  );
+    'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day,cape,lightning_potential',
+  )
   url.searchParams.set(
     'hourly',
-    'temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,cape,lightning_potential'
-  );
+    'temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,cape,lightning_potential',
+  )
   url.searchParams.set(
     'daily',
-    'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max'
-  );
-  url.searchParams.set('timezone', timezone || 'auto');
-  url.searchParams.set('forecast_days', '7');
+    'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max',
+  )
+  url.searchParams.set('timezone', timezone || 'auto')
+  url.searchParams.set('forecast_days', '7')
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 9000);
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 9000)
 
   try {
     const res = await fetch(url.toString(), {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'ConstructionWeatherMonitor/1.0 (Safety Monitoring System)'
-      }
-    });
+        'User-Agent': 'ConstructionWeatherMonitor/1.0 (Safety Monitoring System)',
+      },
+    })
 
     if (!res.ok) {
-      throw new Error(`Open-Meteo responded with status ${res.status}: ${res.statusText}`);
+      throw new Error(`Open-Meteo responded with status ${res.status}: ${res.statusText}`)
     }
 
-    const data = await res.json();
-    return validateAndNormalizeOpenMeteoData(data, locationId, locationName, latitude, longitude);
+    const data = await res.json()
+    return validateAndNormalizeOpenMeteoData(data, locationId, locationName, latitude, longitude)
   } finally {
-    clearTimeout(timeoutId);
+    clearTimeout(timeoutId)
   }
 }
 
@@ -378,25 +410,31 @@ export function validateAndNormalizeOpenMeteoData(
   locationId: string,
   locationName: string,
   latitude: number,
-  longitude: number
+  longitude: number,
 ): WeatherDataPayload {
   if (!raw || typeof raw !== 'object' || !raw.current) {
-    throw new Error('Open-Meteo returned an invalid payload.');
+    throw new Error('Open-Meteo returned an invalid payload.')
   }
 
-  const currentRaw = raw.current;
-  const weatherCode = parseSafeNumber(currentRaw.weather_code, 0);
+  const currentRaw = raw.current
+  const weatherCode = parseSafeNumber(currentRaw.weather_code, 0)
   // Open-Meteo reports local wall-clock times plus the site's UTC offset.
-  const utcOffsetSeconds = parseSafeNumber(raw.utc_offset_seconds, 0);
-  const nowIso = new Date().toISOString();
+  const utcOffsetSeconds = parseSafeNumber(raw.utc_offset_seconds, 0)
+  const nowIso = new Date().toISOString()
 
   const current: CurrentWeather = {
     timestamp: openMeteoTimestamp(currentRaw.time, utcOffsetSeconds, nowIso),
     temperature: parseSafeNumber(currentRaw.temperature_2m, 20),
-    feelsLike: parseSafeNumber(currentRaw.apparent_temperature, parseSafeNumber(currentRaw.temperature_2m, 20)),
+    feelsLike: parseSafeNumber(
+      currentRaw.apparent_temperature,
+      parseSafeNumber(currentRaw.temperature_2m, 20),
+    ),
     humidity: Math.min(100, Math.max(0, parseSafeNumber(currentRaw.relative_humidity_2m, 50))),
     windSpeed: Math.max(0, parseSafeNumber(currentRaw.wind_speed_10m, 0)),
-    windGusts: Math.max(0, parseSafeNumber(currentRaw.wind_gusts_10m, parseSafeNumber(currentRaw.wind_speed_10m, 0))),
+    windGusts: Math.max(
+      0,
+      parseSafeNumber(currentRaw.wind_gusts_10m, parseSafeNumber(currentRaw.wind_speed_10m, 0)),
+    ),
     rainAmount: Math.max(0, parseSafeNumber(currentRaw.precipitation, 0)),
     rainProbability: 0,
     uvIndex: 0,
@@ -407,39 +445,39 @@ export function validateAndNormalizeOpenMeteoData(
     isDay: currentRaw.is_day === 1 || currentRaw.is_day === true,
     windDirection: parseSafeNumber(currentRaw.wind_direction_10m, 0),
     cape: Math.max(0, parseSafeNumber(currentRaw.cape, 0)),
-    lightningPotential: Math.max(0, parseSafeNumber(currentRaw.lightning_potential, 0))
-  };
+    lightningPotential: Math.max(0, parseSafeNumber(currentRaw.lightning_potential, 0)),
+  }
 
-  const hourly: HourlyForecastItem[] = [];
-  const hourlyRaw = raw.hourly;
+  const hourly: HourlyForecastItem[] = []
+  const hourlyRaw = raw.hourly
   if (hourlyRaw && Array.isArray(hourlyRaw.time)) {
-    const times = hourlyRaw.time;
-    const count = Math.min(times.length, 48);
-    const nowMs = Date.now();
+    const times = hourlyRaw.time
+    const count = Math.min(times.length, 48)
+    const nowMs = Date.now()
 
     for (let i = 0; i < count; i++) {
-      const timeStr = times[i];
-      const timeDate = new Date(openMeteoTimestamp(timeStr, utcOffsetSeconds, nowIso));
-      if (isNaN(timeDate.getTime())) continue;
+      const timeStr = times[i]
+      const timeDate = new Date(openMeteoTimestamp(timeStr, utcOffsetSeconds, nowIso))
+      if (isNaN(timeDate.getTime())) continue
 
-      const temp = parseSafeNumber(hourlyRaw.temperature_2m?.[i], current.temperature);
-      const windSpd = parseSafeNumber(hourlyRaw.wind_speed_10m?.[i], 0);
-      const gusts = parseSafeNumber(hourlyRaw.wind_gusts_10m?.[i], windSpd);
-      const rainProb = parseSafeNumber(hourlyRaw.precipitation_probability?.[i], 0);
-      const precip = parseSafeNumber(hourlyRaw.precipitation?.[i], 0);
-      const wCode = parseSafeNumber(hourlyRaw.weather_code?.[i], 0);
-      const uv = parseSafeNumber(hourlyRaw.uv_index?.[i], 0);
-      const windDir = parseSafeNumber(hourlyRaw.wind_direction_10m?.[i], 0);
-      const cape = Math.max(0, parseSafeNumber(hourlyRaw.cape?.[i], 0));
-      const lpi = Math.max(0, parseSafeNumber(hourlyRaw.lightning_potential?.[i], 0));
+      const temp = parseSafeNumber(hourlyRaw.temperature_2m?.[i], current.temperature)
+      const windSpd = parseSafeNumber(hourlyRaw.wind_speed_10m?.[i], 0)
+      const gusts = parseSafeNumber(hourlyRaw.wind_gusts_10m?.[i], windSpd)
+      const rainProb = parseSafeNumber(hourlyRaw.precipitation_probability?.[i], 0)
+      const precip = parseSafeNumber(hourlyRaw.precipitation?.[i], 0)
+      const wCode = parseSafeNumber(hourlyRaw.weather_code?.[i], 0)
+      const uv = parseSafeNumber(hourlyRaw.uv_index?.[i], 0)
+      const windDir = parseSafeNumber(hourlyRaw.wind_direction_10m?.[i], 0)
+      const cape = Math.max(0, parseSafeNumber(hourlyRaw.cape?.[i], 0))
+      const lpi = Math.max(0, parseSafeNumber(hourlyRaw.lightning_potential?.[i], 0))
 
-      let risk: RiskLevel = 'LOW';
+      let risk: RiskLevel = 'LOW'
       if (gusts >= 65 || precip >= 15 || wCode >= 95 || temp >= 40) {
-        risk = 'CRITICAL';
+        risk = 'CRITICAL'
       } else if (gusts >= 50 || precip >= 6 || temp >= 35 || rainProb >= 80) {
-        risk = 'HIGH';
+        risk = 'HIGH'
       } else if (gusts >= 40 || precip >= 2 || rainProb >= 50 || uv >= 8) {
-        risk = 'MODERATE';
+        risk = 'MODERATE'
       }
 
       hourly.push({
@@ -455,37 +493,37 @@ export function validateAndNormalizeOpenMeteoData(
         riskLevel: risk,
         windDirection: windDir,
         cape,
-        lightningPotential: lpi
-      });
+        lightningPotential: lpi,
+      })
 
       if (i === 0 || (timeDate.getTime() <= nowMs && timeDate.getTime() > nowMs - 3600000)) {
-        current.rainProbability = rainProb;
-        current.uvIndex = uv;
+        current.rainProbability = rainProb
+        current.uvIndex = uv
       }
     }
   }
 
-  const daily: DailyForecastItem[] = [];
-  const dailyRaw = raw.daily;
+  const daily: DailyForecastItem[] = []
+  const dailyRaw = raw.daily
   if (dailyRaw && Array.isArray(dailyRaw.time)) {
-    const days = dailyRaw.time;
+    const days = dailyRaw.time
     for (let i = 0; i < days.length; i++) {
-      const dateStr = days[i];
-      const maxTemp = parseSafeNumber(dailyRaw.temperature_2m_max?.[i], current.temperature);
-      const minTemp = parseSafeNumber(dailyRaw.temperature_2m_min?.[i], current.temperature);
-      const rainProb = parseSafeNumber(dailyRaw.precipitation_probability_max?.[i], 0);
-      const precipSum = parseSafeNumber(dailyRaw.precipitation_sum?.[i], 0);
-      const maxWind = parseSafeNumber(dailyRaw.wind_speed_10m_max?.[i], 0);
-      const maxGust = parseSafeNumber(dailyRaw.wind_gusts_10m_max?.[i], maxWind);
-      const wCode = parseSafeNumber(dailyRaw.weather_code?.[i], 0);
+      const dateStr = days[i]
+      const maxTemp = parseSafeNumber(dailyRaw.temperature_2m_max?.[i], current.temperature)
+      const minTemp = parseSafeNumber(dailyRaw.temperature_2m_min?.[i], current.temperature)
+      const rainProb = parseSafeNumber(dailyRaw.precipitation_probability_max?.[i], 0)
+      const precipSum = parseSafeNumber(dailyRaw.precipitation_sum?.[i], 0)
+      const maxWind = parseSafeNumber(dailyRaw.wind_speed_10m_max?.[i], 0)
+      const maxGust = parseSafeNumber(dailyRaw.wind_gusts_10m_max?.[i], maxWind)
+      const wCode = parseSafeNumber(dailyRaw.weather_code?.[i], 0)
 
-      let risk: RiskLevel = 'LOW';
+      let risk: RiskLevel = 'LOW'
       if (maxGust >= 65 || precipSum >= 25 || wCode >= 95 || maxTemp >= 40) {
-        risk = 'CRITICAL';
+        risk = 'CRITICAL'
       } else if (maxGust >= 50 || precipSum >= 10 || maxTemp >= 35 || rainProb >= 80) {
-        risk = 'HIGH';
+        risk = 'HIGH'
       } else if (maxGust >= 40 || precipSum >= 3 || rainProb >= 50) {
-        risk = 'MODERATE';
+        risk = 'MODERATE'
       }
 
       daily.push({
@@ -498,8 +536,8 @@ export function validateAndNormalizeOpenMeteoData(
         maxWindGust: maxGust,
         weatherCode: wCode,
         weatherDescription: getWeatherDescription(wCode),
-        riskLevel: risk
-      });
+        riskLevel: risk,
+      })
     }
   }
 
@@ -513,8 +551,8 @@ export function validateAndNormalizeOpenMeteoData(
     current,
     hourly,
     daily,
-    provider: 'Open-Meteo Meteorological Service'
-  };
+    provider: 'Open-Meteo Meteorological Service',
+  }
 }
 
 /**
@@ -525,39 +563,42 @@ export function generateCrossReferenceComparison(
   primary: WeatherDataPayload,
   crossRef: WeatherDataPayload,
   isFallback = false,
-  fallbackReason?: string
+  fallbackReason?: string,
 ): ProviderComparison {
-  const pCurr = primary.current;
-  const cCurr = crossRef.current;
+  const pCurr = primary.current
+  const cCurr = crossRef.current
 
-  const tempDelta = Math.round(Math.abs(pCurr.temperature - cCurr.temperature) * 10) / 10;
-  const windDelta = Math.round(Math.abs(pCurr.windSpeed - cCurr.windSpeed) * 10) / 10;
-  const gustDelta = Math.round(Math.abs(pCurr.windGusts - cCurr.windGusts) * 10) / 10;
-  const humidityDelta = Math.round(Math.abs(pCurr.humidity - cCurr.humidity) * 10) / 10;
-  const rainProbDelta = Math.round(Math.abs(pCurr.rainProbability - cCurr.rainProbability) * 10) / 10;
-  const pressureDelta = Math.round(Math.abs(pCurr.pressure - cCurr.pressure) * 10) / 10;
+  const tempDelta = Math.round(Math.abs(pCurr.temperature - cCurr.temperature) * 10) / 10
+  const windDelta = Math.round(Math.abs(pCurr.windSpeed - cCurr.windSpeed) * 10) / 10
+  const gustDelta = Math.round(Math.abs(pCurr.windGusts - cCurr.windGusts) * 10) / 10
+  const humidityDelta = Math.round(Math.abs(pCurr.humidity - cCurr.humidity) * 10) / 10
+  const rainProbDelta = Math.round(Math.abs(pCurr.rainProbability - cCurr.rainProbability) * 10) / 10
+  const pressureDelta = Math.round(Math.abs(pCurr.pressure - cCurr.pressure) * 10) / 10
 
   // Concordance classification
-  let concordance: 'HIGH' | 'MODERATE' | 'DIVERGENT' = 'HIGH';
+  let concordance: 'HIGH' | 'MODERATE' | 'DIVERGENT' = 'HIGH'
   if (windDelta > 15 || gustDelta > 20 || tempDelta > 4) {
-    concordance = 'DIVERGENT';
+    concordance = 'DIVERGENT'
   } else if (windDelta > 8 || gustDelta > 12 || tempDelta > 2.5) {
-    concordance = 'MODERATE';
+    concordance = 'MODERATE'
   }
 
   // Consensus confidence score (0 to 100)
-  const penalty = windDelta * 1.5 + gustDelta * 0.8 + tempDelta * 3 + rainProbDelta * 0.2;
-  const confidenceScore = Math.max(50, Math.min(99, Math.round(100 - penalty)));
+  const penalty = windDelta * 1.5 + gustDelta * 0.8 + tempDelta * 3 + rainProbDelta * 0.2
+  const confidenceScore = Math.max(50, Math.min(99, Math.round(100 - penalty)))
 
-  let notes = 'Dual-model data demonstrates close alignment across thermodynamic and wind metrics.';
+  let notes = 'Dual-model data demonstrates close alignment across thermodynamic and wind metrics.'
   if (concordance === 'DIVERGENT') {
-    notes = 'Model divergence observed between WeatherAPI and Open-Meteo. Construction safety thresholds adhere to conservative higher-risk metrics.';
+    notes =
+      'Model divergence observed between WeatherAPI and Open-Meteo. Construction safety thresholds adhere to conservative higher-risk metrics.'
   } else if (concordance === 'MODERATE') {
-    notes = 'Minor variance observed across atmospheric models. General weather trajectory confirmed.';
+    notes = 'Minor variance observed across atmospheric models. General weather trajectory confirmed.'
   }
 
   if (isFallback) {
-    notes = fallbackReason || 'WeatherAPI unavailable. Open-Meteo automatic fallback is actively servicing observations.';
+    notes =
+      fallbackReason ||
+      'WeatherAPI unavailable. Open-Meteo automatic fallback is actively servicing observations.'
   }
 
   return {
@@ -572,7 +613,7 @@ export function generateCrossReferenceComparison(
       gustDelta,
       humidityDelta,
       rainProbDelta,
-      pressureDelta
+      pressureDelta,
     },
     concordance,
     confidenceScore,
@@ -586,7 +627,7 @@ export function generateCrossReferenceComparison(
       humidity: pCurr.humidity,
       pressure: pCurr.pressure,
       uvIndex: pCurr.uvIndex,
-      condition: pCurr.weatherDescription
+      condition: pCurr.weatherDescription,
     },
     crossRefReading: {
       temperature: cCurr.temperature,
@@ -598,11 +639,11 @@ export function generateCrossReferenceComparison(
       humidity: cCurr.humidity,
       pressure: cCurr.pressure,
       uvIndex: cCurr.uvIndex,
-      condition: cCurr.weatherDescription
+      condition: cCurr.weatherDescription,
     },
     notes,
-    timestamp: new Date().toISOString()
-  };
+    timestamp: new Date().toISOString(),
+  }
 }
 
 /**
@@ -618,67 +659,67 @@ export async function fetchRealWeatherData(
   locationId: string,
   locationName: string,
   timezone = 'auto',
-  apiKeyOverride?: string
+  apiKeyOverride?: string,
 ): Promise<WeatherDataPayload> {
   const apiKey =
     apiKeyOverride ||
-    (typeof process !== 'undefined' && process.env ? process.env.WEATHER_API_KEY : undefined);
+    (typeof process !== 'undefined' && process.env ? process.env.WEATHER_API_KEY : undefined)
 
   // Privacy mode: when LOCAL_ONLY is enabled we deliberately skip the
   // third-party WeatherAPI provider (which would receive the site coordinates)
   // and serve data exclusively from the open Open-Meteo service.
-  const localOnly = typeof process !== 'undefined' && process.env?.LOCAL_ONLY === 'true';
+  const localOnly = typeof process !== 'undefined' && process.env?.LOCAL_ONLY === 'true'
   if (localOnly) {
-    return fetchOpenMeteoData(latitude, longitude, locationId, locationName, timezone);
+    return fetchOpenMeteoData(latitude, longitude, locationId, locationName, timezone)
   }
 
   // If WeatherAPI key is present, use WeatherAPI as the main reference & cross-reference with Open-Meteo
   if (apiKey && apiKey.trim().length > 0) {
-    let weatherApiPayload: WeatherDataPayload | null = null;
-    let openMeteoPayload: WeatherDataPayload | null = null;
-    let weatherApiError: string | null = null;
+    let weatherApiPayload: WeatherDataPayload | null = null
+    let openMeteoPayload: WeatherDataPayload | null = null
+    let weatherApiError: string | null = null
 
     // Concurrently fetch WeatherAPI (main) and Open-Meteo (cross-reference)
     const [wApiRes, omRes] = await Promise.allSettled([
       fetchWeatherApiData(apiKey, latitude, longitude, locationId, locationName, timezone),
-      fetchOpenMeteoData(latitude, longitude, locationId, locationName, timezone)
-    ]);
+      fetchOpenMeteoData(latitude, longitude, locationId, locationName, timezone),
+    ])
 
     if (wApiRes.status === 'fulfilled') {
-      weatherApiPayload = wApiRes.value;
+      weatherApiPayload = wApiRes.value
     } else {
-      weatherApiError = wApiRes.reason?.message || 'WeatherAPI request failed';
-      console.warn('WeatherAPI main reference failed:', weatherApiError);
+      weatherApiError = wApiRes.reason?.message || 'WeatherAPI request failed'
+      console.warn('WeatherAPI main reference failed:', weatherApiError)
     }
 
     if (omRes.status === 'fulfilled') {
-      openMeteoPayload = omRes.value;
+      openMeteoPayload = omRes.value
     } else {
-      console.warn('Open-Meteo cross-reference fetch failed:', omRes.reason);
+      console.warn('Open-Meteo cross-reference fetch failed:', omRes.reason)
     }
 
     // MAIN PATH: WeatherAPI succeeded
     if (weatherApiPayload) {
       if (openMeteoPayload) {
         // Cross-reference data available!
-        const comparison = generateCrossReferenceComparison(weatherApiPayload, openMeteoPayload, false);
+        const comparison = generateCrossReferenceComparison(weatherApiPayload, openMeteoPayload, false)
         return {
           ...weatherApiPayload,
           comparison,
-          fallbackActive: false
-        };
+          fallbackActive: false,
+        }
       } else {
         // Only WeatherAPI available
         return {
           ...weatherApiPayload,
-          fallbackActive: false
-        };
+          fallbackActive: false,
+        }
       }
     }
 
     // AUTOMATIC FALLBACK PATH: WeatherAPI failed, switch seamlessly to Open-Meteo
     if (openMeteoPayload) {
-      console.info('Seamlessly switched to Open-Meteo automatic fallback.');
+      console.info('Seamlessly switched to Open-Meteo automatic fallback.')
       const fallbackComparison: ProviderComparison = {
         primaryProvider: 'WeatherAPI (User Main Reference - Offline / Fallback Active)',
         crossRefProvider: 'Open-Meteo (Automatic Fallback Active)',
@@ -691,7 +732,7 @@ export async function fetchRealWeatherData(
           gustDelta: 0,
           humidityDelta: 0,
           rainProbDelta: 0,
-          pressureDelta: 0
+          pressureDelta: 0,
         },
         concordance: 'HIGH',
         confidenceScore: 88,
@@ -705,46 +746,46 @@ export async function fetchRealWeatherData(
           humidity: openMeteoPayload.current.humidity,
           pressure: openMeteoPayload.current.pressure,
           uvIndex: openMeteoPayload.current.uvIndex,
-          condition: openMeteoPayload.current.weatherDescription
+          condition: openMeteoPayload.current.weatherDescription,
         },
         notes: `Automatic fallback actively serving construction safety data. ${weatherApiError || ''}`,
-        timestamp: new Date().toISOString()
-      };
+        timestamp: new Date().toISOString(),
+      }
 
       return {
         ...openMeteoPayload,
         provider: 'Open-Meteo (Automatic Fallback Active)',
         comparison: fallbackComparison,
-        fallbackActive: true
-      };
+        fallbackActive: true,
+      }
     }
 
     // Both failed
     throw new Error(
-      `Both WeatherAPI and Open-Meteo failed: WeatherAPI (${weatherApiError}), Open-Meteo (${omRes.status === 'rejected' ? omRes.reason : 'unknown'})`
-    );
+      `Both WeatherAPI and Open-Meteo failed: WeatherAPI (${weatherApiError}), Open-Meteo (${omRes.status === 'rejected' ? omRes.reason : 'unknown'})`,
+    )
   }
 
   // If no API key configured, use Open-Meteo directly
-  return fetchOpenMeteoData(latitude, longitude, locationId, locationName, timezone);
+  return fetchOpenMeteoData(latitude, longitude, locationId, locationName, timezone)
 }
 
 export async function searchGeocodingLocations(query: string) {
-  if (!query || query.trim().length < 2) return [];
+  if (!query || query.trim().length < 2) return []
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-    query.trim()
-  )}&count=8&language=en&format=json`;
+    query.trim(),
+  )}&count=8&language=en&format=json`
 
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = await res.json();
-  if (!data.results || !Array.isArray(data.results)) return [];
+  const res = await fetch(url)
+  if (!res.ok) return []
+  const data = await res.json()
+  if (!data.results || !Array.isArray(data.results)) return []
 
   return data.results.map((r: any) => ({
     name: [r.name, r.admin1, r.country].filter(Boolean).join(', '),
     latitude: r.latitude,
     longitude: r.longitude,
     timezone: r.timezone || 'auto',
-    country: r.country
-  }));
+    country: r.country,
+  }))
 }

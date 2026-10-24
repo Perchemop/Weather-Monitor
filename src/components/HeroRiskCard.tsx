@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from 'react'
 import {
   AlertTriangle,
   ShieldCheck,
@@ -9,18 +9,18 @@ import {
   Zap,
   Info,
   ChevronDown,
-  ChevronUp
-} from 'lucide-react';
-import { RiskAssessment, RiskLevel } from '../types';
+  ChevronUp,
+} from 'lucide-react'
+import { RiskAssessment, RiskLevel } from '../types'
 
 interface HeroRiskCardProps {
-  risk: RiskAssessment | null;
-  locationName: string;
-  isLoading?: boolean;
+  risk: RiskAssessment | null
+  locationName: string
+  isLoading?: boolean
 }
 
 const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName, isLoading = false }) => {
-  const [showFactors, setShowFactors] = useState(false);
+  const [showFactors, setShowFactors] = useState(false)
 
   if (isLoading || !risk) {
     return (
@@ -40,7 +40,7 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
           <div className="h-16 rounded-xl bg-slate-950/60 border border-slate-800/60" />
         </div>
       </div>
-    );
+    )
   }
 
   const getRiskConfig = (level: RiskLevel) => {
@@ -54,8 +54,8 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
           badgeBg: 'bg-red-500 text-white',
           textColor: 'text-red-400',
           softText: 'text-red-300/90',
-          icon: Zap
-        };
+          icon: Zap,
+        }
       case 'HIGH':
         return {
           title: 'High weather risk',
@@ -65,8 +65,8 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
           badgeBg: 'bg-orange-500 text-slate-950',
           textColor: 'text-orange-400',
           softText: 'text-orange-300/90',
-          icon: AlertTriangle
-        };
+          icon: AlertTriangle,
+        }
       case 'MODERATE':
         return {
           title: 'Moderate weather risk',
@@ -76,8 +76,8 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
           badgeBg: 'bg-amber-500 text-slate-950',
           textColor: 'text-amber-400',
           softText: 'text-amber-300/90',
-          icon: AlertTriangle
-        };
+          icon: AlertTriangle,
+        }
       case 'LOW':
       default:
         return {
@@ -88,34 +88,34 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
           badgeBg: 'bg-emerald-600 text-white',
           textColor: 'text-emerald-400',
           softText: 'text-emerald-300/90',
-          icon: ShieldCheck
-        };
+          icon: ShieldCheck,
+        }
     }
-  };
+  }
 
-  const config = getRiskConfig(risk.level);
-  const StatusIcon = config.icon;
+  const config = getRiskConfig(risk.level)
+  const StatusIcon = config.icon
 
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
       case 'WIND':
       case 'GUST':
-        return Wind;
+        return Wind
       case 'RAIN':
-        return CloudRain;
+        return CloudRain
       case 'TEMPERATURE':
-        return Flame;
+        return Flame
       case 'UV':
-        return Sun;
+        return Sun
       case 'STORM':
-        return Zap;
+        return Zap
       default:
-        return Info;
+        return Info
     }
-  };
+  }
 
   const scoreTone =
-    risk.level === 'LOW' ? 'text-emerald-300' : risk.level === 'MODERATE' ? 'text-amber-300' : config.softText;
+    risk.level === 'LOW' ? 'text-emerald-300' : risk.level === 'MODERATE' ? 'text-amber-300' : config.softText
 
   return (
     <section
@@ -136,7 +136,8 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
             <span className="normal-case tracking-normal">{locationName}</span>
           </p>
           <p className={`text-xs tabular-nums ${scoreTone}`}>
-            Score {risk.score}<span className="text-slate-600"> / 100</span>
+            Score {risk.score}
+            <span className="text-slate-600"> / 100</span>
           </p>
         </div>
 
@@ -151,12 +152,16 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
         </div>
 
         {/* Summary */}
-        <p className="mt-3 max-w-3xl text-sm sm:text-base leading-relaxed text-slate-200/95">{risk.summary}</p>
+        <p className="mt-3 max-w-3xl text-sm sm:text-base leading-relaxed text-slate-200/95">
+          {risk.summary}
+        </p>
 
         {/* Peak period */}
         {risk.peakPeriod && (
           <div className="mt-4 inline-flex max-w-full flex-wrap items-center gap-x-2.5 gap-y-1 rounded-xl border border-slate-700/60 bg-slate-950/50 px-3.5 py-2 text-xs sm:text-sm">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Peak period</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              Peak period
+            </span>
             <span className="font-semibold tabular-nums text-slate-100">
               {risk.peakPeriod.start} – {risk.peakPeriod.end}
             </span>
@@ -189,7 +194,7 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
               </p>
             ) : (
               risk.factors.map((f) => {
-                const CatIcon = getCategoryIcon(f.category);
+                const CatIcon = getCategoryIcon(f.category)
                 return (
                   <div
                     key={f.id}
@@ -204,8 +209,8 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
                             f.severity === 'CRITICAL'
                               ? 'bg-red-500/15 text-red-300'
                               : f.severity === 'HIGH'
-                              ? 'bg-orange-500/15 text-orange-300'
-                              : 'bg-amber-500/15 text-amber-300'
+                                ? 'bg-orange-500/15 text-orange-300'
+                                : 'bg-amber-500/15 text-amber-300'
                           }`}
                         >
                           {f.severity}
@@ -218,7 +223,7 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
                       </div>
                     </div>
                   </div>
-                );
+                )
               })
             )}
           </div>
@@ -231,7 +236,7 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
         </p>
       </div>
     </section>
-  );
-};
+  )
+}
 
-export const HeroRiskCard = React.memo(HeroRiskCardComponent);
+export const HeroRiskCard = React.memo(HeroRiskCardComponent)

@@ -1,7 +1,7 @@
 # Decisions
 
 Implementation decisions for the Construction Weather Monitor, newest first.
-Each entry records *what* was decided and *why*. Facts, assumptions and open
+Each entry records _what_ was decided and _why_. Facts, assumptions and open
 questions live in `docs/project-brief.md` and
 `docs/assumptions-and-questions.md`.
 
@@ -84,6 +84,13 @@ unreviewable diff — while a no-op check would not satisfy the requirement.
 Enforcing trailing whitespace only on lines a change introduces keeps legacy
 files from failing the gate.
 
+**Superseded in part (2026-10-24):** Prettier is now adopted as the style
+authority in its own dedicated release (see `docs/research/prettier-adoption.md`,
+approved via the research gate). The hygiene script above is unchanged and stays
+in force — the two layers are distinct jobs in the `format-check` CI job.
+`docs/`, generated output, lockfiles, `public/sw.js` and `opencode.jsonc` are
+excluded from Prettier via `.prettierignore`.
+
 ## D-16 — Coder may commit, push and open the PR (2026-10-23)
 
 The `coder` subagent now has permissions for `git add/commit/push` and for the
@@ -148,7 +155,7 @@ clear day a critical thunderstorm whenever a WeatherAPI key was configured.
 Wall-clock strings from Open-Meteo are parsed as UTC and offset by the
 response's `utc_offset_seconds`.
 
-**Why:** `new Date("2026-10-23T12:00")` parses in the *server's* timezone, so
+**Why:** `new Date("2026-10-23T12:00")` parses in the _server's_ timezone, so
 current and hourly values shifted whenever the server did not share the site's
 clock.
 

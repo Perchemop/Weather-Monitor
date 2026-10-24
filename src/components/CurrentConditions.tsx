@@ -1,28 +1,19 @@
-import React from 'react';
-import {
-  Wind,
-  Droplets,
-  CloudRain,
-  Sun,
-  Thermometer,
-  CloudLightning,
-  Cloud,
-  CloudSun
-} from 'lucide-react';
-import { CurrentWeather } from '../types';
+import React from 'react'
+import { Wind, Droplets, CloudRain, Sun, Thermometer, CloudLightning, Cloud, CloudSun } from 'lucide-react'
+import { CurrentWeather } from '../types'
 
 interface CurrentConditionsProps {
-  weather: CurrentWeather | null;
-  tempUnit?: 'C' | 'F';
-  windUnit?: 'km/h' | 'mph' | 'm/s';
-  isLoading?: boolean;
+  weather: CurrentWeather | null
+  tempUnit?: 'C' | 'F'
+  windUnit?: 'km/h' | 'mph' | 'm/s'
+  isLoading?: boolean
 }
 
 const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
   weather,
   tempUnit = 'C',
   windUnit = 'km/h',
-  isLoading = false
+  isLoading = false,
 }) => {
   if (isLoading || !weather) {
     return (
@@ -37,50 +28,50 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
           ))}
         </div>
       </div>
-    );
+    )
   }
 
   const formatTemp = (celsius: number) => {
-    if (typeof celsius !== 'number' || isNaN(celsius)) return '—';
-    if (tempUnit === 'F') return `${Math.round((celsius * 9) / 5 + 32)}°F`;
-    return `${Math.round(celsius)}°C`;
-  };
+    if (typeof celsius !== 'number' || isNaN(celsius)) return '—'
+    if (tempUnit === 'F') return `${Math.round((celsius * 9) / 5 + 32)}°F`
+    return `${Math.round(celsius)}°C`
+  }
 
   const formatWind = (kmh: number) => {
-    if (typeof kmh !== 'number' || isNaN(kmh)) return '—';
-    if (windUnit === 'mph') return `${Math.round(kmh * 0.621371)}`;
-    if (windUnit === 'm/s') return `${(kmh / 3.6).toFixed(1)}`;
-    return `${Math.round(kmh)}`;
-  };
+    if (typeof kmh !== 'number' || isNaN(kmh)) return '—'
+    if (windUnit === 'mph') return `${Math.round(kmh * 0.621371)}`
+    if (windUnit === 'm/s') return `${(kmh / 3.6).toFixed(1)}`
+    return `${Math.round(kmh)}`
+  }
 
-  const windSuffix = windUnit === 'mph' ? 'mph' : windUnit === 'm/s' ? 'm/s' : 'km/h';
+  const windSuffix = windUnit === 'mph' ? 'mph' : windUnit === 'm/s' ? 'm/s' : 'km/h'
 
   const getWeatherIcon = (code: number) => {
-    if (code >= 95) return CloudLightning;
-    if (code >= 51 && code <= 82) return CloudRain;
-    if (code === 0) return Sun;
-    if (code === 1 || code === 2) return CloudSun;
-    return Cloud;
-  };
+    if (code >= 95) return CloudLightning
+    if (code >= 51 && code <= 82) return CloudRain
+    if (code === 0) return Sun
+    if (code === 1 || code === 2) return CloudSun
+    return Cloud
+  }
 
-  const WeatherIcon = getWeatherIcon(weather.weatherCode);
+  const WeatherIcon = getWeatherIcon(weather.weatherCode)
 
   // Crane-operation ceiling (deterministic engine flags gusts from 45 km/h):
   // tint the gust value only when it is approaching or above that envelope so
   // the number itself carries the warning instead of a permanent label.
-  const gustElevated = weather.windGusts >= 45;
-  const gustApproaching = !gustElevated && weather.windGusts >= 35;
+  const gustElevated = weather.windGusts >= 45
+  const gustApproaching = !gustElevated && weather.windGusts >= 35
 
   const uvLabel =
     weather.uvIndex >= 11
       ? 'Extreme'
       : weather.uvIndex >= 8
-      ? 'Very high'
-      : weather.uvIndex >= 6
-      ? 'High'
-      : weather.uvIndex >= 3
-      ? 'Moderate'
-      : 'Low';
+        ? 'Very high'
+        : weather.uvIndex >= 6
+          ? 'High'
+          : weather.uvIndex >= 3
+            ? 'Moderate'
+            : 'Low'
 
   const tiles = [
     {
@@ -89,11 +80,7 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
       value: formatWind(weather.windGusts),
       unit: windSuffix,
       note: 'Peak instantaneous',
-      valueClass: gustElevated
-        ? 'text-orange-300'
-        : gustApproaching
-        ? 'text-amber-300'
-        : 'text-slate-100'
+      valueClass: gustElevated ? 'text-orange-300' : gustApproaching ? 'text-amber-300' : 'text-slate-100',
     },
     {
       label: 'Sustained wind',
@@ -101,7 +88,7 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
       value: formatWind(weather.windSpeed),
       unit: windSuffix,
       note: '10 m height',
-      valueClass: 'text-slate-100'
+      valueClass: 'text-slate-100',
     },
     {
       label: 'Precipitation',
@@ -109,7 +96,7 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
       value: `${Math.round(weather.rainProbability)}%`,
       unit: '',
       note: `${weather.rainAmount.toFixed(1)} mm/h rate`,
-      valueClass: 'text-slate-100'
+      valueClass: 'text-slate-100',
     },
     {
       label: 'Temperature',
@@ -117,7 +104,7 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
       value: formatTemp(weather.temperature),
       unit: '',
       note: `Feels like ${formatTemp(weather.feelsLike)}`,
-      valueClass: 'text-slate-100'
+      valueClass: 'text-slate-100',
     },
     {
       label: 'UV index',
@@ -125,7 +112,7 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
       value: weather.uvIndex.toFixed(1),
       unit: '',
       note: uvLabel,
-      valueClass: 'text-slate-100'
+      valueClass: 'text-slate-100',
     },
     {
       label: 'Humidity',
@@ -133,9 +120,9 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
       value: `${Math.round(weather.humidity)}%`,
       unit: '',
       note: `${Math.round(weather.pressure)} hPa`,
-      valueClass: 'text-slate-100'
-    }
-  ];
+      valueClass: 'text-slate-100',
+    },
+  ]
 
   return (
     <section
@@ -152,7 +139,7 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {tiles.map((tile) => {
-          const Icon = tile.icon;
+          const Icon = tile.icon
           return (
             <div
               key={tile.label}
@@ -168,11 +155,11 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
               </div>
               <div className="mt-1 truncate text-[11px] text-slate-500">{tile.note}</div>
             </div>
-          );
+          )
         })}
       </div>
     </section>
-  );
-};
+  )
+}
 
-export const CurrentConditions = React.memo(CurrentConditionsComponent);
+export const CurrentConditions = React.memo(CurrentConditionsComponent)

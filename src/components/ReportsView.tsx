@@ -1,26 +1,21 @@
-import React from 'react';
-import { FileText, Printer, Download, HardHat, CheckCircle2, ShieldAlert } from 'lucide-react';
-import { LocationItem, CurrentWeather, RiskAssessment, AlertItem } from '../types';
+import React from 'react'
+import { FileText, Printer, Download, HardHat, CheckCircle2, ShieldAlert } from 'lucide-react'
+import { LocationItem, CurrentWeather, RiskAssessment, AlertItem } from '../types'
 
 interface ReportsViewProps {
-  location: LocationItem | null;
-  current: CurrentWeather | null;
-  risk: RiskAssessment | null;
-  alerts: AlertItem[];
+  location: LocationItem | null
+  current: CurrentWeather | null
+  risk: RiskAssessment | null
+  alerts: AlertItem[]
 }
 
-export const ReportsView: React.FC<ReportsViewProps> = ({
-  location,
-  current,
-  risk,
-  alerts
-}) => {
+export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, risk, alerts }) => {
   const handlePrint = () => {
-    window.print();
-  };
+    window.print()
+  }
 
   const handleExportCSV = () => {
-    if (!current || !location) return;
+    if (!current || !location) return
     const rows = [
       ['Report', 'Construction Weather Risk Assessment Report'],
       ['Generated', new Date().toISOString()],
@@ -38,18 +33,18 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       ['Precipitation Probability', `${current.rainProbability}%`],
       ['UV Index', `${current.uvIndex}`],
       ['Condition', current.weatherDescription],
-      ['Active Alerts Count', `${alerts.length}`]
-    ];
+      ['Active Alerts Count', `${alerts.length}`],
+    ]
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + rows.map((e) => e.join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `weather-risk-report-${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+    const csvContent = 'data:text/csv;charset=utf-8,' + rows.map((e) => e.join(',')).join('\n')
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement('a')
+    link.setAttribute('href', encodedUri)
+    link.setAttribute('download', `weather-risk-report-${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   return (
     <div className="space-y-6">
@@ -156,7 +151,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             <div className="p-3 bg-slate-50 rounded border border-slate-200">
               <div className="text-xs text-slate-500">Precipitation</div>
               <div className="text-base font-bold text-slate-900 mt-0.5">
-                {current ? `${current.rainAmount.toFixed(1)} mm/h (${Math.round(current.rainProbability)}%)` : '—'}
+                {current
+                  ? `${current.rainAmount.toFixed(1)} mm/h (${Math.round(current.rainProbability)}%)`
+                  : '—'}
               </div>
             </div>
             <div className="p-3 bg-slate-50 rounded border border-slate-200">
@@ -206,7 +203,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             <div className="space-y-2">
               {alerts.map((a) => (
                 <div key={a.id} className="p-3 bg-red-50 border border-red-200 rounded text-xs">
-                  <span className="font-bold text-red-800 uppercase font-mono">{a.severity}: {a.title}</span>
+                  <span className="font-bold text-red-800 uppercase font-mono">
+                    {a.severity}: {a.title}
+                  </span>
                   <p className="text-slate-700 mt-1">{a.message}</p>
                 </div>
               ))}
@@ -218,12 +217,16 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         <div className="pt-6 border-t-2 border-slate-200">
           <div className="bg-slate-50 p-4 rounded border border-slate-200 text-xs text-slate-600 leading-relaxed">
             <strong className="text-slate-800">Mandatory Safety Advisory: </strong>
-            Review applicable site procedures, SWMS, equipment requirements and manufacturer limits. The system is a weather-risk monitoring tool. It is not a replacement for professional safety judgement.
+            Review applicable site procedures, SWMS, equipment requirements and manufacturer limits. The
+            system is a weather-risk monitoring tool. It is not a replacement for professional safety
+            judgement.
           </div>
 
           <div className="mt-8 pt-4 grid grid-cols-2 gap-8 text-xs font-mono text-slate-500">
             <div>
-              <div className="border-b border-slate-300 pb-1 mb-1 font-bold text-slate-700">Site Supervisor / Reviewer Sign-off:</div>
+              <div className="border-b border-slate-300 pb-1 mb-1 font-bold text-slate-700">
+                Site Supervisor / Reviewer Sign-off:
+              </div>
               <div className="pt-6 text-[11px] text-slate-400">Signature & Date</div>
             </div>
             <div className="text-right">
@@ -234,5 +237,5 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from 'react'
 import {
   ShieldAlert,
   MapPin,
@@ -18,32 +18,35 @@ import {
   Users,
   Crown,
   Shield,
-  Eye
-} from 'lucide-react';
-import { LocationItem, UserRole } from '../types';
-import { STATIC_MODE } from '../static/mode';
-import { KeepAwakeToggle } from './KeepAwakeToggle';
+  Eye,
+} from 'lucide-react'
+import { LocationItem, UserRole } from '../types'
+import { STATIC_MODE } from '../static/mode'
+import { KeepAwakeToggle } from './KeepAwakeToggle'
 
 interface NavbarProps {
-  currentLocation: LocationItem | null;
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
-  onOpenLocations: () => void;
-  onRunCheck: () => void;
-  onLogout?: () => void;
-  isChecking: boolean;
-  monitorStatus: 'ACTIVE' | 'STOPPED' | 'ERROR';
-  dataStatus: 'LIVE' | 'CACHED' | 'OFFLINE' | 'UNAVAILABLE';
-  lastCheckTime: string | null;
-  userRole?: UserRole;
-  userEmail?: string;
+  currentLocation: LocationItem | null
+  activeTab: string
+  setActiveTab: (tab: string) => void
+  onOpenLocations: () => void
+  onRunCheck: () => void
+  onLogout?: () => void
+  isChecking: boolean
+  monitorStatus: 'ACTIVE' | 'STOPPED' | 'ERROR'
+  dataStatus: 'LIVE' | 'CACHED' | 'OFFLINE' | 'UNAVAILABLE'
+  lastCheckTime: string | null
+  userRole?: UserRole
+  userEmail?: string
 }
 
-const ROLE_BADGE: Record<UserRole, { label: string; icon: React.ComponentType<{ className?: string }>; className: string }> = {
+const ROLE_BADGE: Record<
+  UserRole,
+  { label: string; icon: React.ComponentType<{ className?: string }>; className: string }
+> = {
   OWNER: { label: 'Owner', icon: Crown, className: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
   MANAGER: { label: 'Manager', icon: Shield, className: 'bg-sky-500/10 text-sky-300 border-sky-500/30' },
-  VIEWER: { label: 'Viewer', icon: Eye, className: 'bg-slate-800/60 text-slate-400 border-slate-700' }
-};
+  VIEWER: { label: 'Viewer', icon: Eye, className: 'bg-slate-800/60 text-slate-400 border-slate-700' },
+}
 
 const NavbarComponent: React.FC<NavbarProps> = ({
   currentLocation,
@@ -57,22 +60,22 @@ const NavbarComponent: React.FC<NavbarProps> = ({
   dataStatus,
   lastCheckTime,
   userRole = 'VIEWER',
-  userEmail
+  userEmail,
 }) => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const canOperate = userRole === 'OWNER' || userRole === 'MANAGER';
-  const isOwner = userRole === 'OWNER';
-  const roleBadge = ROLE_BADGE[userRole];
-  const RoleIcon = roleBadge.icon;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const canOperate = userRole === 'OWNER' || userRole === 'MANAGER'
+  const isOwner = userRole === 'OWNER'
+  const roleBadge = ROLE_BADGE[userRole]
+  const RoleIcon = roleBadge.icon
 
   const getRelativeTime = (iso: string | null) => {
-    if (!iso) return 'Pending check';
-    const d = new Date(iso);
-    const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
-    if (diffSec < 60) return 'Just now';
-    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} min ago`;
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+    if (!iso) return 'Pending check'
+    const d = new Date(iso)
+    const diffSec = Math.floor((Date.now() - d.getTime()) / 1000)
+    if (diffSec < 60) return 'Just now'
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} min ago`
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
 
   // Tabs are gated by role. Settings is available to every authenticated
   // role because each account owns its password, MFA and active sessions; the
@@ -88,12 +91,15 @@ const NavbarComponent: React.FC<NavbarProps> = ({
     { id: 'performance', label: 'Performance', icon: BarChart3, visible: true },
     { id: 'settings', label: 'Settings', icon: Settings, visible: true },
     // User/account management only applies to the server build.
-    { id: 'users', label: 'Users', icon: Users, visible: isOwner && !STATIC_MODE }
-  ];
-  const navItems = allNavItems.filter((item) => item.visible);
+    { id: 'users', label: 'Users', icon: Users, visible: isOwner && !STATIC_MODE },
+  ]
+  const navItems = allNavItems.filter((item) => item.visible)
 
   return (
-    <header data-app-header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/95 text-white select-none backdrop-blur supports-[backdrop-filter]:bg-slate-950/85">
+    <header
+      data-app-header
+      className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/95 text-white select-none backdrop-blur supports-[backdrop-filter]:bg-slate-950/85"
+    >
       {/* Top Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
         {/* Brand & Identity */}
@@ -120,13 +126,17 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                   monitorStatus === 'ACTIVE'
                     ? 'bg-emerald-400'
                     : monitorStatus === 'ERROR'
-                    ? 'bg-red-500'
-                    : 'bg-slate-600'
+                      ? 'bg-red-500'
+                      : 'bg-slate-600'
                 }`}
                 aria-hidden="true"
               />
               <span>
-                {monitorStatus === 'ACTIVE' ? 'Monitoring' : monitorStatus === 'ERROR' ? 'Check failed' : 'Paused'}
+                {monitorStatus === 'ACTIVE'
+                  ? 'Monitoring'
+                  : monitorStatus === 'ERROR'
+                    ? 'Check failed'
+                    : 'Paused'}
                 <span className="text-slate-700"> · </span>
                 {getRelativeTime(lastCheckTime)}
               </span>
@@ -212,8 +222,8 @@ const NavbarComponent: React.FC<NavbarProps> = ({
         <div className="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto no-scrollbar">
           <nav className="flex items-center gap-0.5 sm:gap-1" aria-label="Main navigation">
             {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
+              const Icon = item.icon
+              const isActive = activeTab === item.id
               return (
                 <button
                   type="button"
@@ -234,7 +244,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                     />
                   )}
                 </button>
-              );
+              )
             })}
           </nav>
         </div>
@@ -244,15 +254,15 @@ const NavbarComponent: React.FC<NavbarProps> = ({
       {mobileMenuOpen && (
         <div className="sm:hidden border-t border-slate-800/60 bg-slate-950/95 p-3 space-y-1">
           {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
+            const Icon = item.icon
+            const isActive = activeTab === item.id
             return (
               <button
                 type="button"
                 key={item.id}
                 onClick={() => {
-                  setActiveTab(item.id);
-                  setMobileMenuOpen(false);
+                  setActiveTab(item.id)
+                  setMobileMenuOpen(false)
                 }}
                 className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium text-left transition-colors ${
                   isActive
@@ -263,12 +273,16 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                 <Icon className="h-4 w-4" />
                 <span>{item.label}</span>
               </button>
-            );
+            )
           })}
           <KeepAwakeToggle fullWidth />
           <div className="pt-2 border-t border-slate-800/60 text-[11px] text-slate-500 flex items-center justify-between px-2">
             <span>
-              {monitorStatus === 'ACTIVE' ? 'Monitoring' : monitorStatus === 'ERROR' ? 'Check failed' : 'Paused'}
+              {monitorStatus === 'ACTIVE'
+                ? 'Monitoring'
+                : monitorStatus === 'ERROR'
+                  ? 'Check failed'
+                  : 'Paused'}
               <span className="text-slate-700"> · </span>
               {dataStatus}
             </span>
@@ -277,7 +291,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
         </div>
       )}
     </header>
-  );
-};
+  )
+}
 
-export const Navbar = React.memo(NavbarComponent);
+export const Navbar = React.memo(NavbarComponent)

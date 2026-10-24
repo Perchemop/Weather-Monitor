@@ -3,15 +3,16 @@
 **Document Version:** 1.0  
 **Date:** 3 October 2026  
 **Application:** Construction Weather Monitor (Weather-Monitor-main)  
-**Stack:** React 19 + Vite 6 + Tailwind CSS 4 + Express + sql.js (SQLite) + Nodemailer + Lucide + Recharts + Motion  
+**Stack:** React 19 + Vite 6 + Tailwind CSS 4 + Express + sql.js (SQLite) + Nodemailer + Lucide + Recharts + Motion
 
 ---
 
 ## 1. Application Overview
 
-The application is a **private, single-user, local-first construction weather monitoring and automated alerting system**.  
+The application is a **private, single-user, local-first construction weather monitoring and automated alerting system**.
 
 Primary goals:
+
 - Monitor weather conditions at one or more construction sites.
 - Calculate deterministic risk scores focused on construction activities (crane operations, formwork, concrete pours, roofing, working at heights, etc.).
 - Generate and deliver email alerts when thresholds are breached.
@@ -25,6 +26,7 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
 ## 2. Complete Feature Inventory
 
 ### 2.1 Core Weather & Risk Features
+
 - Dual-provider fetching (WeatherAPI + Open-Meteo)
 - Provider variance / concordance scoring and confidence score
 - Current conditions (temperature, feels-like, humidity, wind, gusts, rain, UV, pressure, visibility, WMO weather code)
@@ -36,6 +38,7 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
 - Safety disclaimer that is always shown
 
 ### 2.2 Alerting & Monitoring
+
 - Alert generation from risk engine
 - Alert states: ACTIVE, CLEARED, DISMISSED
 - Email delivery with retry queue and cooldown
@@ -45,12 +48,14 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
 - Monitor run history and consecutive failure tracking
 
 ### 2.3 Locations
+
 - Multi-location support
 - Geocoding search
 - Default location
 - Per-location status (LIVE / CACHED / STALE / OFFLINE)
 
 ### 2.4 User Interface Views
+
 - Dashboard (Hero Risk Card, Active Alerts, Cross-Reference Card, Hourly Bar, Current Conditions, condensed Activity Risk link, compact System Health strip)
 - Activity Risk Matrix (dedicated tab for the construction activity impact matrix)
 - Weekly Performance Summary (on-screen 7-day monitoring/conditions/alert digest)
@@ -63,6 +68,7 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
 - Location Modal
 
 ### 2.5 Persistence & System
+
 - Full SQLite schema with migrations
 - Audit logs
 - Data retention enforcement
@@ -74,6 +80,7 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
 ## 3. Implementation Plan Phases
 
 ### Phase 0 — Immediate Stabilisation (Highest Priority)
+
 - **Step 0.1: Restore Authentication**
   - Implement full session verification in Express `requireAuth` middleware supporting Cookies, `Authorization: Bearer`, and `x-session-token`.
   - Add `/api/auth/status`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/setup`.
@@ -87,6 +94,7 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
   - Centralize constants across frontend and backend.
 
 ### Phase 1 — Core Reliability & Data Layer
+
 - **Step 1.1: Strengthen SQLite Persistence & Backups**
   - Automated timestamped backup rotation in `data/backups/`.
 - **Step 1.2: Loading, Empty, and Error States**
@@ -97,6 +105,7 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
   - Add unit conversion, auth, and persistence tests to `system.test.ts`.
 
 ### Phase 2 — UI/UX Overhaul
+
 - **Step 2.1: Responsive & Accessible Navigation**
   - Mobile hamburger navigation, ARIA attributes, keyboard accessibility.
 - **Step 2.2: Dashboard Polish**
@@ -109,10 +118,12 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
   - CSV export for historical observations & alert logs, print-ready CSS.
 
 ### Phase 3 & 4 — Hardening & Documentation
+
 - **Step 3.1: Security Headers & Rate Limiting** ✅ (strict CSP + hardening headers; auth endpoints 10/15min, API 300/min)
 - **Step 3.2: Comprehensive README.md** ✅
 
 ### Phase 5 — Multi-User, Offline & Performance ✅
+
 - **Step 5.1: Role-Based Access Control**
   - `users` table + migration (005) with per-account Scrypt credentials.
   - Roles OWNER / MANAGER / VIEWER enforced by `requireRole` middleware.
@@ -130,6 +141,7 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
   - Initial bundle reduced from ~820 kB to ~317 kB (~92 kB gzip).
 
 ### Phase 6 — Security, Push & Operations ✅
+
 - **Step 6.1: Security Hardening**
   - Cookie-only sessions: the session token is no longer returned in JSON bodies
     or stored in `localStorage`; the `HttpOnly` cookie is the sole browser credential.
@@ -166,6 +178,7 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
     renamed from `react-example` to `construction-weather-monitor`.
 
 ### Phase 7 — Test Depth & Testability ✅
+
 - **Step 7.1: Importable application**
   - `server.ts` now exports `createApp(options)` (no port binding on import) and
     `startServer()`; the process bootstrap moved to `server-entry.ts`, which the
@@ -188,6 +201,7 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
   - Test total: 33 unit + 20 integration = **53 checks**.
 
 ### Phase 8 — Active Session Management ✅
+
 - **Step 8.1: Session metadata** (migration `009_session_metadata`)
   - The `sessions` table gains `user_agent`, `ip`, and `last_seen_at` columns via
     `ALTER TABLE` (backward-compatible upgrade verified against a pre-009 schema).
@@ -206,6 +220,7 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
     "Sign Out All" (reuses the existing confirmation modal).
 
 ### Phase 9 — Serverless Pages, Observability & Delivery ✅
+
 - **Step 9.1: Static / serverless build (GitHub Pages)**
   - `VITE_APP_MODE=static` selects a client-side backend (`src/static/*`): an
     IndexedDB store mirroring `db.ts`, the shared deterministic risk/alert engine,
@@ -223,4 +238,3 @@ Default location shipped with the code: Adelaide, South Australia (−34.9285, 1
 - **Step 9.4: Legacy `auth_owner` retirement** (migration `011_drop_legacy_auth_owner`)
   - Credentials are preserved into `users` if still needed, then the redundant
     single-owner table is dropped; owner bootstrap/setup now use `users` directly.
-
