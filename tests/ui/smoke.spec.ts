@@ -10,11 +10,11 @@ const VIEWER_PASSWORD = 'ViewerPass123'
  * Handles first-run setup (if owner not yet created) and login.
  */
 async function ensureAuthenticated(page) {
-  // Wait for the login shell to hydrate (setup vs login determined by API)
-  await expect(page.locator('text=Initial Master Password Setup, text=Site Supervisor Lock')).toBeVisible({
-    timeout: 10000,
-  })
-
+  // Let the React app hydrate after navigation
+  await page.waitForLoadState('networkidle')
+  // Wait for the app shell to render
+  await expect(page.locator('h1')).toBeVisible({ timeout: 10000 })
+  // Determine setup vs login mode (set by /api/auth/status after hydration)
   const isSetup = await page
     .locator('text=Initial Master Password Setup')
     .isVisible()
