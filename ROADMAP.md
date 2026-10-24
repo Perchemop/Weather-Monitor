@@ -41,16 +41,16 @@ Every item now carries its research note (`docs/research/<capability>.md`).
 implemented until the human approves the note it depends on. Approval
 criteria: original wording, URLs present, no copyrighted paste, no UI cloning.
 
-| #   | Item                                                                 | Research note                                                                    | Next step                                          | Ready-for-work                    |
-| --- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------- |
-| 1   | In-app crash report submission (device-flow user token, memory-only) | [`crash-report-submission.md`](docs/research/crash-report-submission.md)         | Human approval of design (B) + acceptance criteria | 0% — blocked on gate              |
-| 2   | Multi-architecture container images (amd64 + arm64 via Buildx)       | [`multi-arch-container-images.md`](docs/research/multi-arch-container-images.md) | Approve, then one CI slice                         | 90% — note complete, pure CI work |
-| 3   | Prettier adoption (dedicated reformat release)                       | [`prettier-adoption.md`](docs/research/prettier-adoption.md)                     | Approve config; one reformat-only PR               | 90% — note complete               |
-| 4   | Browser-level (DOM) smoke tests (Playwright)                         | [`dom-ui-tests.md`](docs/research/dom-ui-tests.md)                               | Approve scope; one slice + CI job                  | 85% — note complete               |
-| 5   | Prometheus alert examples + operations runbook                       | [`prometheus-runbook.md`](docs/research/prometheus-runbook.md)                   | Approve alert set; docs slice + promtool check     | 85% — note complete               |
+| #   | Item                                                                 | Research note                                                                    | Next step                                       | Ready-for-work                                          |
+| --- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------- |
+| 1   | In-app crash report submission (device-flow user token, memory-only) | [`crash-report-submission.md`](docs/research/crash-report-submission.md)         | Implement per approved design (B)               | 0% — not started                                        |
+| 2   | Multi-architecture container images (amd64 + arm64 via Buildx)       | [`multi-arch-container-images.md`](docs/research/multi-arch-container-images.md) | Verify at the `v0.1.1` tag (manifest + compose) | 95% — workflow written; awaiting tag evidence           |
+| 3   | Prettier adoption (dedicated reformat release)                       | [`prettier-adoption.md`](docs/research/prettier-adoption.md)                     | Done                                            | 100% — PR #6, CI green (reformat-only; tests unchanged) |
+| 4   | Browser-level (DOM) smoke tests (Playwright)                         | [`dom-ui-tests.md`](docs/research/dom-ui-tests.md)                               | Implement tests + CI job                        | 85% — note complete, not started                        |
+| 5   | Prometheus alert examples + operations runbook                       | [`prometheus-runbook.md`](docs/research/prometheus-runbook.md)                   | Implement rules + runbook + promtool            | 85% — note complete, not started                        |
 
 **Feature breadth: unchanged (no new in-scope features in this stage).**
-**Ready-for-work: 0/5 implemented; 4/5 unblocked the moment the gate opens.**
+**Ready-for-work: 1/5 done (Prettier), 1/5 awaiting tag evidence (images), 3/5 ready to implement.**
 
 ## Stage 1.0.0 — stability declaration
 
