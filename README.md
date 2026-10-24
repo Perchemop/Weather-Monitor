@@ -50,14 +50,14 @@ Autonomous, local-first microclimate risk evaluation and automated safety alerti
 Access is enforced on the server for every route; the UI simply mirrors the
 same policy by hiding tabs an operator cannot use.
 
-| Capability | Viewer | Manager | Owner |
-| --- | :---: | :---: | :---: |
-| View dashboard, forecast, history, reports, alerts | ✅ | ✅ | ✅ |
-| Run manual checks, dismiss alerts, manage locations | — | ✅ | ✅ |
-| System health diagnostics | — | ✅ | ✅ |
-| Own password, TOTP MFA, active sessions, push preferences | ✅ | ✅ | ✅ |
-| Safety thresholds, monitor cycle, email gateway, storage & backups | — | — | ✅ |
-| User & role management, data purge | — | — | ✅ |
+| Capability                                                         | Viewer | Manager | Owner |
+| ------------------------------------------------------------------ | :----: | :-----: | :---: |
+| View dashboard, forecast, history, reports, alerts                 |   ✅   |   ✅    |  ✅   |
+| Run manual checks, dismiss alerts, manage locations                |   —    |   ✅    |  ✅   |
+| System health diagnostics                                          |   —    |   ✅    |  ✅   |
+| Own password, TOTP MFA, active sessions, push preferences          |   ✅   |   ✅    |  ✅   |
+| Safety thresholds, monitor cycle, email gateway, storage & backups |   —    |    —    |  ✅   |
+| User & role management, data purge                                 |   —    |    —    |  ✅   |
 
 - Accounts are stored per-user in SQLite with individual Scrypt-hashed passwords.
 - The **last active Owner** cannot be demoted, deactivated, or deleted.
@@ -207,7 +207,7 @@ bundle):
   tiles animated as a smooth past→nowcast loop (play/pause, step, 0.5×/1×/2×
   speed, scrub timeline). Frames are preloaded for the current viewport so the
   loop plays without stutter; the feed refreshes every 5 minutes.
-- **Rain** — an Open-Meteo 5×5 sample grid, switchable between *instantaneous*
+- **Rain** — an Open-Meteo 5×5 sample grid, switchable between _instantaneous_
   intensity (mm/h) and **accumulated totals over the next 1 / 3 / 6 / 24 hours** —
   useful for trench-flooding and runoff planning.
 - **Wind** — the same grid rendered as direction arrows coloured by speed.
@@ -225,12 +225,12 @@ degrades gracefully (the base map and remaining layers stay usable).
 
 Beyond the WMO thunderstorm codes (95/96/99), the risk engine and both alert
 engines now consume Open-Meteo's **Lightning Potential Index** and **CAPE** to
-raise a **LIGHTNING** alert *before* a storm code is issued:
+raise a **LIGHTNING** alert _before_ a storm code is issued:
 
-| Metric | Moderate | High | Critical |
-| --- | --- | --- | --- |
-| LPI (J/kg) | ≥ 100 | ≥ 500 | ≥ 1000 |
-| CAPE (J/kg) | ≥ 800 | ≥ 1500 | ≥ 2500 |
+| Metric      | Moderate | High   | Critical |
+| ----------- | -------- | ------ | -------- |
+| LPI (J/kg)  | ≥ 100    | ≥ 500  | ≥ 1000   |
+| CAPE (J/kg) | ≥ 800    | ≥ 1500 | ≥ 2500   |
 
 This is deterministic, key-free, and works in both the server and static builds.
 
@@ -269,7 +269,7 @@ docker compose --profile mail up --build     # starts the app + Mailpit catcher
 #   OWNER_EMAIL=safety@site.local
 ```
 
-Trigger an alert (or Settings → Email Gateway → *Send Test Notification*), then
+Trigger an alert (or Settings → Email Gateway → _Send Test Notification_), then
 read the delivered message at <http://localhost:8025>. Point `SMTP_HOST` at any
 free relay (Brevo 300/day, SMTP2GO 1000/mo, Mailjet, or a Gmail App Password) for
 real delivery — see `.env.example` for the exact host/port values.
@@ -360,18 +360,22 @@ Entrance animations (`fade-in`, toast/modal transitions) are defined in
 ## Getting Started
 
 ### Development Mode
+
 ```bash
 npm install
 npm run dev
 ```
+
 The server will start on port 3000 (`http://localhost:3000`).
 
 ### Running the Test Suites
+
 ```bash
 npm test              # both suites
 npm run test:unit     # deterministic engine + utilities (59 checks)
 npm run test:api      # HTTP integration surface (29 checks)
 ```
+
 The suite is now an **88-point** verification run split across two layers:
 
 - **Unit suite** — deterministic risk calculation (including UV level handling
@@ -397,20 +401,25 @@ Tests never touch your working `./data` directory — they run in a fresh temp
 directory via the `DATA_DIR` override.
 
 ### Building for Production
+
 ```bash
 npm run build           # server build -> dist/ (Express + API)
 npm start
 ```
+
 For the serverless GitHub Pages build:
+
 ```bash
 npm run build:static    # static build -> dist-static/ (no backend)
 ```
 
 ### Container Deployment
+
 ```bash
 cp .env.example .env   # then edit your credentials
 docker compose up --build
 ```
+
 State (SQLite database, backups, and generated secrets) persists in `./data`.
 
 ### Staying current

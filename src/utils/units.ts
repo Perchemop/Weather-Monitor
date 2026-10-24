@@ -4,53 +4,49 @@
  * according to owner preferences stored in SQLite.
  */
 
-export type TemperatureUnit = 'C' | 'F';
-export type WindUnit = 'km/h' | 'mph' | 'm/s';
+export type TemperatureUnit = 'C' | 'F'
+export type WindUnit = 'km/h' | 'mph' | 'm/s'
 
 export function convertTemperature(celsius: number, unit: TemperatureUnit): number {
   if (unit === 'F') {
-    return (celsius * 9) / 5 + 32;
+    return (celsius * 9) / 5 + 32
   }
-  return celsius;
+  return celsius
 }
 
 export function convertWind(kmh: number, unit: WindUnit): number {
   if (unit === 'mph') {
-    return kmh * 0.621371;
+    return kmh * 0.621371
   }
   if (unit === 'm/s') {
-    return kmh / 3.6;
+    return kmh / 3.6
   }
-  return kmh;
+  return kmh
 }
 
 export function formatTemperature(
   celsius: number | null | undefined,
   unit: TemperatureUnit = 'C',
-  decimals = 0
+  decimals = 0,
 ): string {
   if (celsius === null || celsius === undefined || isNaN(celsius)) {
-    return '--';
+    return '--'
   }
-  const val = convertTemperature(celsius, unit);
-  return `${val.toFixed(decimals)}°${unit}`;
+  const val = convertTemperature(celsius, unit)
+  return `${val.toFixed(decimals)}°${unit}`
 }
 
-export function formatWind(
-  kmh: number | null | undefined,
-  unit: WindUnit = 'km/h',
-  decimals = 0
-): string {
+export function formatWind(kmh: number | null | undefined, unit: WindUnit = 'km/h', decimals = 0): string {
   if (kmh === null || kmh === undefined || isNaN(kmh)) {
-    return '--';
+    return '--'
   }
-  const val = convertWind(kmh, unit);
-  return `${val.toFixed(decimals)} ${unit}`;
+  const val = convertWind(kmh, unit)
+  return `${val.toFixed(decimals)} ${unit}`
 }
 
 export function formatPrecipitation(mm: number | null | undefined, decimals = 1): string {
   if (mm === null || mm === undefined || isNaN(mm)) {
-    return '0.0 mm';
+    return '0.0 mm'
   }
-  return `${mm.toFixed(decimals)} mm`;
+  return `${mm.toFixed(decimals)} mm`
 }

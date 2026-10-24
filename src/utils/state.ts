@@ -10,23 +10,23 @@
  * `setStateIfChanged` keeps the *previous* reference whenever the incoming
  * payload is structurally identical, so React bails out of the update.
  */
-import type { Dispatch, SetStateAction } from 'react';
+import type { Dispatch, SetStateAction } from 'react'
 
 /** Structural (deep) equality. Uses JSON semantics, which is sufficient for the
  *  plain JSON payloads exchanged with the API and the in-browser backend. */
 export function deepEqual(a: unknown, b: unknown): boolean {
-  if (Object.is(a, b)) return true;
-  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  if (Array.isArray(a) !== Array.isArray(b)) return false
   try {
-    return JSON.stringify(a) === JSON.stringify(b);
+    return JSON.stringify(a) === JSON.stringify(b)
   } catch {
-    return false;
+    return false
   }
 }
 
 /** Applies `next` only when it differs from the current value, preserving the
  *  existing reference (and therefore avoiding a needless re-render). */
 export function setStateIfChanged<T>(setter: Dispatch<SetStateAction<T>>, next: T): void {
-  setter((prev) => (deepEqual(prev, next) ? prev : next));
+  setter((prev) => (deepEqual(prev, next) ? prev : next))
 }

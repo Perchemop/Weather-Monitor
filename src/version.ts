@@ -5,4 +5,4 @@
  * is surfaced through `/healthz`, `/api/health` and Settings → About, and is
  * the baseline for the in-app update check against GitHub Releases.
  */
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.1.0'

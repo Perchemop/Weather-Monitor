@@ -12,31 +12,31 @@
  * nothing leaves the page. Delivery is best-effort and de-duplicated per alert.
  */
 
-import { AlertItem } from '../types.js';
+import { AlertItem } from '../types.js'
 
 export interface EmailRelayConfig {
-  url?: string | null;
-  recipient?: string | null;
-  locationName?: string | null;
+  url?: string | null
+  recipient?: string | null
+  locationName?: string | null
 }
 
-const SENT_KEY = 'cwm.emailRelay.sent.v1';
-const TIMEOUT_MS = 8000;
-const MAX_REMEMBERED = 200;
+const SENT_KEY = 'cwm.emailRelay.sent.v1'
+const TIMEOUT_MS = 8000
+const MAX_REMEMBERED = 200
 
 function loadSent(): Set<string> {
   try {
-    const raw = globalThis.localStorage?.getItem(SENT_KEY);
-    const arr = raw ? (JSON.parse(raw) as string[]) : [];
-    return new Set<string>(Array.isArray(arr) ? arr : []);
+    const raw = globalThis.localStorage?.getItem(SENT_KEY)
+    const arr = raw ? (JSON.parse(raw) as string[]) : []
+    return new Set<string>(Array.isArray(arr) ? arr : [])
   } catch {
-    return new Set<string>();
+    return new Set<string>()
   }
 }
 
 function saveSent(set: Set<string>): void {
   try {
-    globalThis.localStorage?.setItem(SENT_KEY, JSON.stringify([...set].slice(-MAX_REMEMBERED)));
+    globalThis.localStorage?.setItem(SENT_KEY, JSON.stringify([...set].slice(-MAX_REMEMBERED)))
   } catch {
     /* storage unavailable — relay just fires without cross-reload memory */
   }
@@ -44,7 +44,7 @@ function saveSent(set: Set<string>): void {
 
 /** True when a syntactically valid HTTPS(S) relay URL is configured. */
 export function emailRelayConfigured(url?: string | null): boolean {
-  return Boolean(url && /^https?:\/\//i.test(url.trim()));
+  return Boolean(url && /^https?:\/\//i.test(url.trim()))
 }
 
 /**
@@ -52,11 +52,11 @@ export function emailRelayConfigured(url?: string | null): boolean {
  * accepted the alert (or it was already relayed). Never throws.
  */
 export async function dispatchAlertEmail(alert: AlertItem, config: EmailRelayConfig): Promise<boolean> {
-  const url = config.url?.trim();
-  if (!emailRelayConfigured(url)) return false;
+  const url = config.url?.trim()
+  if (!emailRelayConfigured(url)) return false
 
-  const sent = loadSent();
-  if (sent.has(alert.id)) return true;
+  const sent = loadSent()
+  if (sent.has(alert.id)) return true
 
   const payload = {
     to: config.recipient || undefined,
@@ -73,29 +73,29 @@ export async function dispatchAlertEmail(alert: AlertItem, config: EmailRelayCon
       `Started:         ${alert.startTime}`,
       `Expected duration: ${alert.expectedDuration}`,
       '',
-      alert.message
+      alert.message,
     ].join('\n'),
     severity: alert.severity,
     alertId: alert.id,
-    locationName: alert.locationName
-  };
+    locationName: alert.locationName,
+  }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
     const res = await fetch(url as string, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-    if (!res.ok) return false;
-    sent.add(alert.id);
-    saveSent(sent);
-    return true;
+      signal: controller.signal,
+    })
+    if (!res.ok) return false
+    sent.add(alert.id)
+    saveSent(sent)
+    return true
   } catch {
-    return false;
+    return false
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(timeout)
   }
 }

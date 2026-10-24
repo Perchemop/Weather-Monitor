@@ -1,9 +1,9 @@
-import './src/env.js';
-import express, { Request, Response, NextFunction } from 'express';
-import path from 'path';
-import cookieParser from 'cookie-parser';
-import crypto from 'crypto';
-import { createServer as createViteServer } from 'vite';
+import './src/env.js'
+import express, { Request, Response, NextFunction } from 'express'
+import path from 'path'
+import cookieParser from 'cookie-parser'
+import crypto from 'crypto'
+import { createServer as createViteServer } from 'vite'
 
 import {
   getDb,
@@ -74,80 +74,77 @@ import {
   countUsers,
   // Per-user push preferences
   getPushPreferences,
-  savePushPreferences
-} from './src/database/db.js';
-import { DEFAULT_THRESHOLDS } from './src/services/riskEngine.js';
-import { searchGeocodingLocations } from './src/services/weatherService.js';
-import { isSmtpConfigured, sendTestEmail, getPublicSmtpStatus } from './src/services/emailService.js';
-import { monitoringService } from './src/services/monitoringService.js';
-import { buildWeeklyPerformanceSummary } from './src/services/performanceSummary.js';
+  savePushPreferences,
+} from './src/database/db.js'
+import { DEFAULT_THRESHOLDS } from './src/services/riskEngine.js'
+import { searchGeocodingLocations } from './src/services/weatherService.js'
+import { isSmtpConfigured, sendTestEmail, getPublicSmtpStatus } from './src/services/emailService.js'
+import { monitoringService } from './src/services/monitoringService.js'
+import { buildWeeklyPerformanceSummary } from './src/services/performanceSummary.js'
 import {
   initPush,
   getVapidPublicKey,
   isPushConfigured,
   subscribeToPush,
   unsubscribeFromPush,
-  sendPushToAll
-} from './src/services/pushService.js';
-import { evaluateDataFreshness } from './src/utils/time.js';
-import { maskSecret } from './src/utils/security.js';
-import { securityHeaders } from './src/utils/securityHeaders.js';
-import { createRateLimiter } from './src/utils/rateLimiter.js';
-import { logger, requestLogger } from './src/utils/logger.js';
-import { APP_VERSION } from './src/version.js';
-import { validatePasswordStrength, describePasswordPolicy } from './src/utils/password.js';
-import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from './src/utils/totp.js';
-import { loadOrCreateSessionSecret } from './src/utils/secretStore.js';
-import { UserAccount, UserRole } from './src/types.js';
+  sendPushToAll,
+} from './src/services/pushService.js'
+import { evaluateDataFreshness } from './src/utils/time.js'
+import { maskSecret } from './src/utils/security.js'
+import { securityHeaders } from './src/utils/securityHeaders.js'
+import { createRateLimiter } from './src/utils/rateLimiter.js'
+import { logger, requestLogger } from './src/utils/logger.js'
+import { APP_VERSION } from './src/version.js'
+import { validatePasswordStrength, describePasswordPolicy } from './src/utils/password.js'
+import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from './src/utils/totp.js'
+import { loadOrCreateSessionSecret } from './src/utils/secretStore.js'
+import { UserAccount, UserRole } from './src/types.js'
 
-const PORT = 3000;
-const SESSION_SECRET = loadOrCreateSessionSecret();
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const PORT = 3000
+const SESSION_SECRET = loadOrCreateSessionSecret()
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 // Cookies are marked Secure only when explicitly enabled, because the default
 // deployment is a plain-HTTP local enclave where Secure cookies are never sent.
-const SECURE_COOKIES = process.env.SECURE_COOKIES === 'true';
+const SECURE_COOKIES = process.env.SECURE_COOKIES === 'true'
 
 // When enabled, the third-party WeatherAPI provider is skipped entirely.
-const LOCAL_ONLY = process.env.LOCAL_ONLY === 'true';
+const LOCAL_ONLY = process.env.LOCAL_ONLY === 'true'
 
 // Simple secure in-memory session store, keyed by token. Each entry is bound
 // to a user account and carries an absolute expiry. Entries are mirrored to
 // SQLite so logins survive process restarts.
 interface SessionEntry {
-  userId: string;
-  email: string;
-  role: UserRole;
-  displayName?: string;
-  createdAt: string;
-  expiresAt: number;
-  userAgent?: string;
-  ip?: string;
-  lastSeenAt: number;
+  userId: string
+  email: string
+  role: UserRole
+  displayName?: string
+  createdAt: string
+  expiresAt: number
+  userAgent?: string
+  ip?: string
+  lastSeenAt: number
 }
-const activeSessions = new Map<string, SessionEntry>();
+const activeSessions = new Map<string, SessionEntry>()
 
 // How long a session may go before its "last seen" timestamp is flushed to
 // SQLite. Keeps the per-request cost to a best-effort write every minute.
-const SESSION_TOUCH_INTERVAL_MS = 60 * 1000;
+const SESSION_TOUCH_INTERVAL_MS = 60 * 1000
 
 // A non-reversible public identifier for a session token. The raw token is the
 // bearer credential and must never be exposed to the client; this digest lets
 // the UI reference (and revoke) a session without revealing it.
 function sessionPublicId(token: string): string {
-  return crypto.createHash('sha256').update(token).digest('hex');
+  return crypto.createHash('sha256').update(token).digest('hex')
 }
 
 // Augments the Express request with the resolved session for downstream handlers.
 interface AuthedRequest extends Request {
-  session?: SessionEntry;
+  session?: SessionEntry
 }
 
-function createSession(
-  user: UserAccount,
-  meta: { userAgent?: string; ip?: string } = {}
-): string {
-  const token = crypto.randomBytes(32).toString('hex');
+function createSession(user: UserAccount, meta: { userAgent?: string; ip?: string } = {}): string {
+  const token = crypto.randomBytes(32).toString('hex')
   const entry: SessionEntry = {
     userId: user.id,
     email: user.email,
@@ -157,54 +154,54 @@ function createSession(
     expiresAt: Date.now() + SESSION_TTL_MS,
     userAgent: meta.userAgent,
     ip: meta.ip,
-    lastSeenAt: Date.now()
-  };
-  activeSessions.set(token, entry);
+    lastSeenAt: Date.now(),
+  }
+  activeSessions.set(token, entry)
   // Write-through persistence (best-effort; a failure must not block login).
   saveSession({ token, ...entry }).catch((err) =>
-    logger.warn('session_persist_failed', { error: String(err) })
-  );
-  return token;
+    logger.warn('session_persist_failed', { error: String(err) }),
+  )
+  return token
 }
 
 // Extracts display metadata for the connecting device, used by the active
 // sessions view. Best-effort and truncated to keep stored values bounded.
 function extractClientMeta(req: Request): { userAgent?: string; ip?: string } {
-  const ua = req.headers['user-agent'];
+  const ua = req.headers['user-agent']
   return {
     userAgent: typeof ua === 'string' ? ua.slice(0, 400) : undefined,
-    ip: req.ip
-  };
+    ip: req.ip,
+  }
 }
 
 function extractSessionToken(req: Request): string | undefined {
-  const cookieToken = req.cookies?.cwm_session;
-  if (cookieToken) return cookieToken;
-  const headerToken = req.headers['x-session-token'];
-  if (typeof headerToken === 'string' && headerToken) return headerToken;
-  const authHeader = req.headers.authorization;
+  const cookieToken = req.cookies?.cwm_session
+  if (cookieToken) return cookieToken
+  const headerToken = req.headers['x-session-token']
+  if (typeof headerToken === 'string' && headerToken) return headerToken
+  const authHeader = req.headers.authorization
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.slice(7);
+    return authHeader.slice(7)
   }
-  return undefined;
+  return undefined
 }
 
 function getSession(token?: string): SessionEntry | undefined {
-  if (!token) return undefined;
-  const entry = activeSessions.get(token);
-  if (!entry) return undefined;
+  if (!token) return undefined
+  const entry = activeSessions.get(token)
+  if (!entry) return undefined
   if (entry.expiresAt <= Date.now()) {
-    activeSessions.delete(token);
-    deleteSession(token).catch(() => {});
-    return undefined;
+    activeSessions.delete(token)
+    deleteSession(token).catch(() => {})
+    return undefined
   }
   // Record activity at most once per interval to avoid a write on every request.
-  const now = Date.now();
+  const now = Date.now()
   if (now - entry.lastSeenAt > SESSION_TOUCH_INTERVAL_MS) {
-    entry.lastSeenAt = now;
-    touchSession(token, now).catch(() => {});
+    entry.lastSeenAt = now
+    touchSession(token, now).catch(() => {})
   }
-  return entry;
+  return entry
 }
 
 /**
@@ -213,46 +210,46 @@ function getSession(token?: string): SessionEntry | undefined {
  * expires. Deactivated or deleted accounts have every session revoked.
  */
 async function reconcileUserSessions(userId: string): Promise<void> {
-  const user = await getUserById(userId);
+  const user = await getUserById(userId)
   if (!user || !user.active) {
     for (const [token, entry] of activeSessions) {
-      if (entry.userId === userId) activeSessions.delete(token);
+      if (entry.userId === userId) activeSessions.delete(token)
     }
-    await deleteSessionsForUser(userId);
-    return;
+    await deleteSessionsForUser(userId)
+    return
   }
   for (const [token, entry] of activeSessions) {
-    if (entry.userId !== userId) continue;
-    entry.email = user.email;
-    entry.role = user.role;
-    entry.displayName = user.displayName;
+    if (entry.userId !== userId) continue
+    entry.email = user.email
+    entry.role = user.role
+    entry.displayName = user.displayName
     saveSession({ token, ...entry }).catch((err) =>
-      logger.warn('session_sync_failed', { error: String(err) })
-    );
+      logger.warn('session_sync_failed', { error: String(err) }),
+    )
   }
 }
 
 /** Revokes every live session for a user except an optional current token. */
 async function revokeUserSessions(userId: string, keepToken?: string): Promise<void> {
-  const doomed: string[] = [];
+  const doomed: string[] = []
   for (const [token, entry] of activeSessions) {
-    if (entry.userId === userId && token !== keepToken) doomed.push(token);
+    if (entry.userId === userId && token !== keepToken) doomed.push(token)
   }
   for (const token of doomed) {
-    activeSessions.delete(token);
-    await deleteSession(token).catch(() => {});
+    activeSessions.delete(token)
+    await deleteSession(token).catch(() => {})
   }
 }
 
 // Authentication middleware - verifies signed session cookie, x-session-token, or Bearer auth
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const session = getSession(extractSessionToken(req));
+  const session = getSession(extractSessionToken(req))
   if (!session) {
-    res.status(401).json({ error: 'Authentication required. Safety enclave locked.' });
-    return;
+    res.status(401).json({ error: 'Authentication required. Safety enclave locked.' })
+    return
   }
-  (req as AuthedRequest).session = session;
-  next();
+  ;(req as AuthedRequest).session = session
+  next()
 }
 
 /**
@@ -265,35 +262,34 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
  */
 function requireCsrf(req: Request, res: Response, next: NextFunction): void {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-    next();
-    return;
+    next()
+    return
   }
   // Only cookie-authenticated requests are vulnerable to CSRF. Unauthenticated
   // requests (login/setup) and explicit token-header clients are exempt.
   if (!req.cookies?.cwm_session) {
-    next();
-    return;
+    next()
+    return
   }
-  const cookieToken = req.cookies?.cwm_csrf;
-  const headerToken = req.headers['x-csrf-token'];
+  const cookieToken = req.cookies?.cwm_csrf
+  const headerToken = req.headers['x-csrf-token']
   if (!cookieToken || typeof headerToken !== 'string' || cookieToken !== headerToken) {
-    res.status(403).json({ error: 'Invalid or missing CSRF token.' });
-    return;
+    res.status(403).json({ error: 'Invalid or missing CSRF token.' })
+    return
   }
-  next();
+  next()
 }
 
 /** Issues the readable double-submit CSRF cookie alongside a login. */
 function issueCsrfCookie(res: Response): void {
-  const csrfToken = crypto.randomBytes(24).toString('hex');
+  const csrfToken = crypto.randomBytes(24).toString('hex')
   res.cookie('cwm_csrf', csrfToken, {
     httpOnly: false,
     sameSite: 'lax',
     secure: SECURE_COOKIES,
-    maxAge: SESSION_TTL_MS
-  });
+    maxAge: SESSION_TTL_MS,
+  })
 }
-
 
 /**
  * Role-gating middleware. The OWNER role always satisfies any gate; otherwise
@@ -301,126 +297,127 @@ function issueCsrfCookie(res: Response): void {
  */
 function requireRole(...roles: UserRole[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const session = (req as AuthedRequest).session || getSession(extractSessionToken(req));
+    const session = (req as AuthedRequest).session || getSession(extractSessionToken(req))
     if (!session) {
-      res.status(401).json({ error: 'Authentication required. Safety enclave locked.' });
-      return;
+      res.status(401).json({ error: 'Authentication required. Safety enclave locked.' })
+      return
     }
-    (req as AuthedRequest).session = session;
+    ;(req as AuthedRequest).session = session
     if (session.role !== 'OWNER' && !roles.includes(session.role)) {
-      res.status(403).json({ error: 'Insufficient permissions for this action.' });
-      return;
+      res.status(403).json({ error: 'Insufficient permissions for this action.' })
+      return
     }
-    next();
-  };
+    next()
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Per-account login lockout
 // ---------------------------------------------------------------------------
-const LOGIN_MAX_ATTEMPTS = Math.max(3, Number(process.env.LOGIN_MAX_ATTEMPTS) || 5);
-const LOGIN_LOCKOUT_MS = Math.max(1, Number(process.env.LOGIN_LOCKOUT_MINUTES) || 15) * 60 * 1000;
-const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const LOGIN_MAX_ATTEMPTS = Math.max(3, Number(process.env.LOGIN_MAX_ATTEMPTS) || 5)
+const LOGIN_LOCKOUT_MS = Math.max(1, Number(process.env.LOGIN_LOCKOUT_MINUTES) || 15) * 60 * 1000
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>()
 
 function lockoutRemainingMs(key: string): number {
-  const entry = loginAttempts.get(key);
-  if (!entry) return 0;
-  if (entry.lockedUntil > Date.now()) return entry.lockedUntil - Date.now();
-  return 0;
+  const entry = loginAttempts.get(key)
+  if (!entry) return 0
+  if (entry.lockedUntil > Date.now()) return entry.lockedUntil - Date.now()
+  return 0
 }
 
 function recordLoginFailure(key: string): void {
-  const entry = loginAttempts.get(key) || { count: 0, lockedUntil: 0 };
-  entry.count += 1;
+  const entry = loginAttempts.get(key) || { count: 0, lockedUntil: 0 }
+  entry.count += 1
   if (entry.count >= LOGIN_MAX_ATTEMPTS) {
-    entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
-    entry.count = 0;
+    entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS
+    entry.count = 0
   }
-  loginAttempts.set(key, entry);
+  loginAttempts.set(key, entry)
 }
 
 function clearLoginFailures(key: string): void {
-  loginAttempts.delete(key);
+  loginAttempts.delete(key)
 }
 
-
-export type StaticMode = 'vite' | 'static' | 'none';
+export type StaticMode = 'vite' | 'static' | 'none'
 
 export interface CreateAppOptions {
   /**
    * How to serve the frontend. Defaults to the Vite dev middleware outside
    * production and the built `dist/` assets in production. Tests pass 'none'.
    */
-  staticMode?: StaticMode;
+  staticMode?: StaticMode
   /** Start the periodic monitoring poller (default true). */
-  startMonitoring?: boolean;
+  startMonitoring?: boolean
   /** Schedule the 30-minute backup snapshot timer (default true). */
-  scheduleBackups?: boolean;
+  scheduleBackups?: boolean
 }
 
 async function createApp(options: CreateAppOptions = {}): Promise<express.Express> {
   const staticMode: StaticMode =
-    options.staticMode ?? (process.env.NODE_ENV === 'production' ? 'static' : 'vite');
-  const startMonitoring = options.startMonitoring ?? true;
-  const scheduleBackups = options.scheduleBackups ?? true;
+    options.staticMode ?? (process.env.NODE_ENV === 'production' ? 'static' : 'vite')
+  const startMonitoring = options.startMonitoring ?? true
+  const scheduleBackups = options.scheduleBackups ?? true
 
-  const app = express();
+  const app = express()
 
   // Disable fingerprinting. Proxy trust is opt-in: trusting a forwarded header
   // by default would let any direct client spoof its IP and evade the
   // per-account lockout and rate limits. Set TRUST_PROXY when (and only when)
   // the app actually sits behind a trusted reverse proxy.
-  app.disable('x-powered-by');
-  const trustProxy = process.env.TRUST_PROXY;
+  app.disable('x-powered-by')
+  const trustProxy = process.env.TRUST_PROXY
   if (trustProxy && trustProxy.trim()) {
-    app.set('trust proxy', /^\d+$/.test(trustProxy.trim()) ? Number(trustProxy.trim()) : trustProxy.trim());
+    app.set('trust proxy', /^\d+$/.test(trustProxy.trim()) ? Number(trustProxy.trim()) : trustProxy.trim())
   }
 
   // Apply baseline security headers to every response. HSTS is opt-in because
   // the default deployment is a plain-HTTP local enclave.
-  app.use(securityHeaders({
-    enableHsts: process.env.ENABLE_HSTS === 'true',
-    dev: process.env.NODE_ENV !== 'production'
-  }));
+  app.use(
+    securityHeaders({
+      enableHsts: process.env.ENABLE_HSTS === 'true',
+      dev: process.env.NODE_ENV !== 'production',
+    }),
+  )
 
-  app.use(requestLogger);
-  app.use(express.json({ limit: '1mb' }));
-  app.use(cookieParser(SESSION_SECRET));
+  app.use(requestLogger)
+  app.use(express.json({ limit: '1mb' }))
+  app.use(cookieParser(SESSION_SECRET))
 
   // Brute-force protection for the unauthenticated auth endpoints.
   const authLimiter = createRateLimiter({
     windowMs: 15 * 60 * 1000,
     max: Math.max(1, Number(process.env.AUTH_RATE_LIMIT_MAX) || 10),
-    message: 'Too many authentication attempts. Please wait before trying again.'
-  });
+    message: 'Too many authentication attempts. Please wait before trying again.',
+  })
 
   // Broad safety net for the authenticated API surface.
   const apiLimiter = createRateLimiter({
     windowMs: 60 * 1000,
-    max: Math.max(1, Number(process.env.API_RATE_LIMIT_MAX) || 300)
-  });
+    max: Math.max(1, Number(process.env.API_RATE_LIMIT_MAX) || 300),
+  })
 
-  app.use('/api/', apiLimiter);
+  app.use('/api/', apiLimiter)
 
   // CSRF double-submit protection for cookie-authenticated state changes.
-  app.use('/api/', requireCsrf);
+  app.use('/api/', requireCsrf)
 
   // Initialize SQLite database
-  await getDb();
-  logger.info('database_initialised');
+  await getDb()
+  logger.info('database_initialised')
 
   // Restore persistent sessions so logins survive restarts.
   try {
-    await pruneExpiredSessions();
-    const stored = await loadActiveSessions();
+    await pruneExpiredSessions()
+    const stored = await loadActiveSessions()
     for (const s of stored) {
       // A persisted session is only valid while its account still exists and is
       // active; roles are re-read so a downgrade applied while the process was
       // down cannot be carried forward from a stale snapshot.
-      const user = await getUserById(s.userId);
+      const user = await getUserById(s.userId)
       if (!user || !user.active) {
-        await deleteSession(s.token).catch(() => {});
-        continue;
+        await deleteSession(s.token).catch(() => {})
+        continue
       }
       activeSessions.set(s.token, {
         userId: user.id,
@@ -431,28 +428,31 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         expiresAt: s.expiresAt,
         userAgent: s.userAgent,
         ip: s.ip,
-        lastSeenAt: s.lastSeenAt ?? Date.parse(s.createdAt)
-      });
+        lastSeenAt: s.lastSeenAt ?? Date.parse(s.createdAt),
+      })
     }
-    logger.info('sessions_restored', { count: stored.length });
+    logger.info('sessions_restored', { count: stored.length })
   } catch (err) {
-    logger.warn('session_restore_failed', { error: String(err) });
+    logger.warn('session_restore_failed', { error: String(err) })
   }
 
   // Initialize Web Push (generates/persists VAPID keys on first boot).
-  initPush();
+  initPush()
 
   // Start background monitoring service
   if (startMonitoring) {
-    await monitoringService.start();
-    logger.info('monitoring_started');
+    await monitoringService.start()
+    logger.info('monitoring_started')
   }
 
   // Background automated backup snapshot every 30 minutes
   if (scheduleBackups) {
-    setInterval(() => {
-      createDatabaseBackup().catch((e) => logger.error('backup_snapshot_failed', { error: String(e) }));
-    }, 30 * 60 * 1000);
+    setInterval(
+      () => {
+        createDatabaseBackup().catch((e) => logger.error('backup_snapshot_failed', { error: String(e) }))
+      },
+      30 * 60 * 1000,
+    )
   }
 
   // ----------------- LIVENESS (UNAUTHENTICATED) -----------------
@@ -460,28 +460,28 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   // load balancers can probe the process without credentials. Readiness is
   // reported separately by /api/health, which also exposes persistence state.
   app.get('/healthz', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', version: APP_VERSION, uptimeSeconds: Math.floor(process.uptime()) });
-  });
+    res.json({ status: 'ok', version: APP_VERSION, uptimeSeconds: Math.floor(process.uptime()) })
+  })
 
   // ----------------- METRICS (PROMETHEUS) -----------------
   // Operational metrics in the Prometheus text exposition format. Scrapers may
   // authenticate with a shared bearer token (`METRICS_TOKEN`); otherwise the
   // caller must hold a valid session so metrics are never exposed by default.
   app.get('/metrics', async (req: Request, res: Response) => {
-    const metricsToken = process.env.METRICS_TOKEN;
-    const authHeader = req.headers.authorization || '';
-    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-    const queryToken = typeof req.query.token === 'string' ? req.query.token : '';
-    const tokenOk = Boolean(metricsToken) && (bearer === metricsToken || queryToken === metricsToken);
+    const metricsToken = process.env.METRICS_TOKEN
+    const authHeader = req.headers.authorization || ''
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
+    const queryToken = typeof req.query.token === 'string' ? req.query.token : ''
+    const tokenOk = Boolean(metricsToken) && (bearer === metricsToken || queryToken === metricsToken)
 
     if (!tokenOk && !getSession(extractSessionToken(req))) {
-      res.status(401).json({ error: 'Authentication required.' });
-      return;
+      res.status(401).json({ error: 'Authentication required.' })
+      return
     }
 
     try {
-      const monitor = monitoringService.getStatus();
-      const smtpConfigured = await isSmtpConfigured();
+      const monitor = monitoringService.getStatus()
+      const smtpConfigured = await isSmtpConfigured()
       const [
         locations,
         activeAlerts,
@@ -491,7 +491,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         observations,
         runsByStatus,
         pushSubscriptions,
-        settings
+        settings,
       ] = await Promise.all([
         getAllLocations(),
         getActiveAlerts(),
@@ -501,86 +501,90 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         countObservations(),
         countMonitorRunsByStatus(),
         countPushSubscriptions(),
-        getOwnerSettings()
-      ]);
+        getOwnerSettings(),
+      ])
 
-      const mem = process.memoryUsage();
+      const mem = process.memoryUsage()
       const lastCheckSeconds = monitor.lastCheckTime
         ? Math.floor(new Date(monitor.lastCheckTime).getTime() / 1000)
-        : 0;
-      const weatherApiConfigured = Boolean(process.env.WEATHER_API_KEY) && !LOCAL_ONLY;
+        : 0
+      const weatherApiConfigured = Boolean(process.env.WEATHER_API_KEY) && !LOCAL_ONLY
 
-      const lines: string[] = [];
+      const lines: string[] = []
       const gauge = (name: string, help: string, value: number | string) => {
-        lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} gauge`, `${name} ${value}`);
-      };
+        lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} gauge`, `${name} ${value}`)
+      }
       const counter = (name: string, help: string) => {
-        lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} counter`);
-      };
+        lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} counter`)
+      }
 
-      gauge('cwm_uptime_seconds', 'Process uptime in seconds.', Math.floor(process.uptime()));
-      gauge('cwm_memory_rss_bytes', 'Resident set size in bytes.', mem.rss);
-      gauge('cwm_memory_heap_used_bytes', 'V8 heap used in bytes.', mem.heapUsed);
-      gauge('cwm_monitor_running', '1 when the monitoring loop is running, else 0.', monitor.isRunning ? 1 : 0);
+      gauge('cwm_uptime_seconds', 'Process uptime in seconds.', Math.floor(process.uptime()))
+      gauge('cwm_memory_rss_bytes', 'Resident set size in bytes.', mem.rss)
+      gauge('cwm_memory_heap_used_bytes', 'V8 heap used in bytes.', mem.heapUsed)
+      gauge(
+        'cwm_monitor_running',
+        '1 when the monitoring loop is running, else 0.',
+        monitor.isRunning ? 1 : 0,
+      )
       gauge(
         'cwm_monitor_consecutive_failures',
         'Consecutive failed monitoring cycles.',
-        monitor.consecutiveFailures
-      );
+        monitor.consecutiveFailures,
+      )
       gauge(
         'cwm_monitor_last_check_timestamp_seconds',
         'Unix timestamp of the last completed monitoring cycle (0 if never).',
-        lastCheckSeconds
-      );
-      gauge('cwm_locations_total', 'Configured monitoring locations.', locations.length);
-      gauge('cwm_observations_total', 'Stored weather observations.', observations);
-      gauge('cwm_active_alerts', 'Currently active alerts.', activeAlerts.length);
-      gauge('cwm_sessions_active', 'Active login sessions.', sessions.length);
-      gauge('cwm_users_total', 'User accounts.', users);
-      gauge('cwm_push_subscriptions_total', 'Stored Web Push subscriptions.', pushSubscriptions);
+        lastCheckSeconds,
+      )
+      gauge('cwm_locations_total', 'Configured monitoring locations.', locations.length)
+      gauge('cwm_observations_total', 'Stored weather observations.', observations)
+      gauge('cwm_active_alerts', 'Currently active alerts.', activeAlerts.length)
+      gauge('cwm_sessions_active', 'Active login sessions.', sessions.length)
+      gauge('cwm_users_total', 'User accounts.', users)
+      gauge('cwm_push_subscriptions_total', 'Stored Web Push subscriptions.', pushSubscriptions)
       gauge(
         'cwm_weather_api_configured',
         '1 when a primary WeatherAPI key is configured, else 0.',
-        weatherApiConfigured ? 1 : 0
-      );
-      gauge('cwm_smtp_configured', '1 when SMTP delivery is configured, else 0.', smtpConfigured ? 1 : 0);
+        weatherApiConfigured ? 1 : 0,
+      )
+      gauge('cwm_smtp_configured', '1 when SMTP delivery is configured, else 0.', smtpConfigured ? 1 : 0)
       gauge(
         'cwm_database_persist_healthy',
         '1 while the SQLite file is being written successfully, else 0 (data-loss risk).',
-        getPersistenceStatus().healthy ? 1 : 0
-      );
+        getPersistenceStatus().healthy ? 1 : 0,
+      )
       gauge(
         'cwm_settings_monitor_interval_minutes',
         'Configured monitoring interval in minutes.',
-        settings.monitorIntervalMinutes
-      );
+        settings.monitorIntervalMinutes,
+      )
       gauge(
         'cwm_settings_data_retention_days',
         'Configured data retention window in days.',
-        settings.dataRetentionDays
-      );
+        settings.dataRetentionDays,
+      )
 
-      counter('cwm_alert_deliveries_total', 'Total alert delivery records.');
-      lines.push(`cwm_alert_deliveries_total ${deliveries}`);
+      counter('cwm_alert_deliveries_total', 'Total alert delivery records.')
+      lines.push(`cwm_alert_deliveries_total ${deliveries}`)
 
-      counter('cwm_monitor_runs_total', 'Completed monitoring cycles by outcome.');
+      counter('cwm_monitor_runs_total', 'Completed monitoring cycles by outcome.')
       for (const status of ['SUCCESS', 'PARTIAL', 'FAILED', 'RUNNING']) {
-        lines.push(`cwm_monitor_runs_total{status="${status}"} ${runsByStatus[status] || 0}`);
+        lines.push(`cwm_monitor_runs_total{status="${status}"} ${runsByStatus[status] || 0}`)
       }
 
-      res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-      res.send(lines.join('\n') + '\n');
+      res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
+      res.send(lines.join('\n') + '\n')
     } catch (err) {
-      logger.error('metrics_failed', { error: String(err) });
-      res.status(500).send('# metrics collection failed\n');
+      logger.error('metrics_failed', { error: String(err) })
+      res.status(500).send('# metrics collection failed\n')
     }
-  });
+  })
 
   // ----------------- AUTHENTICATION ROUTES -----------------
   app.get('/api/auth/status', async (req: Request, res: Response) => {
-    const session = getSession(extractSessionToken(req));
-    const authenticated = Boolean(session);
-    const owner = await getOwnerInfo();
+    const session = getSession(extractSessionToken(req))
+    const authenticated = Boolean(session)
+    const owner = await getOwnerInfo()
 
     // While unauthenticated, avoid disclosing the owner email (account
     // enumeration) or operator display name.
@@ -592,9 +596,9 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       role: authenticated ? session!.role : undefined,
       ownerEmail: authenticated ? owner?.email || process.env.OWNER_EMAIL || 'owner@local' : undefined,
       ownerName: authenticated ? 'Site Owner' : undefined,
-      mfaSupported: true
-    });
-  });
+      mfaSupported: true,
+    })
+  })
 
   app.post('/api/auth/setup', authLimiter, async (req: Request, res: Response) => {
     // Setup is a one-time bootstrap. Without this guard an unauthenticated
@@ -602,142 +606,141 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     // credentials (a full account takeover). Legacy databases without the
     // marker are backfilled to "configured" by getDb().
     if (await isOwnerPasswordConfigured()) {
-      res.status(409).json({ error: 'Initial setup is already complete. Sign in instead.' });
-      return;
+      res.status(409).json({ error: 'Initial setup is already complete. Sign in instead.' })
+      return
     }
 
-    const { password, email } = req.body;
-    const strength = validatePasswordStrength(password);
+    const { password, email } = req.body
+    const strength = validatePasswordStrength(password)
     if (!strength.valid) {
-      res.status(400).json({ error: describePasswordPolicy() });
-      return;
+      res.status(400).json({ error: describePasswordPolicy() })
+      return
     }
-    await setupInitialPassword(password, email);
+    await setupInitialPassword(password, email)
 
     // Synchronize the primary OWNER user account with the new credentials.
-    const ownerUser = (await getAllUsers()).find((u) => u.role === 'OWNER');
+    const ownerUser = (await getAllUsers()).find((u) => u.role === 'OWNER')
     if (ownerUser) {
-      await updateUserCredentials(ownerUser.id, email || ownerUser.email, password);
+      await updateUserCredentials(ownerUser.id, email || ownerUser.email, password)
     }
-    const refreshed = ownerUser ? await getUserById(ownerUser.id) : null;
-    const sessionUser: UserAccount =
-      refreshed || {
-        id: 'usr-owner-1',
-        email: email || 'owner@local',
-        displayName: 'Site Owner',
-        role: 'OWNER',
-        active: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+    const refreshed = ownerUser ? await getUserById(ownerUser.id) : null
+    const sessionUser: UserAccount = refreshed || {
+      id: 'usr-owner-1',
+      email: email || 'owner@local',
+      displayName: 'Site Owner',
+      role: 'OWNER',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
 
-    const token = createSession(sessionUser, extractClientMeta(req));
+    const token = createSession(sessionUser, extractClientMeta(req))
     res.cookie('cwm_session', token, {
       httpOnly: true,
       sameSite: 'lax',
       secure: SECURE_COOKIES,
-      maxAge: SESSION_TTL_MS
-    });
-    issueCsrfCookie(res);
-    await addAuditLog('AUTH_SETUP', `Initial master password set for ${email || 'owner'}`);
+      maxAge: SESSION_TTL_MS,
+    })
+    issueCsrfCookie(res)
+    await addAuditLog('AUTH_SETUP', `Initial master password set for ${email || 'owner'}`)
     // The session token is intentionally NOT returned in the body; the HttpOnly
     // cookie is the sole credential for browser clients.
-    res.json({ success: true, email: sessionUser.email, role: sessionUser.role });
-  });
+    res.json({ success: true, email: sessionUser.email, role: sessionUser.role })
+  })
 
   app.post('/api/auth/login', authLimiter, async (req: Request, res: Response) => {
-    const { password, email, mfaCode } = req.body;
+    const { password, email, mfaCode } = req.body
     if (!password) {
-      res.status(400).json({ error: 'Password is required' });
-      return;
+      res.status(400).json({ error: 'Password is required' })
+      return
     }
 
-    const lockKey = String(email || 'owner').toLowerCase();
-    const remaining = lockoutRemainingMs(lockKey);
+    const lockKey = String(email || 'owner').toLowerCase()
+    const remaining = lockoutRemainingMs(lockKey)
     if (remaining > 0) {
       res.status(429).json({
         error: `Account temporarily locked. Try again in ${Math.ceil(remaining / 60000)} minute(s).`,
-        lockedForSeconds: Math.ceil(remaining / 1000)
-      });
-      return;
+        lockedForSeconds: Math.ceil(remaining / 1000),
+      })
+      return
     }
 
-    const { valid, user } = await verifyUserCredentials(password, email);
+    const { valid, user } = await verifyUserCredentials(password, email)
     if (!valid || !user) {
-      recordLoginFailure(lockKey);
-      await addAuditLog('AUTH_FAILED', `Failed login attempt for ${email || 'owner'}`);
-      res.status(401).json({ error: 'Invalid credentials. Please try again.' });
-      return;
+      recordLoginFailure(lockKey)
+      await addAuditLog('AUTH_FAILED', `Failed login attempt for ${email || 'owner'}`)
+      res.status(401).json({ error: 'Invalid credentials. Please try again.' })
+      return
     }
 
     // Second factor: if enabled, require a valid TOTP code in the same request.
-    const mfa = await getUserMfaByEmail(user.email);
+    const mfa = await getUserMfaByEmail(user.email)
     if (mfa?.mfaEnabled) {
       if (!mfaCode) {
-        res.status(401).json({ error: 'Multi-factor code required.', mfaRequired: true });
-        return;
+        res.status(401).json({ error: 'Multi-factor code required.', mfaRequired: true })
+        return
       }
       if (!mfa.mfaSecret || !verifyTotp(mfa.mfaSecret, String(mfaCode))) {
-        recordLoginFailure(lockKey);
-        await addAuditLog('AUTH_MFA_FAILED', `Invalid MFA code for ${user.email}`);
-        res.status(401).json({ error: 'Invalid multi-factor code.', mfaRequired: true });
-        return;
+        recordLoginFailure(lockKey)
+        await addAuditLog('AUTH_MFA_FAILED', `Invalid MFA code for ${user.email}`)
+        res.status(401).json({ error: 'Invalid multi-factor code.', mfaRequired: true })
+        return
       }
     }
 
-    clearLoginFailures(lockKey);
-    const token = createSession(user, extractClientMeta(req));
+    clearLoginFailures(lockKey)
+    const token = createSession(user, extractClientMeta(req))
     res.cookie('cwm_session', token, {
       httpOnly: true,
       sameSite: 'lax',
       secure: SECURE_COOKIES,
-      maxAge: SESSION_TTL_MS // 7 days
-    });
-    issueCsrfCookie(res);
+      maxAge: SESSION_TTL_MS, // 7 days
+    })
+    issueCsrfCookie(res)
 
-    await recordUserLogin(user.id);
-    await addAuditLog('AUTH_SUCCESS', `Successful login for ${user.email} (${user.role})`);
+    await recordUserLogin(user.id)
+    await addAuditLog('AUTH_SUCCESS', `Successful login for ${user.email} (${user.role})`)
     res.json({
       success: true,
       email: user.email,
       displayName: user.displayName,
-      role: user.role
-    });
-  });
+      role: user.role,
+    })
+  })
 
   app.post('/api/auth/logout', (req: Request, res: Response) => {
-    const token = extractSessionToken(req);
+    const token = extractSessionToken(req)
     if (token) {
-      activeSessions.delete(token);
-      deleteSession(token).catch(() => {});
+      activeSessions.delete(token)
+      deleteSession(token).catch(() => {})
     }
-    res.clearCookie('cwm_session');
-    res.clearCookie('cwm_csrf');
-    res.json({ success: true });
-  });
+    res.clearCookie('cwm_session')
+    res.clearCookie('cwm_csrf')
+    res.json({ success: true })
+  })
 
   // Revokes every session for the caller (e.g. after a suspected compromise).
   app.post('/api/auth/logout-all', requireAuth, async (req: Request, res: Response) => {
-    const session = (req as AuthedRequest).session!;
+    const session = (req as AuthedRequest).session!
     for (const [token, entry] of activeSessions) {
-      if (entry.userId === session.userId) activeSessions.delete(token);
+      if (entry.userId === session.userId) activeSessions.delete(token)
     }
-    await deleteSessionsForUser(session.userId);
-    res.clearCookie('cwm_session');
-    res.clearCookie('cwm_csrf');
-    await addAuditLog('AUTH_LOGOUT_ALL', `All sessions revoked for ${session.email}`);
-    res.json({ success: true, message: 'All sessions have been revoked.' });
-  });
+    await deleteSessionsForUser(session.userId)
+    res.clearCookie('cwm_session')
+    res.clearCookie('cwm_csrf')
+    await addAuditLog('AUTH_LOGOUT_ALL', `All sessions revoked for ${session.email}`)
+    res.json({ success: true, message: 'All sessions have been revoked.' })
+  })
 
   // Lists the caller's own active sessions/devices for review. Tokens are
   // represented by a non-reversible digest so the credential never leaves the
   // server, even to its owner.
   app.get('/api/auth/sessions', requireAuth, (req: Request, res: Response) => {
-    const session = (req as AuthedRequest).session!;
-    const currentToken = extractSessionToken(req);
-    const sessions = [];
+    const session = (req as AuthedRequest).session!
+    const currentToken = extractSessionToken(req)
+    const sessions = []
     for (const [token, entry] of activeSessions) {
-      if (entry.userId !== session.userId) continue;
+      if (entry.userId !== session.userId) continue
       sessions.push({
         id: sessionPublicId(token),
         current: token === currentToken,
@@ -745,312 +748,320 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         ip: entry.ip || null,
         createdAt: entry.createdAt,
         lastSeenAt: new Date(entry.lastSeenAt).toISOString(),
-        expiresAt: new Date(entry.expiresAt).toISOString()
-      });
+        expiresAt: new Date(entry.expiresAt).toISOString(),
+      })
     }
     // Current session first, then most-recently active.
     sessions.sort((a, b) => {
-      if (a.current !== b.current) return a.current ? -1 : 1;
-      return Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt);
-    });
-    res.json({ sessions });
-  });
+      if (a.current !== b.current) return a.current ? -1 : 1
+      return Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt)
+    })
+    res.json({ sessions })
+  })
 
   // Revokes a single session belonging to the caller, identified by its public
   // digest. Sessions belonging to other users can never be targeted.
   app.delete('/api/auth/sessions/:id', requireAuth, async (req: Request, res: Response) => {
-    const session = (req as AuthedRequest).session!;
-    const targetId = req.params.id;
-    const currentToken = extractSessionToken(req);
+    const session = (req as AuthedRequest).session!
+    const targetId = req.params.id
+    const currentToken = extractSessionToken(req)
 
-    let targetToken: string | undefined;
+    let targetToken: string | undefined
     for (const [token, entry] of activeSessions) {
       if (entry.userId === session.userId && sessionPublicId(token) === targetId) {
-        targetToken = token;
-        break;
+        targetToken = token
+        break
       }
     }
     if (!targetToken) {
-      res.status(404).json({ error: 'Session not found.' });
-      return;
+      res.status(404).json({ error: 'Session not found.' })
+      return
     }
 
-    activeSessions.delete(targetToken);
-    await deleteSession(targetToken).catch(() => {});
-    const wasCurrent = targetToken === currentToken;
+    activeSessions.delete(targetToken)
+    await deleteSession(targetToken).catch(() => {})
+    const wasCurrent = targetToken === currentToken
     if (wasCurrent) {
-      res.clearCookie('cwm_session');
-      res.clearCookie('cwm_csrf');
+      res.clearCookie('cwm_session')
+      res.clearCookie('cwm_csrf')
     }
-    await addAuditLog('AUTH_SESSION_REVOKED', `Session revoked for ${session.email}`);
-    res.json({ success: true, revokedCurrent: wasCurrent });
-  });
+    await addAuditLog('AUTH_SESSION_REVOKED', `Session revoked for ${session.email}`)
+    res.json({ success: true, revokedCurrent: wasCurrent })
+  })
 
   app.post('/api/auth/change-password', requireAuth, async (req: Request, res: Response) => {
-    const { currentPassword, newPassword, newEmail } = req.body;
-    const session = (req as AuthedRequest).session!;
+    const { currentPassword, newPassword, newEmail } = req.body
+    const session = (req as AuthedRequest).session!
     if (!currentPassword || !newPassword) {
-      res.status(400).json({ error: 'Current and new password are required.' });
-      return;
+      res.status(400).json({ error: 'Current and new password are required.' })
+      return
     }
 
-    const { valid } = await verifyUserCredentials(currentPassword, session.email);
+    const { valid } = await verifyUserCredentials(currentPassword, session.email)
     if (!valid) {
-      res.status(403).json({ error: 'Current password does not match.' });
-      return;
+      res.status(403).json({ error: 'Current password does not match.' })
+      return
     }
 
-    const strength = validatePasswordStrength(newPassword);
+    const strength = validatePasswordStrength(newPassword)
     if (!strength.valid) {
-      res.status(400).json({ error: describePasswordPolicy() });
-      return;
+      res.status(400).json({ error: describePasswordPolicy() })
+      return
     }
 
-    const nextEmail = typeof newEmail === 'string' && newEmail.trim() ? newEmail.trim() : undefined;
+    const nextEmail = typeof newEmail === 'string' && newEmail.trim() ? newEmail.trim() : undefined
     if (nextEmail) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
-        res.status(400).json({ error: 'A valid email address is required.' });
-        return;
+        res.status(400).json({ error: 'A valid email address is required.' })
+        return
       }
       const clash = (await getAllUsers()).find(
-        (u) => u.id !== session.userId && u.email.toLowerCase() === nextEmail.toLowerCase()
-      );
+        (u) => u.id !== session.userId && u.email.toLowerCase() === nextEmail.toLowerCase(),
+      )
       if (clash) {
-        res.status(409).json({ error: 'Another account already uses that email address.' });
-        return;
+        res.status(409).json({ error: 'Another account already uses that email address.' })
+        return
       }
     }
 
-    await updateUserCredentials(session.userId, nextEmail || session.email, newPassword);
+    await updateUserCredentials(session.userId, nextEmail || session.email, newPassword)
     // Keep the current device signed in with fresh account data, and revoke
     // every other session: a credential change must invalidate stale devices.
-    await reconcileUserSessions(session.userId);
-    await revokeUserSessions(session.userId, extractSessionToken(req));
+    await reconcileUserSessions(session.userId)
+    await revokeUserSessions(session.userId, extractSessionToken(req))
 
-    await addAuditLog('PASSWORD_CHANGED', `Password updated for ${session.email}`);
-    res.json({ success: true, message: 'Password updated successfully. Other devices were signed out.' });
-  });
+    await addAuditLog('PASSWORD_CHANGED', `Password updated for ${session.email}`)
+    res.json({ success: true, message: 'Password updated successfully. Other devices were signed out.' })
+  })
 
   // ----------------- MULTI-FACTOR AUTHENTICATION (TOTP) -----------------
   app.get('/api/auth/mfa/status', requireAuth, async (req: Request, res: Response) => {
-    const session = (req as AuthedRequest).session!;
-    const mfa = await getUserMfaById(session.userId);
-    res.json({ enabled: Boolean(mfa?.mfaEnabled) });
-  });
+    const session = (req as AuthedRequest).session!
+    const mfa = await getUserMfaById(session.userId)
+    res.json({ enabled: Boolean(mfa?.mfaEnabled) })
+  })
 
   app.post('/api/auth/mfa/setup', requireAuth, async (req: Request, res: Response) => {
-    const session = (req as AuthedRequest).session!;
-    const secret = generateTotpSecret();
-    await setUserMfaSecret(session.userId, secret);
+    const session = (req as AuthedRequest).session!
+    const secret = generateTotpSecret()
+    await setUserMfaSecret(session.userId, secret)
     res.json({
       secret,
       otpauthUrl: buildOtpauthUrl(secret, session.email),
-      message: 'Scan the secret in your authenticator app, then verify a code to enable MFA.'
-    });
-  });
+      message: 'Scan the secret in your authenticator app, then verify a code to enable MFA.',
+    })
+  })
 
   app.post('/api/auth/mfa/enable', requireAuth, async (req: Request, res: Response) => {
-    const session = (req as AuthedRequest).session!;
-    const { code } = req.body;
-    const mfa = await getUserMfaById(session.userId);
+    const session = (req as AuthedRequest).session!
+    const { code } = req.body
+    const mfa = await getUserMfaById(session.userId)
     if (!mfa?.mfaSecret) {
-      res.status(400).json({ error: 'Start MFA setup before enabling.' });
-      return;
+      res.status(400).json({ error: 'Start MFA setup before enabling.' })
+      return
     }
     if (!verifyTotp(mfa.mfaSecret, String(code || ''))) {
-      res.status(400).json({ error: 'That code is not valid. Check your device clock and try again.' });
-      return;
+      res.status(400).json({ error: 'That code is not valid. Check your device clock and try again.' })
+      return
     }
-    await setUserMfaEnabled(session.userId, true);
-    await addAuditLog('MFA_ENABLED', `Multi-factor authentication enabled for ${session.email}`);
-    res.json({ success: true, message: 'Multi-factor authentication enabled.' });
-  });
+    await setUserMfaEnabled(session.userId, true)
+    await addAuditLog('MFA_ENABLED', `Multi-factor authentication enabled for ${session.email}`)
+    res.json({ success: true, message: 'Multi-factor authentication enabled.' })
+  })
 
   app.post('/api/auth/mfa/disable', requireAuth, async (req: Request, res: Response) => {
-    const session = (req as AuthedRequest).session!;
-    const { password } = req.body;
-    const { valid } = await verifyUserCredentials(String(password || ''), session.email);
+    const session = (req as AuthedRequest).session!
+    const { password } = req.body
+    const { valid } = await verifyUserCredentials(String(password || ''), session.email)
     if (!valid) {
-      res.status(403).json({ error: 'Password confirmation failed.' });
-      return;
+      res.status(403).json({ error: 'Password confirmation failed.' })
+      return
     }
-    await setUserMfaEnabled(session.userId, false);
-    await addAuditLog('MFA_DISABLED', `Multi-factor authentication disabled for ${session.email}`);
-    res.json({ success: true, message: 'Multi-factor authentication disabled.' });
-  });
+    await setUserMfaEnabled(session.userId, false)
+    await addAuditLog('MFA_DISABLED', `Multi-factor authentication disabled for ${session.email}`)
+    res.json({ success: true, message: 'Multi-factor authentication disabled.' })
+  })
 
   // ----------------- USER & ACCESS MANAGEMENT (OWNER ONLY) -----------------
   app.get('/api/users', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
-    const users = await getAllUsers();
-    res.json({ users });
-  });
+    const users = await getAllUsers()
+    res.json({ users })
+  })
 
   app.post('/api/users', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
-    const { email, password, role, displayName } = req.body;
+    const { email, password, role, displayName } = req.body
 
     if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      res.status(400).json({ error: 'A valid email address is required.' });
-      return;
+      res.status(400).json({ error: 'A valid email address is required.' })
+      return
     }
-    const strength = validatePasswordStrength(password);
+    const strength = validatePasswordStrength(password)
     if (!strength.valid) {
-      res.status(400).json({ error: describePasswordPolicy() });
-      return;
+      res.status(400).json({ error: describePasswordPolicy() })
+      return
     }
     if (!['OWNER', 'MANAGER', 'VIEWER'].includes(role)) {
-      res.status(400).json({ error: 'Role must be OWNER, MANAGER, or VIEWER.' });
-      return;
+      res.status(400).json({ error: 'Role must be OWNER, MANAGER, or VIEWER.' })
+      return
     }
 
-    const existing = (await getAllUsers()).find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
+    const existing = (await getAllUsers()).find((u) => u.email.toLowerCase() === email.trim().toLowerCase())
     if (existing) {
-      res.status(409).json({ error: 'A user with that email already exists.' });
-      return;
+      res.status(409).json({ error: 'A user with that email already exists.' })
+      return
     }
 
     const created = await createUserAccount({
       email: email.trim(),
       password,
       role: role as UserRole,
-      displayName: typeof displayName === 'string' && displayName.trim() ? displayName.trim() : undefined
-    });
-    const actor = (req as AuthedRequest).session!;
-    await addAuditLog('USER_CREATED', `${actor.email} created ${created.email} as ${created.role}`);
-    res.json({ success: true, user: created });
-  });
+      displayName: typeof displayName === 'string' && displayName.trim() ? displayName.trim() : undefined,
+    })
+    const actor = (req as AuthedRequest).session!
+    await addAuditLog('USER_CREATED', `${actor.email} created ${created.email} as ${created.role}`)
+    res.json({ success: true, user: created })
+  })
 
   app.put('/api/users/:id', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { role, active, displayName } = req.body;
-    const target = await getUserById(id);
+    const { id } = req.params
+    const { role, active, displayName } = req.body
+    const target = await getUserById(id)
     if (!target) {
-      res.status(404).json({ error: 'User not found.' });
-      return;
+      res.status(404).json({ error: 'User not found.' })
+      return
     }
 
-    const actor = (req as AuthedRequest).session!;
+    const actor = (req as AuthedRequest).session!
 
     if (role !== undefined) {
       if (!['OWNER', 'MANAGER', 'VIEWER'].includes(role)) {
-        res.status(400).json({ error: 'Role must be OWNER, MANAGER, or VIEWER.' });
-        return;
+        res.status(400).json({ error: 'Role must be OWNER, MANAGER, or VIEWER.' })
+        return
       }
-      const ok = await updateUserRole(id, role as UserRole);
+      const ok = await updateUserRole(id, role as UserRole)
       if (!ok) {
-        res.status(409).json({ error: 'Cannot demote the last remaining OWNER account.' });
-        return;
+        res.status(409).json({ error: 'Cannot demote the last remaining OWNER account.' })
+        return
       }
-      await reconcileUserSessions(id);
-      await addAuditLog('USER_ROLE_CHANGED', `${actor.email} set ${target.email} role to ${role}`);
+      await reconcileUserSessions(id)
+      await addAuditLog('USER_ROLE_CHANGED', `${actor.email} set ${target.email} role to ${role}`)
     }
 
     if (active !== undefined) {
       if (id === actor.userId && active === false) {
-        res.status(409).json({ error: 'You cannot deactivate your own account.' });
-        return;
+        res.status(409).json({ error: 'You cannot deactivate your own account.' })
+        return
       }
-      const ok = await setUserActive(id, Boolean(active));
+      const ok = await setUserActive(id, Boolean(active))
       if (!ok) {
-        res.status(409).json({ error: 'Cannot deactivate the last remaining OWNER account.' });
-        return;
+        res.status(409).json({ error: 'Cannot deactivate the last remaining OWNER account.' })
+        return
       }
-      await reconcileUserSessions(id);
-      await addAuditLog('USER_STATUS_CHANGED', `${actor.email} set ${target.email} active=${Boolean(active)}`);
+      await reconcileUserSessions(id)
+      await addAuditLog('USER_STATUS_CHANGED', `${actor.email} set ${target.email} active=${Boolean(active)}`)
     }
 
     // displayName updates are cosmetic; handle without dedicated helper.
     if (displayName !== undefined && typeof displayName === 'string') {
-      const db = await getDb();
+      const db = await getDb()
       db.run('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?', [
         displayName.trim() || null,
         new Date().toISOString(),
-        id
-      ]);
-      persistDb();
-      await reconcileUserSessions(id);
+        id,
+      ])
+      persistDb()
+      await reconcileUserSessions(id)
     }
 
-    const updated = await getUserById(id);
-    res.json({ success: true, user: updated });
-  });
+    const updated = await getUserById(id)
+    res.json({ success: true, user: updated })
+  })
 
-  app.post('/api/users/:id/password', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { newPassword } = req.body;
-    const strength = validatePasswordStrength(newPassword);
-    if (!strength.valid) {
-      res.status(400).json({ error: describePasswordPolicy() });
-      return;
-    }
-    const target = await getUserById(id);
-    if (!target) {
-      res.status(404).json({ error: 'User not found.' });
-      return;
-    }
-    await updateUserPassword(id, newPassword);
-    // A reset must invalidate every existing session for that account. If an
-    // owner resets their own password, keep the current device signed in.
-    await revokeUserSessions(id, id === (req as AuthedRequest).session!.userId ? extractSessionToken(req) : undefined);
-    const actor = (req as AuthedRequest).session!;
-    await addAuditLog('USER_PASSWORD_RESET', `${actor.email} reset the password for ${target.email}`);
-    res.json({ success: true, message: `Password reset for ${target.email}.` });
-  });
+  app.post(
+    '/api/users/:id/password',
+    requireAuth,
+    requireRole('OWNER'),
+    async (req: Request, res: Response) => {
+      const { id } = req.params
+      const { newPassword } = req.body
+      const strength = validatePasswordStrength(newPassword)
+      if (!strength.valid) {
+        res.status(400).json({ error: describePasswordPolicy() })
+        return
+      }
+      const target = await getUserById(id)
+      if (!target) {
+        res.status(404).json({ error: 'User not found.' })
+        return
+      }
+      await updateUserPassword(id, newPassword)
+      // A reset must invalidate every existing session for that account. If an
+      // owner resets their own password, keep the current device signed in.
+      await revokeUserSessions(
+        id,
+        id === (req as AuthedRequest).session!.userId ? extractSessionToken(req) : undefined,
+      )
+      const actor = (req as AuthedRequest).session!
+      await addAuditLog('USER_PASSWORD_RESET', `${actor.email} reset the password for ${target.email}`)
+      res.json({ success: true, message: `Password reset for ${target.email}.` })
+    },
+  )
 
   app.delete('/api/users/:id', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const actor = (req as AuthedRequest).session!;
+    const { id } = req.params
+    const actor = (req as AuthedRequest).session!
     if (id === actor.userId) {
-      res.status(409).json({ error: 'You cannot delete your own account.' });
-      return;
+      res.status(409).json({ error: 'You cannot delete your own account.' })
+      return
     }
-    const target = await getUserById(id);
+    const target = await getUserById(id)
     if (!target) {
-      res.status(404).json({ error: 'User not found.' });
-      return;
+      res.status(404).json({ error: 'User not found.' })
+      return
     }
-    const ok = await deleteUserAccount(id);
+    const ok = await deleteUserAccount(id)
     if (!ok) {
-      res.status(409).json({ error: 'Cannot delete the last remaining OWNER account.' });
-      return;
+      res.status(409).json({ error: 'Cannot delete the last remaining OWNER account.' })
+      return
     }
-    await reconcileUserSessions(id);
-    await addAuditLog('USER_DELETED', `${actor.email} deleted ${target.email}`);
-    res.json({ success: true });
-  });
+    await reconcileUserSessions(id)
+    await addAuditLog('USER_DELETED', `${actor.email} deleted ${target.email}`)
+    res.json({ success: true })
+  })
 
   // ----------------- WEATHER & MONITOR DATA -----------------
   app.get('/api/weather/current', requireAuth, async (req: Request, res: Response) => {
     try {
-      const locId = (req.query.locationId as string) || undefined;
-      const locations = await getAllLocations();
-      const targetLoc = locId ? locations.find((l) => l.id === locId) : await getDefaultLocation();
+      const locId = (req.query.locationId as string) || undefined
+      const locations = await getAllLocations()
+      const targetLoc = locId ? locations.find((l) => l.id === locId) : await getDefaultLocation()
 
       if (!targetLoc) {
-        res.status(404).json({ error: locId ? 'Location not found.' : 'No location configured.' });
-        return;
+        res.status(404).json({ error: locId ? 'Location not found.' : 'No location configured.' })
+        return
       }
 
-      let observation = await getLatestObservation(targetLoc.id);
-      let risk = await getLatestRiskAssessment(targetLoc.id);
+      let observation = await getLatestObservation(targetLoc.id)
+      let risk = await getLatestRiskAssessment(targetLoc.id)
 
       // If missing observation or risk, trigger immediate cycle to guarantee fresh data
       if (!observation || !risk) {
-        await monitoringService.executeCycle(targetLoc.id, true);
-        observation = await getLatestObservation(targetLoc.id);
-        risk = await getLatestRiskAssessment(targetLoc.id);
+        await monitoringService.executeCycle(targetLoc.id, true)
+        observation = await getLatestObservation(targetLoc.id)
+        risk = await getLatestRiskAssessment(targetLoc.id)
       }
 
-      const activeAlerts = await getActiveAlerts(targetLoc.id);
-      const monitorStatus = monitoringService.getStatus();
-      const comparison = await getLatestCrossReference(targetLoc.id);
-      const settings = await getOwnerSettings();
+      const activeAlerts = await getActiveAlerts(targetLoc.id)
+      const monitorStatus = monitoringService.getStatus()
+      const comparison = await getLatestCrossReference(targetLoc.id)
+      const settings = await getOwnerSettings()
 
       // Precise data freshness evaluation based on actual timestamp and interval
       const freshness = evaluateDataFreshness(
         observation?.timestamp,
         targetLoc.timezone,
-        !monitorStatus.isRunning
-      );
+        !monitorStatus.isRunning,
+      )
 
       res.json({
         location: targetLoc,
@@ -1060,168 +1071,190 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         monitorStatus,
         comparison,
         hasWeatherApiKey: !LOCAL_ONLY && Boolean(process.env.WEATHER_API_KEY),
-        activeProvider: comparison?.activeDataSource || (!LOCAL_ONLY && process.env.WEATHER_API_KEY ? 'WeatherAPI (Main Reference)' : 'Open-Meteo'),
+        activeProvider:
+          comparison?.activeDataSource ||
+          (!LOCAL_ONLY && process.env.WEATHER_API_KEY ? 'WeatherAPI (Main Reference)' : 'Open-Meteo'),
         dataStatus: freshness.status,
-        freshness
-      });
+        freshness,
+      })
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch weather data' });
+      res.status(500).json({ error: err?.message || 'Failed to fetch weather data' })
     }
-  });
+  })
 
   app.get('/api/weather/forecast', requireAuth, async (req: Request, res: Response) => {
     try {
-      const locId = (req.query.locationId as string) || undefined;
-      const locations = await getAllLocations();
-      const targetLoc = locId ? locations.find((l) => l.id === locId) : await getDefaultLocation();
+      const locId = (req.query.locationId as string) || undefined
+      const locations = await getAllLocations()
+      const targetLoc = locId ? locations.find((l) => l.id === locId) : await getDefaultLocation()
 
       if (!targetLoc) {
-        res.status(404).json({ error: locId ? 'Location not found.' : 'No location configured.' });
-        return;
+        res.status(404).json({ error: locId ? 'Location not found.' : 'No location configured.' })
+        return
       }
 
-      let forecast = await getLatestForecastSnapshot(targetLoc.id);
+      let forecast = await getLatestForecastSnapshot(targetLoc.id)
       if (!forecast || !forecast.hourly || forecast.hourly.length === 0) {
-        await monitoringService.executeCycle(targetLoc.id, true);
-        forecast = await getLatestForecastSnapshot(targetLoc.id);
+        await monitoringService.executeCycle(targetLoc.id, true)
+        forecast = await getLatestForecastSnapshot(targetLoc.id)
       }
 
       res.json({
         location: targetLoc,
         hourly: forecast?.hourly || [],
         daily: forecast?.daily || [],
-        fetchedAt: forecast?.fetchedAt || null
-      });
+        fetchedAt: forecast?.fetchedAt || null,
+      })
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch forecast snapshot' });
+      res.status(500).json({ error: err?.message || 'Failed to fetch forecast snapshot' })
     }
-  });
+  })
 
   app.get('/api/weather/cross-reference', requireAuth, async (req: Request, res: Response) => {
     try {
-      const locId = (req.query.locationId as string) || undefined;
-      const locations = await getAllLocations();
-      const targetLoc = locId ? locations.find((l) => l.id === locId) : await getDefaultLocation();
+      const locId = (req.query.locationId as string) || undefined
+      const locations = await getAllLocations()
+      const targetLoc = locId ? locations.find((l) => l.id === locId) : await getDefaultLocation()
 
       if (!targetLoc) {
-        res.status(404).json({ error: locId ? 'Location not found.' : 'No location configured.' });
-        return;
+        res.status(404).json({ error: locId ? 'Location not found.' : 'No location configured.' })
+        return
       }
 
-      let comparison = await getLatestCrossReference(targetLoc.id);
+      let comparison = await getLatestCrossReference(targetLoc.id)
       if (!comparison) {
-        await monitoringService.executeCycle(targetLoc.id, true);
-        comparison = await getLatestCrossReference(targetLoc.id);
+        await monitoringService.executeCycle(targetLoc.id, true)
+        comparison = await getLatestCrossReference(targetLoc.id)
       }
 
       res.json({
         location: targetLoc,
         comparison,
         hasWeatherApiKey: !LOCAL_ONLY && Boolean(process.env.WEATHER_API_KEY),
-        activeProvider: comparison?.activeDataSource || (!LOCAL_ONLY && process.env.WEATHER_API_KEY ? 'WeatherAPI (Main Reference)' : 'Open-Meteo')
-      });
+        activeProvider:
+          comparison?.activeDataSource ||
+          (!LOCAL_ONLY && process.env.WEATHER_API_KEY ? 'WeatherAPI (Main Reference)' : 'Open-Meteo'),
+      })
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch cross reference' });
+      res.status(500).json({ error: err?.message || 'Failed to fetch cross reference' })
     }
-  });
+  })
 
   app.get('/api/weather/history', requireAuth, async (req: Request, res: Response) => {
     try {
-      const locId = req.query.locationId as string;
-      const range = (req.query.range as any) || 'today';
+      const locId = req.query.locationId as string
+      const range = (req.query.range as any) || 'today'
       const targetLoc = locId
         ? (await getAllLocations()).find((l) => l.id === locId)
-        : await getDefaultLocation();
+        : await getDefaultLocation()
 
       if (!targetLoc) {
-        res.status(404).json({ error: 'Location not found' });
-        return;
+        res.status(404).json({ error: 'Location not found' })
+        return
       }
 
-      const history = await getHistoricalObservations(targetLoc.id, range);
+      const history = await getHistoricalObservations(targetLoc.id, range)
       res.json({
         location: targetLoc,
         range,
-        observations: history
-      });
+        observations: history,
+      })
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch historical observations' });
+      res.status(500).json({ error: err?.message || 'Failed to fetch historical observations' })
     }
-  });
+  })
 
   // ----------------- MONITOR CONTROLS -----------------
-  app.post('/api/monitor/check-now', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
-    const locId = req.body?.locationId;
-    if (locId !== undefined && typeof locId !== 'string') {
-      res.status(400).json({ error: 'locationId must be a string.' });
-      return;
-    }
-    if (locId && !(await getAllLocations()).some((l) => l.id === locId)) {
-      res.status(404).json({ error: 'Location not found.' });
-      return;
-    }
-    const result = await monitoringService.executeCycle(locId, true);
-    if (result.error === 'Monitoring check already in progress.') {
-      res.status(409).json({ error: result.error });
-      return;
-    }
-    if (!result.success) {
-      res.status(500).json({ error: result.error });
-      return;
-    }
-    res.json({
-      success: true,
-      processedCount: result.processedCount,
-      message: result.processedCount === 1 ? 'Weather check completed successfully.' : `Weather check completed for ${result.processedCount} locations.`
-    });
-  });
+  app.post(
+    '/api/monitor/check-now',
+    requireAuth,
+    requireRole('MANAGER'),
+    async (req: Request, res: Response) => {
+      const locId = req.body?.locationId
+      if (locId !== undefined && typeof locId !== 'string') {
+        res.status(400).json({ error: 'locationId must be a string.' })
+        return
+      }
+      if (locId && !(await getAllLocations()).some((l) => l.id === locId)) {
+        res.status(404).json({ error: 'Location not found.' })
+        return
+      }
+      const result = await monitoringService.executeCycle(locId, true)
+      if (result.error === 'Monitoring check already in progress.') {
+        res.status(409).json({ error: result.error })
+        return
+      }
+      if (!result.success) {
+        res.status(500).json({ error: result.error })
+        return
+      }
+      res.json({
+        success: true,
+        processedCount: result.processedCount,
+        message:
+          result.processedCount === 1
+            ? 'Weather check completed successfully.'
+            : `Weather check completed for ${result.processedCount} locations.`,
+      })
+    },
+  )
 
-  app.post('/api/monitor/toggle', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
-    const { enable } = req.body;
-    await saveOwnerSettings({ monitoringEnabled: Boolean(enable) });
-    if (enable) {
-      await monitoringService.start();
-    } else {
-      monitoringService.stop();
-    }
-    res.json({ success: true, status: monitoringService.getStatus() });
-  });
+  app.post(
+    '/api/monitor/toggle',
+    requireAuth,
+    requireRole('MANAGER'),
+    async (req: Request, res: Response) => {
+      const { enable } = req.body
+      await saveOwnerSettings({ monitoringEnabled: Boolean(enable) })
+      if (enable) {
+        await monitoringService.start()
+      } else {
+        monitoringService.stop()
+      }
+      res.json({ success: true, status: monitoringService.getStatus() })
+    },
+  )
 
   // ----------------- ALERTS & DELIVERIES -----------------
   app.get(['/api/alerts', '/api/alerts/history'], requireAuth, async (req: Request, res: Response) => {
-    const alerts = await getAlertHistory(50);
-    const deliveries = await getAlertDeliveries(50);
-    res.json({ alerts, deliveries });
-  });
+    const alerts = await getAlertHistory(50)
+    const deliveries = await getAlertDeliveries(50)
+    res.json({ alerts, deliveries })
+  })
 
-  app.post('/api/alerts/:id/dismiss', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
-    const dismissed = await updateAlertStatus(req.params.id, 'DISMISSED');
-    if (!dismissed) {
-      res.status(404).json({ error: 'Alert not found.' });
-      return;
-    }
-    res.json({ success: true });
-  });
+  app.post(
+    '/api/alerts/:id/dismiss',
+    requireAuth,
+    requireRole('MANAGER'),
+    async (req: Request, res: Response) => {
+      const dismissed = await updateAlertStatus(req.params.id, 'DISMISSED')
+      if (!dismissed) {
+        res.status(404).json({ error: 'Alert not found.' })
+        return
+      }
+      res.json({ success: true })
+    },
+  )
 
   // ----------------- PERFORMANCE REPORT -----------------
   app.get('/api/reports/weekly', requireAuth, async (req: Request, res: Response) => {
     try {
-      const locId = req.query.locationId as string | undefined;
+      const locId = req.query.locationId as string | undefined
       const targetLoc = locId
         ? (await getAllLocations()).find((l) => l.id === locId)
-        : await getDefaultLocation();
+        : await getDefaultLocation()
 
       if (!targetLoc) {
-        res.status(404).json({ error: 'Location not found' });
-        return;
+        res.status(404).json({ error: 'Location not found' })
+        return
       }
 
-      const settings = await getOwnerSettings();
+      const settings = await getOwnerSettings()
       const [observations, alerts, runs] = await Promise.all([
         getHistoricalObservations(targetLoc.id, '7days'),
         getAlertHistory(200),
-        getRecentMonitorRuns(200)
-      ]);
+        getRecentMonitorRuns(200),
+      ])
 
       const summary = buildWeeklyPerformanceSummary({
         locationId: targetLoc.id,
@@ -1231,38 +1264,38 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         monitorStatus: monitoringService.getStatus(),
         observations,
         alerts,
-        runs
-      });
+        runs,
+      })
 
-      res.json(summary);
+      res.json(summary)
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to build the weekly performance summary' });
+      res.status(500).json({ error: err?.message || 'Failed to build the weekly performance summary' })
     }
-  });
+  })
 
   // ----------------- LOCATIONS -----------------
   app.get('/api/locations', requireAuth, async (_req: Request, res: Response) => {
-    const locations = await getAllLocations();
-    res.json({ locations });
-  });
+    const locations = await getAllLocations()
+    res.json({ locations })
+  })
 
   app.post('/api/locations', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
-    const { name, latitude, longitude, timezone, isDefault } = req.body;
+    const { name, latitude, longitude, timezone, isDefault } = req.body
 
     // Strict input validation
     if (!name || typeof name !== 'string' || name.trim().length === 0 || name.trim().length > 100) {
-      res.status(400).json({ error: 'Location name must be a string between 1 and 100 characters.' });
-      return;
+      res.status(400).json({ error: 'Location name must be a string between 1 and 100 characters.' })
+      return
     }
-    const lat = Number(latitude);
-    const lon = Number(longitude);
+    const lat = Number(latitude)
+    const lon = Number(longitude)
     if (isNaN(lat) || lat < -90 || lat > 90) {
-      res.status(400).json({ error: 'Latitude must be a valid number between -90 and 90.' });
-      return;
+      res.status(400).json({ error: 'Latitude must be a valid number between -90 and 90.' })
+      return
     }
     if (isNaN(lon) || lon < -180 || lon > 180) {
-      res.status(400).json({ error: 'Longitude must be a valid number between -180 and 180.' });
-      return;
+      res.status(400).json({ error: 'Longitude must be a valid number between -180 and 180.' })
+      return
     }
 
     const created = await saveLocation({
@@ -1270,161 +1303,190 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       latitude: lat,
       longitude: lon,
       timezone: typeof timezone === 'string' && timezone.trim() ? timezone.trim() : 'auto',
-      isDefault: Boolean(isDefault)
-    });
+      isDefault: Boolean(isDefault),
+    })
     // Trigger initial check for new location
-    await monitoringService.executeCycle(created.id, true);
-    res.json({ success: true, location: created });
-  });
+    await monitoringService.executeCycle(created.id, true)
+    res.json({ success: true, location: created })
+  })
 
-  app.post('/api/locations/:id/default', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
-    const ok = await setDefaultLocation(req.params.id);
-    if (!ok) {
-      res.status(404).json({ error: 'Location not found.' });
-      return;
-    }
-    res.json({ success: true });
-  });
+  app.post(
+    '/api/locations/:id/default',
+    requireAuth,
+    requireRole('MANAGER'),
+    async (req: Request, res: Response) => {
+      const ok = await setDefaultLocation(req.params.id)
+      if (!ok) {
+        res.status(404).json({ error: 'Location not found.' })
+        return
+      }
+      res.json({ success: true })
+    },
+  )
 
-  app.delete('/api/locations/:id', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
-    const target = (await getAllLocations()).find((l) => l.id === req.params.id);
-    if (!target) {
-      res.status(404).json({ error: 'Location not found.' });
-      return;
-    }
-    if (target.isDefault) {
-      res.status(400).json({ error: 'The default location cannot be deleted. Promote another location first.' });
-      return;
-    }
-    const ok = await deleteLocation(req.params.id);
-    if (!ok) {
-      res.status(400).json({ error: 'The default location cannot be deleted. Promote another location first.' });
-      return;
-    }
-    res.json({ success: true });
-  });
+  app.delete(
+    '/api/locations/:id',
+    requireAuth,
+    requireRole('MANAGER'),
+    async (req: Request, res: Response) => {
+      const target = (await getAllLocations()).find((l) => l.id === req.params.id)
+      if (!target) {
+        res.status(404).json({ error: 'Location not found.' })
+        return
+      }
+      if (target.isDefault) {
+        res
+          .status(400)
+          .json({ error: 'The default location cannot be deleted. Promote another location first.' })
+        return
+      }
+      const ok = await deleteLocation(req.params.id)
+      if (!ok) {
+        res
+          .status(400)
+          .json({ error: 'The default location cannot be deleted. Promote another location first.' })
+        return
+      }
+      res.json({ success: true })
+    },
+  )
 
   app.get('/api/locations/search', requireAuth, async (req: Request, res: Response) => {
-    const query = ((req.query.query || req.query.q) as string) || '';
-    const results = await searchGeocodingLocations(query.trim());
-    res.json({ results });
-  });
+    const query = ((req.query.query || req.query.q) as string) || ''
+    const results = await searchGeocodingLocations(query.trim())
+    res.json({ results })
+  })
 
   // ----------------- SETTINGS -----------------
   app.get('/api/settings', requireAuth, async (_req: Request, res: Response) => {
-    const settings = await getOwnerSettings();
-    const smtpConfigured = await isSmtpConfigured();
-    const smtpStatus = getPublicSmtpStatus();
-    res.json({ settings, smtpConfigured, smtpStatus });
-  });
+    const settings = await getOwnerSettings()
+    const smtpConfigured = await isSmtpConfigured()
+    const smtpStatus = getPublicSmtpStatus()
+    res.json({ settings, smtpConfigured, smtpStatus })
+  })
 
   app.put('/api/settings', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
-    const updates = req.body;
+    const updates = req.body
 
     // Validate monitor interval
     if (updates.monitorIntervalMinutes !== undefined) {
-      const interval = Number(updates.monitorIntervalMinutes);
+      const interval = Number(updates.monitorIntervalMinutes)
       if (isNaN(interval) || interval < 5 || interval > 1440) {
-        res.status(400).json({ error: 'Monitor interval must be between 5 and 1440 minutes.' });
-        return;
+        res.status(400).json({ error: 'Monitor interval must be between 5 and 1440 minutes.' })
+        return
       }
-      updates.monitorIntervalMinutes = interval;
+      updates.monitorIntervalMinutes = interval
     }
 
     // Validate data retention window
     if (updates.dataRetentionDays !== undefined) {
-      const days = Number(updates.dataRetentionDays);
+      const days = Number(updates.dataRetentionDays)
       if (!Number.isFinite(days) || days < 1 || days > 3650) {
-        res.status(400).json({ error: 'Data retention must be between 1 and 3650 days.' });
-        return;
+        res.status(400).json({ error: 'Data retention must be between 1 and 3650 days.' })
+        return
       }
-      updates.dataRetentionDays = Math.floor(days);
+      updates.dataRetentionDays = Math.floor(days)
     }
 
-    await saveOwnerSettings(updates);
+    await saveOwnerSettings(updates)
     if (updates.monitorIntervalMinutes !== undefined) {
-      monitoringService.updateInterval(updates.monitorIntervalMinutes);
+      monitoringService.updateInterval(updates.monitorIntervalMinutes)
     }
-    res.json({ success: true, message: 'Settings saved successfully.' });
-  });
+    res.json({ success: true, message: 'Settings saved successfully.' })
+  })
 
-  app.post('/api/settings/restore-defaults', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
-    await saveOwnerSettings({
-      thresholds: DEFAULT_THRESHOLDS,
-      monitorIntervalMinutes: 15,
-      alertCooldownMinutes: 60,
-      emailAlertsEnabled: true,
-      recoveryNotificationsEnabled: true
-    });
-    monitoringService.updateInterval(15);
-    res.json({ success: true, message: 'Default thresholds restored.' });
-  });
+  app.post(
+    '/api/settings/restore-defaults',
+    requireAuth,
+    requireRole('OWNER'),
+    async (_req: Request, res: Response) => {
+      await saveOwnerSettings({
+        thresholds: DEFAULT_THRESHOLDS,
+        monitorIntervalMinutes: 15,
+        alertCooldownMinutes: 60,
+        emailAlertsEnabled: true,
+        recoveryNotificationsEnabled: true,
+      })
+      monitoringService.updateInterval(15)
+      res.json({ success: true, message: 'Default thresholds restored.' })
+    },
+  )
 
   app.post('/api/email/test', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
-    const settings = await getOwnerSettings();
-    const recipient = req.body?.email || settings.ownerEmail;
-    const result = await sendTestEmail(recipient);
+    const settings = await getOwnerSettings()
+    const recipient = req.body?.email || settings.ownerEmail
+    const result = await sendTestEmail(recipient)
     if (!result.success) {
-      res.status(400).json({ error: result.error });
-      return;
+      res.status(400).json({ error: result.error })
+      return
     }
-    res.json({ success: true, message: `Test email sent to ${recipient}` });
-  });
+    res.json({ success: true, message: `Test email sent to ${recipient}` })
+  })
 
   // ----------------- DATA RETENTION & PRIVACY -----------------
-  app.post('/api/data/retention/run', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
-    try {
-      const settings = await getOwnerSettings();
-      const days = Number(req.body?.retentionDays) || settings.dataRetentionDays || 30;
-      const result = await enforceDataRetention(days);
-      res.json({ success: true, result });
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to enforce data retention.' });
-    }
-  });
+  app.post(
+    '/api/data/retention/run',
+    requireAuth,
+    requireRole('OWNER'),
+    async (req: Request, res: Response) => {
+      try {
+        const settings = await getOwnerSettings()
+        const days = Number(req.body?.retentionDays) || settings.dataRetentionDays || 30
+        const result = await enforceDataRetention(days)
+        res.json({ success: true, result })
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'Failed to enforce data retention.' })
+      }
+    },
+  )
 
-  app.get('/api/data/retention/logs', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
-    try {
-      const logs = await getDataRetentionLogs();
-      res.json({ logs });
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch retention logs.' });
-    }
-  });
+  app.get(
+    '/api/data/retention/logs',
+    requireAuth,
+    requireRole('OWNER'),
+    async (_req: Request, res: Response) => {
+      try {
+        const logs = await getDataRetentionLogs()
+        res.json({ logs })
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'Failed to fetch retention logs.' })
+      }
+    },
+  )
 
   // ----------------- SECRETS STATUS (MASKED) -----------------
   app.get('/api/secrets/status', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
     try {
-      const weatherKey = process.env.WEATHER_API_KEY || '';
-      const smtpInfo = getPublicSmtpStatus();
+      const weatherKey = process.env.WEATHER_API_KEY || ''
+      const smtpInfo = getPublicSmtpStatus()
 
       res.json({
         weatherApiKeyConfigured: Boolean(weatherKey.trim()),
         weatherApiKeyMasked: weatherKey ? maskSecret(weatherKey, 4) : 'Not configured',
         smtpConfigured: smtpInfo.configured,
         smtpHost: smtpInfo.host || 'Not configured',
-        pushConfigured: isPushConfigured()
-      });
+        pushConfigured: isPushConfigured(),
+      })
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to retrieve secrets status.' });
+      res.status(500).json({ error: err?.message || 'Failed to retrieve secrets status.' })
     }
-  });
+  })
 
   // ----------------- SYSTEM HEALTH & DIAGNOSTICS -----------------
   app.get(['/api/health', '/api/system/health'], requireAuth, async (_req: Request, res: Response) => {
-    const monitor = monitoringService.getStatus();
-    const smtpConfigured = await isSmtpConfigured();
-    const recentRuns = await getRecentMonitorRuns(10);
-    const auditLogs = await getAuditLogs(15);
-    const activeAlerts = await getActiveAlerts();
-    const deliveries = await getAlertDeliveries(1);
+    const monitor = monitoringService.getStatus()
+    const smtpConfigured = await isSmtpConfigured()
+    const recentRuns = await getRecentMonitorRuns(10)
+    const auditLogs = await getAuditLogs(15)
+    const activeAlerts = await getActiveAlerts()
+    const deliveries = await getAlertDeliveries(1)
 
-    const mem = process.memoryUsage();
-    const uptimeSec = Math.floor(process.uptime());
+    const mem = process.memoryUsage()
+    const uptimeSec = Math.floor(process.uptime())
     // Database health is reported from the real write path. A failed persist
     // must never be reported as HEALTHY: the on-disk file would be missing the
     // latest changes (guide §3: never lose user data; no fake success).
-    const persistence = getPersistenceStatus();
+    const persistence = getPersistenceStatus()
 
     res.json({
       version: APP_VERSION,
@@ -1440,178 +1502,196 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       memoryUsageMb: Math.round(mem.rss / 1024 / 1024),
       uptimeSeconds: uptimeSec,
       recentRuns,
-      auditLogs
-    });
-  });
+      auditLogs,
+    })
+  })
 
   // ----------------- PRIVACY & DATA CONTROLS -----------------
   app.post('/api/data/clear', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
-    const { target } = req.body;
+    const { target } = req.body
     if (target === 'cache') {
-      await clearCachedData();
-      await addAuditLog('DATA_CLEARED', 'Cached forecasts cleared');
+      await clearCachedData()
+      await addAuditLog('DATA_CLEARED', 'Cached forecasts cleared')
     } else if (target === 'history') {
-      await clearHistoricalObservations();
-      await addAuditLog('DATA_CLEARED', 'Historical observations cleared');
+      await clearHistoricalObservations()
+      await addAuditLog('DATA_CLEARED', 'Historical observations cleared')
     } else if (target === 'all') {
-      await clearAllApplicationData();
-      await addAuditLog('DATA_CLEARED', 'All application data wiped');
+      await clearAllApplicationData()
+      await addAuditLog('DATA_CLEARED', 'All application data wiped')
     } else {
-      res.status(400).json({ error: "target must be one of 'cache', 'history', or 'all'." });
-      return;
+      res.status(400).json({ error: "target must be one of 'cache', 'history', or 'all'." })
+      return
     }
-    res.json({ success: true });
-  });
+    res.json({ success: true })
+  })
 
   app.get('/api/data/backup', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
-    const buffer = await getDatabaseBinary();
-    res.setHeader('Content-Type', 'application/x-sqlite3');
-    res.setHeader('Content-Disposition', `attachment; filename="weather-monitor-backup-${new Date().toISOString().slice(0, 10)}.sqlite"`);
-    res.send(buffer);
-  });
+    const buffer = await getDatabaseBinary()
+    res.setHeader('Content-Type', 'application/x-sqlite3')
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="weather-monitor-backup-${new Date().toISOString().slice(0, 10)}.sqlite"`,
+    )
+    res.send(buffer)
+  })
 
-  app.post('/api/data/backup/create', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
-    try {
-      const filename = await createDatabaseBackup();
-      await addAuditLog('BACKUP_CREATED', `Database snapshot created: ${filename}`);
-      res.json({ success: true, filename, message: 'Database backup snapshot created successfully.' });
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to create database backup snapshot.' });
-    }
-  });
-
-  app.get('/api/data/backup/list', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
-    try {
-      const backups = getDatabaseBackupsList();
-      res.json({ backups });
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to list backups.' });
-    }
-  });
-
-  app.post('/api/data/backup/restore', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
-    try {
-      const { filename } = req.body;
-      if (!filename || typeof filename !== 'string') {
-        res.status(400).json({ error: 'A backup filename is required.' });
-        return;
+  app.post(
+    '/api/data/backup/create',
+    requireAuth,
+    requireRole('OWNER'),
+    async (_req: Request, res: Response) => {
+      try {
+        const filename = await createDatabaseBackup()
+        await addAuditLog('BACKUP_CREATED', `Database snapshot created: ${filename}`)
+        res.json({ success: true, filename, message: 'Database backup snapshot created successfully.' })
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'Failed to create database backup snapshot.' })
       }
-      const actor = (req as AuthedRequest).session!;
-      const ok = await restoreDatabaseBackup(filename);
-      if (!ok) {
-        res.status(404).json({ error: 'Backup not found or invalid filename.' });
-        return;
+    },
+  )
+
+  app.get(
+    '/api/data/backup/list',
+    requireAuth,
+    requireRole('OWNER'),
+    async (_req: Request, res: Response) => {
+      try {
+        const backups = getDatabaseBackupsList()
+        res.json({ backups })
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'Failed to list backups.' })
       }
-      // Sessions may reference users that no longer exist in the restored file,
-      // and tokens minted before the restore must not survive it.
-      activeSessions.clear();
-      await deleteAllSessions();
-      await addAuditLog('BACKUP_RESTORED', `${actor.email} restored database from ${filename}`);
-      res.clearCookie('cwm_session');
-      res.clearCookie('cwm_csrf');
-      res.json({
-        success: true,
-        message: 'Database restored. Please sign in again.',
-        signedOut: true
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to restore database backup.' });
-    }
-  });
+    },
+  )
+
+  app.post(
+    '/api/data/backup/restore',
+    requireAuth,
+    requireRole('OWNER'),
+    async (req: Request, res: Response) => {
+      try {
+        const { filename } = req.body
+        if (!filename || typeof filename !== 'string') {
+          res.status(400).json({ error: 'A backup filename is required.' })
+          return
+        }
+        const actor = (req as AuthedRequest).session!
+        const ok = await restoreDatabaseBackup(filename)
+        if (!ok) {
+          res.status(404).json({ error: 'Backup not found or invalid filename.' })
+          return
+        }
+        // Sessions may reference users that no longer exist in the restored file,
+        // and tokens minted before the restore must not survive it.
+        activeSessions.clear()
+        await deleteAllSessions()
+        await addAuditLog('BACKUP_RESTORED', `${actor.email} restored database from ${filename}`)
+        res.clearCookie('cwm_session')
+        res.clearCookie('cwm_csrf')
+        res.json({
+          success: true,
+          message: 'Database restored. Please sign in again.',
+          signedOut: true,
+        })
+      } catch (err: any) {
+        res.status(500).json({ error: err?.message || 'Failed to restore database backup.' })
+      }
+    },
+  )
 
   // ----------------- WEB PUSH NOTIFICATIONS -----------------
   app.get('/api/push/public-key', requireAuth, (_req: Request, res: Response) => {
-    res.json({ publicKey: getVapidPublicKey(), configured: isPushConfigured() });
-  });
+    res.json({ publicKey: getVapidPublicKey(), configured: isPushConfigured() })
+  })
 
   app.get('/api/push/status', requireAuth, async (_req: Request, res: Response) => {
-    const count = await countPushSubscriptions();
-    res.json({ configured: isPushConfigured(), subscriptions: count });
-  });
+    const count = await countPushSubscriptions()
+    res.json({ configured: isPushConfigured(), subscriptions: count })
+  })
 
   // Per-user push notification preferences. Applies to every device the user
   // has subscribed, letting them mute, set a severity floor, or opt out of
   // recovery notifications without unsubscribing.
   app.get('/api/push/preferences', requireAuth, async (req: Request, res: Response) => {
-    const session = (req as AuthedRequest).session!;
-    const preferences = await getPushPreferences(session.userId);
-    res.json({ preferences });
-  });
+    const session = (req as AuthedRequest).session!
+    const preferences = await getPushPreferences(session.userId)
+    res.json({ preferences })
+  })
 
   app.put('/api/push/preferences', requireAuth, async (req: Request, res: Response) => {
-    const session = (req as AuthedRequest).session!;
-    const { enabled, minSeverity, notifyRecovery } = req.body || {};
+    const session = (req as AuthedRequest).session!
+    const { enabled, minSeverity, notifyRecovery } = req.body || {}
 
     if (enabled !== undefined && typeof enabled !== 'boolean') {
-      res.status(400).json({ error: '`enabled` must be a boolean.' });
-      return;
+      res.status(400).json({ error: '`enabled` must be a boolean.' })
+      return
     }
     if (notifyRecovery !== undefined && typeof notifyRecovery !== 'boolean') {
-      res.status(400).json({ error: '`notifyRecovery` must be a boolean.' });
-      return;
+      res.status(400).json({ error: '`notifyRecovery` must be a boolean.' })
+      return
     }
-    const allowedSeverities = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
+    const allowedSeverities = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL']
     if (minSeverity !== undefined && !allowedSeverities.includes(minSeverity)) {
-      res.status(400).json({ error: '`minSeverity` must be one of LOW, MODERATE, HIGH, CRITICAL.' });
-      return;
+      res.status(400).json({ error: '`minSeverity` must be one of LOW, MODERATE, HIGH, CRITICAL.' })
+      return
     }
 
-    const preferences = await savePushPreferences(session.userId, { enabled, minSeverity, notifyRecovery });
-    await addAuditLog('PUSH_PREFERENCES_UPDATED', `Push preferences updated for ${session.email}`);
-    res.json({ success: true, preferences });
-  });
+    const preferences = await savePushPreferences(session.userId, { enabled, minSeverity, notifyRecovery })
+    await addAuditLog('PUSH_PREFERENCES_UPDATED', `Push preferences updated for ${session.email}`)
+    res.json({ success: true, preferences })
+  })
 
   app.post('/api/push/subscribe', requireAuth, async (req: Request, res: Response) => {
     try {
-      const session = (req as AuthedRequest).session!;
-      const { endpoint, keys } = req.body || {};
+      const session = (req as AuthedRequest).session!
+      const { endpoint, keys } = req.body || {}
       await subscribeToPush({
         endpoint,
         keys,
         userId: session.userId,
-        userEmail: session.email
-      });
-      res.json({ success: true, message: 'Device subscribed to safety alerts.' });
+        userEmail: session.email,
+      })
+      res.json({ success: true, message: 'Device subscribed to safety alerts.' })
     } catch (err: any) {
-      res.status(400).json({ error: err?.message || 'Failed to store push subscription.' });
+      res.status(400).json({ error: err?.message || 'Failed to store push subscription.' })
     }
-  });
+  })
 
   app.post('/api/push/unsubscribe', requireAuth, async (req: Request, res: Response) => {
-    await unsubscribeFromPush(req.body?.endpoint);
-    res.json({ success: true });
-  });
+    await unsubscribeFromPush(req.body?.endpoint)
+    res.json({ success: true })
+  })
 
   app.post('/api/push/test', requireAuth, async (req: Request, res: Response) => {
     if (!isPushConfigured()) {
-      res.status(400).json({ error: 'Push notifications are not configured.' });
-      return;
+      res.status(400).json({ error: 'Push notifications are not configured.' })
+      return
     }
     const result = await sendPushToAll({
       title: 'Test notification',
       body: 'Push notifications are working on this device.',
       tag: 'push-test',
-      url: '/'
-    });
-    res.json({ success: true, ...result });
-  });
+      url: '/',
+    })
+    res.json({ success: true, ...result })
+  })
 
   // ----------------- VITE MIDDLEWARE (DEV) / STATIC (PROD) -----------------
   if (staticMode === 'vite') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: 'spa'
-    });
-    app.use(vite.middlewares);
+      appType: 'spa',
+    })
+    app.use(vite.middlewares)
   } else if (staticMode === 'static') {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    const distPath = path.join(process.cwd(), 'dist')
+    app.use(express.static(distPath))
     app.get('*', (_req: Request, res: Response) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+      res.sendFile(path.join(distPath, 'index.html'))
+    })
   }
 
-  return app;
+  return app
 }
 
 /**
@@ -1620,10 +1700,10 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
  * without binding a fixed port or starting background pollers.
  */
 async function startServer(): Promise<void> {
-  const app = await createApp();
+  const app = await createApp()
   const server = app.listen(PORT, '0.0.0.0', () => {
-    logger.info('server_listening', { url: `http://localhost:${PORT}`, port: PORT });
-  });
+    logger.info('server_listening', { url: `http://localhost:${PORT}`, port: PORT })
+  })
 
   // ----------------- CRASH STUB (guide §6.1 / §7.1) -----------------
   // A crash must never be silent and must never take unsaved data with it.
@@ -1632,34 +1712,36 @@ async function startServer(): Promise<void> {
   // process exits so the container orchestrator can restart it cleanly.
   // (In-app crash report submission via GitHub is a 0.2.x roadmap item.)
   process.on('unhandledRejection', (reason) => {
-    logger.error('unhandled_rejection', { reason: String(reason instanceof Error ? reason.stack || reason.message : reason) });
-  });
+    logger.error('unhandled_rejection', {
+      reason: String(reason instanceof Error ? reason.stack || reason.message : reason),
+    })
+  })
   process.on('uncaughtException', (err) => {
-    logger.error('uncaught_exception', { message: err.message, stack: err.stack });
+    logger.error('uncaught_exception', { message: err.message, stack: err.stack })
     try {
-      persistDb();
+      persistDb()
     } catch {
       // Nothing more can be done; exit below regardless.
     }
-    process.exit(1);
-  });
+    process.exit(1)
+  })
 
   // ----------------- GRACEFUL SHUTDOWN -----------------
   // Orchestrators send SIGTERM; interactive runs send SIGINT. Flush the
   // database, stop accepting connections, and exit within a bounded time.
   const shutdown = (signal: string) => {
-    logger.info('server_shutdown', { signal });
+    logger.info('server_shutdown', { signal })
     try {
-      persistDb();
+      persistDb()
     } catch (err) {
-      logger.error('shutdown_persist_failed', { message: String(err) });
+      logger.error('shutdown_persist_failed', { message: String(err) })
     }
-    server.close(() => process.exit(0));
+    server.close(() => process.exit(0))
     // Force the exit if close hangs (open keep-alive sockets).
-    setTimeout(() => process.exit(0), 3000).unref();
-  };
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+    setTimeout(() => process.exit(0), 3000).unref()
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
 }
 
-export { createApp, startServer };
+export { createApp, startServer }

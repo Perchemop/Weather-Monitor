@@ -12,24 +12,24 @@ First tagged release; every claim below is backed by the CI workflow
 (format-check, build-test matrix on Windows/macOS/Linux, docker, Pages deploy)
 and the 88-check automated suite.
 
-| Capability | State | Evidence |
-| --- | --- | --- |
-| Deterministic risk engine (AS 2550.1 envelopes, DST-aware) | Done | system tests; property tests (determinism, monotonicity) |
-| Dual-provider weather (WeatherAPI + Open-Meteo, automatic fallback) | Done | system + API tests; CI |
-| Autonomous monitoring cycle + alert engine (WIND/GUST/RAIN/UV/TEMP/STORM) | Done | API tests; manual QC checklist |
-| Role-based access (Owner/Manager/Viewer), hardened auth, TOTP MFA, sessions | Done | API tests (auth, RBAC, CSRF, MFA, sessions) |
-| SQLite persistence, backup rotation + restore, retention pruning | Done | API tests; persistence-health monitoring |
-| Web Push alerts, per-device preferences, PWA install/offline | Done | API tests; manual QC |
-| Live weather map (radar/rain/wind/lightning), lightning forecasting | Done | manual QC; system tests for alert candidates |
-| Reports, activity risk matrix, weekly performance summary | Done | system tests; manual QC |
-| Dashboard redesign: clear hierarchy, decluttered, consistent tokens | Done | PR #2; manual QC |
-| Observable persistence health (`/api/health`, `cwm_database_persist_healthy`) | Done | API + system tests |
-| Crash stub: React ErrorBoundary + server process handlers + graceful flush | Done | code review; CI |
-| Update check: Settings → About vs GitHub Releases, fail-soft, cached | Done | system tests (comparison logic); manual QC |
-| In-app version surfacing (`/healthz`, `/api/health`, Settings) | Done | API tests |
-| CI: format-check + 3-OS build-test + docker + Pages deploy | Done | GitHub Actions runs |
-| Release path: `release.yml` on `v*` tags, checksummed artefacts, changelog notes | Done | release run for `v0.1.0` |
-| Governance: PR template, CONTRIBUTING, ROADMAP, brand doc, research gate | Done | files in tree |
+| Capability                                                                       | State | Evidence                                                 |
+| -------------------------------------------------------------------------------- | ----- | -------------------------------------------------------- |
+| Deterministic risk engine (AS 2550.1 envelopes, DST-aware)                       | Done  | system tests; property tests (determinism, monotonicity) |
+| Dual-provider weather (WeatherAPI + Open-Meteo, automatic fallback)              | Done  | system + API tests; CI                                   |
+| Autonomous monitoring cycle + alert engine (WIND/GUST/RAIN/UV/TEMP/STORM)        | Done  | API tests; manual QC checklist                           |
+| Role-based access (Owner/Manager/Viewer), hardened auth, TOTP MFA, sessions      | Done  | API tests (auth, RBAC, CSRF, MFA, sessions)              |
+| SQLite persistence, backup rotation + restore, retention pruning                 | Done  | API tests; persistence-health monitoring                 |
+| Web Push alerts, per-device preferences, PWA install/offline                     | Done  | API tests; manual QC                                     |
+| Live weather map (radar/rain/wind/lightning), lightning forecasting              | Done  | manual QC; system tests for alert candidates             |
+| Reports, activity risk matrix, weekly performance summary                        | Done  | system tests; manual QC                                  |
+| Dashboard redesign: clear hierarchy, decluttered, consistent tokens              | Done  | PR #2; manual QC                                         |
+| Observable persistence health (`/api/health`, `cwm_database_persist_healthy`)    | Done  | API + system tests                                       |
+| Crash stub: React ErrorBoundary + server process handlers + graceful flush       | Done  | code review; CI                                          |
+| Update check: Settings → About vs GitHub Releases, fail-soft, cached             | Done  | system tests (comparison logic); manual QC               |
+| In-app version surfacing (`/healthz`, `/api/health`, Settings)                   | Done  | API tests                                                |
+| CI: format-check + 3-OS build-test + docker + Pages deploy                       | Done  | GitHub Actions runs                                      |
+| Release path: `release.yml` on `v*` tags, checksummed artefacts, changelog notes | Done  | release run for `v0.1.0`                                 |
+| Governance: PR template, CONTRIBUTING, ROADMAP, brand doc, research gate         | Done  | files in tree                                            |
 
 **Feature breadth: 100% of the v1 in-scope scope, implemented and verified.**
 **Ready-for-work: n/a — stage closed.**
@@ -41,13 +41,13 @@ Every item now carries its research note (`docs/research/<capability>.md`).
 implemented until the human approves the note it depends on. Approval
 criteria: original wording, URLs present, no copyrighted paste, no UI cloning.
 
-| # | Item | Research note | Next step | Ready-for-work |
-| --- | --- | --- | --- | --- |
-| 1 | In-app crash report submission (device-flow user token, memory-only) | [`crash-report-submission.md`](docs/research/crash-report-submission.md) | Human approval of design (B) + acceptance criteria | 0% — blocked on gate |
-| 2 | Multi-architecture container images (amd64 + arm64 via Buildx) | [`multi-arch-container-images.md`](docs/research/multi-arch-container-images.md) | Approve, then one CI slice | 90% — note complete, pure CI work |
-| 3 | Prettier adoption (dedicated reformat release) | [`prettier-adoption.md`](docs/research/prettier-adoption.md) | Approve config; one reformat-only PR | 90% — note complete |
-| 4 | Browser-level (DOM) smoke tests (Playwright) | [`dom-ui-tests.md`](docs/research/dom-ui-tests.md) | Approve scope; one slice + CI job | 85% — note complete |
-| 5 | Prometheus alert examples + operations runbook | [`prometheus-runbook.md`](docs/research/prometheus-runbook.md) | Approve alert set; docs slice + promtool check | 85% — note complete |
+| #   | Item                                                                 | Research note                                                                    | Next step                                          | Ready-for-work                    |
+| --- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------- |
+| 1   | In-app crash report submission (device-flow user token, memory-only) | [`crash-report-submission.md`](docs/research/crash-report-submission.md)         | Human approval of design (B) + acceptance criteria | 0% — blocked on gate              |
+| 2   | Multi-architecture container images (amd64 + arm64 via Buildx)       | [`multi-arch-container-images.md`](docs/research/multi-arch-container-images.md) | Approve, then one CI slice                         | 90% — note complete, pure CI work |
+| 3   | Prettier adoption (dedicated reformat release)                       | [`prettier-adoption.md`](docs/research/prettier-adoption.md)                     | Approve config; one reformat-only PR               | 90% — note complete               |
+| 4   | Browser-level (DOM) smoke tests (Playwright)                         | [`dom-ui-tests.md`](docs/research/dom-ui-tests.md)                               | Approve scope; one slice + CI job                  | 85% — note complete               |
+| 5   | Prometheus alert examples + operations runbook                       | [`prometheus-runbook.md`](docs/research/prometheus-runbook.md)                   | Approve alert set; docs slice + promtool check     | 85% — note complete               |
 
 **Feature breadth: unchanged (no new in-scope features in this stage).**
 **Ready-for-work: 0/5 implemented; 4/5 unblocked the moment the gate opens.**

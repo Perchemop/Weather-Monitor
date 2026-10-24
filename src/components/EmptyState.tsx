@@ -1,35 +1,38 @@
-import React from 'react';
+import React from 'react'
 
-type EmptyStateSize = 'default' | 'compact';
+type EmptyStateSize = 'default' | 'compact'
 
 interface EmptyStateProps {
   /** Icon rendered in the centred badge. */
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description?: string;
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  description?: string
   /** Renders without outer card chrome, for nesting inside an existing card. */
-  nested?: boolean;
+  nested?: boolean
   /** `compact` suits inline panels; `default` suits full-width panes. */
-  size?: EmptyStateSize;
-  className?: string;
+  size?: EmptyStateSize
+  className?: string
 }
 
-const SIZES: Record<EmptyStateSize, { pad: string; badge: string; icon: string; title: string; desc: string }> = {
+const SIZES: Record<
+  EmptyStateSize,
+  { pad: string; badge: string; icon: string; title: string; desc: string }
+> = {
   default: {
     pad: 'p-10 sm:p-12',
     badge: 'w-12 h-12 rounded-2xl',
     icon: 'w-6 h-6',
     title: 'mt-3.5 text-sm font-semibold',
-    desc: 'mt-1.5 text-xs'
+    desc: 'mt-1.5 text-xs',
   },
   compact: {
     pad: 'p-6',
     badge: 'w-9 h-9 rounded-xl',
     icon: 'w-4 h-4',
     title: 'mt-2.5 text-xs font-semibold',
-    desc: 'mt-1 text-[11px]'
-  }
-};
+    desc: 'mt-1 text-[11px]',
+  },
+}
 
 /**
  * Consistent empty state for lists, tables and chart panes: a soft icon badge,
@@ -42,9 +45,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   description,
   nested,
   size = 'default',
-  className
+  className,
 }) => {
-  const s = SIZES[size];
+  const s = SIZES[size]
   return (
     <div
       className={`${s.pad} text-center ${
@@ -61,7 +64,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         <div className={`${s.desc} text-slate-500 max-w-md mx-auto leading-relaxed`}>{description}</div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default EmptyState;
+export default EmptyState

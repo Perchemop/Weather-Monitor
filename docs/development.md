@@ -81,16 +81,23 @@ without SMTP it skips email. Notable variables:
 - `METRICS_TOKEN` — shared token for `/metrics`.
 - `DATA_DIR` — relocate the SQLite database and generated secrets.
 
-## Format check
+## Format & style checks
 
 ```bash
-npm run format:check           # whole repository hygiene
-npm run format:check:changed   # plus trailing whitespace on changed lines
+npm run format:check      # whole-repository hygiene (no dependencies)
+npm run prettier:check    # Prettier style (`.prettierrc.json`, `.prettierignore`)
+npm run prettier:fix      # apply Prettier locally (already formatted in CI)
 ```
 
-Enforced by CI. Rules: no CRLF, no merge-conflict markers, every file ends with a
-newline, code files use spaces, and no trailing whitespace on lines *you* added
-(Markdown is exempt — two trailing spaces there are a hard line break).
+Both run in CI's `format-check` job. Two layers, distinct jobs:
+
+- **Hygiene** (`scripts/check-format.mjs`, dependency-free): no CRLF, no
+  merge-conflict markers, a final newline, spaces-not-tabs, and no trailing
+  whitespace on lines *you* added (Markdown is exempt — two trailing spaces
+  there are a hard line break).
+- **Style** (Prettier): formatting of code, Markdown prose, JSON and YAML.
+  `docs/`, generated output, lockfiles, `public/sw.js` and `opencode.jsonc`
+  are excluded via `.prettierignore` (see the file for why).
 
 ## Running the suites (in CI)
 
