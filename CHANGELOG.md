@@ -88,6 +88,7 @@ hardening and governance work below.
   thunderstorm when a WeatherAPI key was configured.
 - **Weather:** Open-Meteo wall-clock times are converted to true UTC instants
   using the response's `utc_offset_seconds`, fixing misaligned current and
+
   hourly values when the server timezone differs from the site.
 - **Risk:** extremely high UV now raises the overall risk level to `HIGH`, and
   very-high UV moves the level and score instead of being displayed without
@@ -105,3 +106,18 @@ hardening and governance work below.
   false success.
 - **Tooling:** the `docs-writer` subagent's edit permission was corrected from
   deny to allow.
+
+### Known limitations
+
+- The WeatherAPI key (optional) must be provided as a server environment
+  variable; there is no in-app key entry by design (keys never reach the
+  browser).
+- Autonomous monitoring runs only while the server (or, in the static build,
+  the browser tab) is running — there is no external scheduler.
+- Static (GitHub Pages) mode has no accounts, no shared database and no push
+  service; it is a single-browser companion to the server build.
+- The in-app update check reads only the latest published release; it does not
+  auto-install anything.
+- In-app crash report submission requires a user GitHub token (planned 0.2.x,
+  research-gated); until then the pre-filled issue form is the reporting path.
+- Container images are published for the CI runner architecture (amd64) only.
