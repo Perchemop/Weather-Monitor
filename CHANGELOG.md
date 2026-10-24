@@ -34,7 +34,9 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Config in `.prettierrc.json` (no semicolons, single quotes, width 110);
   `npm run prettier:check` runs in CI alongside the unchanged hygiene checker
   (`scripts/check-format.mjs`); `.prettierignore` keeps docs, generated output,
-  lockfiles, the service worker and the harness config out of the formatter.
+  lockfiles, the service worker and the harness config (`.opencode/`,
+  `opencode.jsonc` — files the harness owns and rewrites, so they are not ours
+  to reformat) out of the formatter.
 
 ## [0.1.0] — 2026-10-24
 
