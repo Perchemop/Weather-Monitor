@@ -46,6 +46,28 @@ the failover plugin, so the structure never depends on which model is running.
 - Never use Ollama or any local model hosting.
 - No model change affects the process: heavy work runs in GitHub Actions.
 
+## Research method (guide §2.4)
+
+How public research for `docs/research/*.md` is performed, least human input
+first:
+
+1. **Preferred — orchestrator web access.** The running orchestrator model
+   (currently an OpenCode free tier model) fetches and searches public pages
+   directly (`websearch`/`webfetch`). It resolves the authoritative doc URLs,
+   reads the public behaviour, and writes original summaries into
+   `docs/research/<capability>.md` — behaviour, acceptance criteria, edge
+   cases, and a "Sources" list of URLs only. No copyrighted text, scraped
+   HTML, or screenshots are committed.
+2. **CI / script assist.** For bulk verification, a workflow or script can
+   fetch `text/plain` from the URLs listed in a note; the agent then
+   summarises. (Not needed for the current notes.)
+3. **Human assist (last resort).** The human pastes URLs or short excerpts;
+   the agent still writes original notes only.
+
+Every research note ends with its source-URL list so any reviewer can verify
+the summary against the public source. Notes are **human-gated** before any
+large implementation Task depends on them (guide §2.3, §8.4).
+
 ## Verified availability (re-checked 2026-10-22)
 
 Live probes of the NVIDIA free tier, which is tier 2 in the provider order:
