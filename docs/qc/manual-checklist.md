@@ -1,5 +1,12 @@
 # Manual QC Checklist
 
+- [ ] Settings → About "Connect GitHub to submit reports" shows user_code + link, polls with back-off, surfaces terminal states.
+- [ ] Connected account login shown; Disconnect drops token.
+- [ ] Report modal shows exact payload; Edit notes and Cancel work; Submit disabled until preview shown.
+- [ ] Created issues carry labels bug or crash.
+- [ ] Failure keeps drafted report and offers pre-filled URL fallback.
+- [ ] Reload clears token.
+
 Run against a deployed build after a change. Tick each item; note any deviation.
 
 ## Authentication & access
