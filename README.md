@@ -434,6 +434,14 @@ State (SQLite database, backups, and generated secrets) persists in `./data`.
 - **Contributing:** see `CONTRIBUTING.md`; the public plan lives in
   `ROADMAP.md`.
 
+## Privacy (crash reports)
+
+In-app bug/crash reports are opt-in via GitHub device flow. The user token is
+held in memory only for the tab session; reloading clears it. Reports include
+app version, build mode, browser user-agent, redacted error details, and
+operator notes. They never include session cookies, CSRF tokens, passwords, or
+site locations unless the operator types them deliberately.
+
 ## Community & policies
 
 - Read the [contributing guide](CONTRIBUTING.md) before opening a pull request.

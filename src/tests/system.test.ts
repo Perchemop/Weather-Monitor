@@ -23,6 +23,7 @@ import {
 import { createDatabaseBackup, getDatabaseBackupsList, hashPasswordWithSalt } from '../database/db.js'
 import { markPersistenceFailure, clearPersistenceFailure, getPersistenceStatus } from '../database/db.js'
 import { compareVersions, resolveUpdateState } from '../utils/updateCheck.js'
+import { classifyPollResponse, scrubText, buildReportPayload } from '../utils/crashReport.js'
 import {
   createUserAccount,
   verifyUserCredentials,
@@ -1187,6 +1188,54 @@ async function runTests() {
     // Unknown inputs must surface as unknown, never as "up to date".
     assert.equal(resolveUpdateState('0.1.0', null, null).status, 'unknown')
     assert.equal(resolveUpdateState('0.1.0', 'garbage', null).status, 'unknown')
+  })
+
+  // Crash report utilities
+  test('Crash report poll: access_token -> done', () => {
+    const r = classifyPollResponse({ access_token: 'gho_abc' } as any)
+    assert.equal(r.state, 'done')
+    assert.equal(r.token, 'gho_abc')
+  })
+  test('Crash report poll: authorization_pending -> pending', () => {
+    const r = classifyPollResponse({ error: 'authorization_pending' } as any)
+    assert.equal(r.state, 'pending')
+  })
+  test('Crash report poll: slow_down grows interval by 5', () => {
+    const r = classifyPollResponse({ error: 'slow_down', interval: 5 } as any)
+    assert.equal(r.state, 'slow_down')
+    assert.equal(r.interval, 10)
+  })
+  test('Crash report poll: expired_token -> expired', () => {
+    const r = classifyPollResponse({ error: 'expired_token' } as any)
+    assert.equal(r.state, 'expired')
+  })
+  test('Crash report poll: access_denied -> denied', () => {
+    const r = classifyPollResponse({ error: 'access_denied' } as any)
+    assert.equal(r.state, 'denied')
+  })
+  test('Crash report scrub: redacts paths and tokens', () => {
+    const s = scrubText(
+      'boom at /home/user/secret/file.ts with token abcdef0123456789abcdef0123456789abcdef0123',
+    )
+    assert.ok(!s.includes('/home/user/secret/file.ts'))
+    assert.ok(s.includes('[REDACTED_PATH]'))
+    assert.ok(s.includes('[REDACTED_TOKEN]'))
+  })
+  test('Crash report payload: builds title/body/labels', () => {
+    const p = buildReportPayload(
+      {
+        appVersion: '0.1.0',
+        buildMode: 'static',
+        userAgent: 'UA',
+        error: { message: 'boom', stack: '/x/y.ts' },
+        notes: 'note',
+      },
+      'crash',
+    )
+    assert.equal(p.labels[0], 'crash')
+    assert.ok(p.title.startsWith('[crash]'))
+    assert.ok(p.body.includes('0.1.0'))
+    assert.ok(!p.body.includes('/x/y.ts'))
   })
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`)
