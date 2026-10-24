@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a bug or unexpected behaviour
+title: '[Bug]: '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in as much detail as possible. If this is a security issue, use the private security reporting link above.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: Tell us what you see vs what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps to reproduce the issue.
+      placeholder: "1. Go to ...\n2. Click ...\n3. See error"
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - 'Web (static/PWA)'
+        - 'Node server (Express)'
+        - 'Docker'
+        - 'Other'
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version/commit
+      description: App version or git commit SHA
+      placeholder: 'v0.1.1 or abc1234'
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/screenshots
+      description: Relevant logs, console output, or screenshots.
+      render: shell
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Anything else that might help.
