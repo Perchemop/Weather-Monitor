@@ -32,6 +32,7 @@ import { STATIC_MODE } from '../static/mode'
 import { requestNotificationPermission } from '../static/notifications'
 import { emailRelayConfigured } from '../static/emailRelay'
 import { APP_VERSION } from '../version'
+import { classifyPollResponse, buildReportPayload } from '../utils/crashReport'
 import { resolveUpdateState, UpdateState } from '../utils/updateCheck'
 
 interface SettingsViewProps {
@@ -148,6 +149,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
   )}&body=${encodeURIComponent(
     `### Description\n\n\n### What happened vs what you expected\n\n\n### Environment\n- App version: ${APP_VERSION}\n- Mode: ${STATIC_MODE ? 'Static (browser build)' : 'Server build'}\n- Browser: ${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}\n\n> Please review before submitting and remove anything you do not want to publish.\n> Do not include passwords, tokens, or site locations.`,
   )}`
+
+  // In-app crash/bug report submission (design B)
+  const githubClientId = (import.meta as any).env?.VITE_GITHUB_CLIENT_ID as string | undefined
+  const [ghToken, setGhToken] = useState<string | null>(null)
+  const [ghLogin, setGhLogin] = useState<string | null>(null)
+  const [ghDeviceCode, setGhDeviceCode] = useState<string | null>(null)
+  const [ghUserCode, setGhUserCode] = useState<string | null>(null)
+  const [ghVerifyUri, setGhVerifyUri] = useState<string | null>(null)
+  const [ghPollState, setGhPollState] = useState<string>('idle')
+  const [ghPollMsg, setGhPollMsg] = useState<string | null>(null)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportNotes, setReportNotes] = useState('')
+  const [reportPreviewShown, setReportPreviewShown] = useState(false)
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+  const [reportError, setReportError] = useState<string | null>(null)
 
   // Confirmation modal state (replaces window.confirm)
   const [confirmModal, setConfirmModal] = useState<{
@@ -716,6 +732,123 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
       toast.error('Failed to send test notification.')
     } finally {
       setPushBusy(false)
+    }
+  }
+
+  const startDeviceFlow = async () => {
+    if (!githubClientId) {
+      setGhPollState('error')
+      setGhPollMsg('Not configured')
+      return
+    }
+    setGhPollState('pending')
+    setGhPollMsg(null)
+    try {
+      const res = await fetch('https://github.com/login/device/code', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: githubClientId, scope: 'public_repo' }),
+      })
+      const data = await res.json()
+      setGhDeviceCode(data.device_code)
+      setGhUserCode(data.user_code)
+      setGhVerifyUri(data.verification_uri)
+      // poll
+      let interval = data.interval || 5
+      let attempts = 0
+      const poll = async () => {
+        while (attempts < 10) {
+          attempts++
+          await new Promise((r) => setTimeout(r, interval * 1000))
+          const pres = await fetch('https://github.com/login/oauth/access_token', {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: githubClientId,
+              device_code: data.device_code,
+              grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+            }),
+          })
+          const pdata = await pres.json()
+          const result = classifyPollResponse(pdata)
+          if (result.state === 'pending') continue
+          if (result.state === 'slow_down') {
+            interval = result.interval || interval + 5
+            continue
+          }
+          if (result.state === 'done' && result.token) {
+            setGhToken(result.token)
+            setGhPollState('done')
+            // fetch login
+            try {
+              const ures = await fetch('https://api.github.com/user', {
+                headers: { Authorization: `Bearer ${result.token}`, Accept: 'application/vnd.github+json' },
+              })
+              const udata = await ures.json()
+              setGhLogin(udata.login || null)
+            } catch {}
+            return
+          }
+          setGhPollState(result.state)
+          setGhPollMsg(result.message || null)
+          return
+        }
+        setGhPollState('error')
+        setGhPollMsg('Polling timed out.')
+      }
+      void poll()
+    } catch {
+      setGhPollState('error')
+      setGhPollMsg('Network error.')
+    }
+  }
+
+  const disconnectGithub = () => {
+    setGhToken(null)
+    setGhLogin(null)
+    setGhDeviceCode(null)
+    setGhUserCode(null)
+    setGhVerifyUri(null)
+    setGhPollState('idle')
+    setGhPollMsg(null)
+  }
+
+  const openReport = () => {
+    setReportOpen(true)
+    setReportPreviewShown(false)
+    setReportError(null)
+  }
+
+  const submitReport = async () => {
+    if (!ghToken) return
+    setReportSubmitting(true)
+    setReportError(null)
+    const payload = buildReportPayload(
+      {
+        appVersion: APP_VERSION,
+        buildMode: STATIC_MODE ? 'Static (browser build)' : 'Server build',
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+        notes: reportNotes,
+      },
+      'bug',
+    )
+    try {
+      const res = await fetch('https://api.github.com/repos/Perchemop/Weather-Monitor/issues', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ghToken}`,
+          Accept: 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error(`GitHub API returned ${res.status}`)
+      toast.success('Report submitted.')
+      setReportOpen(false)
+    } catch (e: any) {
+      setReportError(e?.message || 'Failed to submit.')
+    } finally {
+      setReportSubmitting(false)
     }
   }
 
@@ -1905,6 +2038,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               Found a bug or an unsafe behaviour? Open a GitHub issue — the form comes pre-filled with the app
               version and browser so the report is actionable.
             </p>
+            {!githubClientId ? (
+              <p className="mt-2 text-xs text-amber-400">
+                GitHub reporting not configured (missing VITE_GITHUB_CLIENT_ID).
+              </p>
+            ) : ghToken ? (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-emerald-400">Connected as {ghLogin || 'GitHub user'}</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={openReport}
+                    className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
+                  >
+                    Report a problem in-app
+                  </button>
+                  <button
+                    type="button"
+                    onClick={disconnectGithub}
+                    className="rounded-lg bg-red-900/60 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-900"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => void startDeviceFlow()}
+                  className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
+                >
+                  Connect GitHub to submit reports
+                </button>
+                {ghUserCode && (
+                  <div className="text-xs text-slate-300">
+                    Enter code <strong>{ghUserCode}</strong> at{' '}
+                    <a
+                      href={ghVerifyUri || 'https://github.com/login/device'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline"
+                    >
+                      {ghVerifyUri || 'https://github.com/login/device'}
+                    </a>
+                  </div>
+                )}
+                {ghPollMsg && <p className="text-xs text-red-400">{ghPollMsg}</p>}
+                <p className="text-xs text-slate-500">State: {ghPollState}</p>
+              </div>
+            )}
+
             <a
               id="report-issue-link"
               href={reportIssueUrl}
@@ -1919,6 +2103,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               Nothing is sent automatically — you review and submit the report yourself. Do not include
               passwords, tokens or site locations.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Report preview modal */}
+      {reportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
+          <div className="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
+              Report preview
+            </h3>
+            <textarea
+              className="w-full h-24 bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs"
+              value={reportNotes}
+              onChange={(e) => setReportNotes(e.target.value)}
+              placeholder="Notes (editable)"
+            />
+            {(() => {
+              const payload = buildReportPayload(
+                {
+                  appVersion: APP_VERSION,
+                  buildMode: STATIC_MODE ? 'Static (browser build)' : 'Server build',
+                  userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+                  notes: reportNotes,
+                },
+                'bug',
+              )
+              // mark preview shown
+              setTimeout(() => setReportPreviewShown(true), 0)
+              return (
+                <div className="space-y-2">
+                  <div className="text-xs text-slate-400">Title: {payload.title}</div>
+                  <pre className="text-xs text-slate-300 bg-slate-950 p-3 rounded-lg max-h-64 overflow-auto whitespace-pre-wrap">
+                    {payload.body}
+                  </pre>
+                  {reportError && <p className="text-xs text-red-400">{reportError}</p>}
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setReportOpen(false)}
+                      className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void submitReport()}
+                      disabled={!reportPreviewShown || reportSubmitting}
+                      className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold disabled:opacity-50"
+                    >
+                      {reportSubmitting ? 'Submitting...' : 'Submit'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Fallback:{' '}
+                    <a href={reportIssueUrl} target="_blank" rel="noreferrer" className="underline">
+                      Open pre-filled GitHub issue
+                    </a>
+                  </p>
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}
