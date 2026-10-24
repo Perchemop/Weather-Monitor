@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Build stage — install all dependencies and produce the production bundle.
 # ---------------------------------------------------------------------------
-FROM node:22-slim AS build
+FROM node:25-slim AS build
 WORKDIR /app
 
 # Install dependencies first for better layer caching.
@@ -17,7 +17,7 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Runtime stage — minimal image with production dependencies only.
 # ---------------------------------------------------------------------------
-FROM node:22-slim AS runtime
+FROM node:25-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
