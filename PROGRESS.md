@@ -6,10 +6,20 @@ detailed history lives in `CHANGELOG.md`.
 ## Where we are
 
 - **Branch:** `opencode/ci`, with pull requests into `main` reviewed and
-  rebase-merged to keep history linear.
-- **CI:** green on every slice. The workflow now runs `format-check`, a
-  multi-OS `build-test` matrix (Windows, macOS, Linux — type-check, 88 tests,
-  production build, static build with artefact upload), and `docker`.
+  rebase-merged to keep history linear. `main` is protected: pull requests
+  required, conversation resolution required, no force-push/deletion, and the
+  CI checks required to pass (guide Part II §20.2).
+- **CI:** green on every slice. The workflow runs `format-check`,
+  `security-compliance` (licence policy + CycloneDX SBOM), `dependency-review`,
+  a multi-OS `build-test` matrix (Windows, macOS, Linux — type-check, 88 tests,
+  production build, static build with artefact upload), and `docker`. CodeQL
+  (SAST) runs on push/PR/weekly; Dependabot covers npm, actions and Docker.
+  Actions are pinned to commit SHAs.
+- **Open-source readiness (guide Part II):** community, security, accessibility,
+  governance and legal files are in place (`CODE_OF_CONDUCT`, `SECURITY`,
+  `ACCESSIBILITY`, `VISION`, `GOVERNANCE`, `CONTRIBUTORS`, `CITATION.cff`),
+  issue templates and contributor labels exist, and Open-Meteo data attribution
+  (CC BY 4.0) is shown in the UI footer and map.
 - **Releases:** `release.yml` turns `v*` tags into GitHub Releases with
   checksummed artefacts and CHANGELOG-derived notes; `v0.1.0` is the first
   tagged release. The app checks for updates in Settings → About.

@@ -49,12 +49,21 @@ Automated verification runs in GitHub Actions (`npm test`): 59 unit/system tests
 | R-35  | Release path: tag → artefacts + checksums + changelog notes     | `.github/workflows/release.yml`                                                                                        | release workflow run for `v0.1.0`           | Met    |
 | R-36  | PR template, CONTRIBUTING, ROADMAP, brand doc, research gate    | `.github/PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, `ROADMAP.md`, `docs/design/brand.md`, `docs/research/README.md` | files + review                              | Met    |
 
+| R-37 | Open-source project files: CoC, SECURITY, ACCESSIBILITY, VISION, GOVERNANCE, CONTRIBUTORS, CITATION | root docs | files present; §16 review | Met |
+| R-38 | Issue/PR templates, contributor labels, a11y PR checklist | `.github/ISSUE_TEMPLATE/*`, `.github/PULL_REQUEST_TEMPLATE.md` | files present | Met |
+| R-39 | SAST (CodeQL), SCA (Dependabot + dependency-review), secret scanning | `.github/workflows/codeql.yml`, `.github/dependabot.yml`, repo settings | CI green on every PR | Met |
+| R-40 | Licence policy check + SBOM in CI | `scripts/check-licences.mjs`, `security-compliance` job | CI green; CycloneDX artefact | Met |
+| R-41 | Protected `main` with required status checks | branch protection on `main` | API-verified settings | Met |
+| R-42 | Data/asset attribution (Open-Meteo CC BY 4.0, OSM) and AI provenance | `ATTRIBUTION.md`, UI footer, map | code + docs | Met |
+| R-43 | Git identity enforcement `"<App Name> Dev" <dev@example.com>` | `ci.sh`, PR template, `docs/development.md` | ci.sh asserts before commit | Met |
+| R-44 | Pinned build inputs (action SHAs) | `.github/workflows/*.yml` | all `uses:` pinned to commit SHAs | Met |
+
 ## Gaps / planned
 
-- No browser-level (DOM) test harness; UI behaviour is verified by type-check,
-  production build and the manual QC checklist in `docs/qc/`.
-- The format check is a hygiene script (line endings, tabs, conflict markers,
-  final newline, trailing whitespace on added lines) rather than an opinionated
-  formatter; adopting Prettier would require a one-off whole-repository reformat.
-- Container images are built for a single architecture; a multi-arch matrix is
-  not yet configured.
+- No browser-level (DOM) test harness (Playwright); UI behaviour is verified by
+  type-check, production build and the manual QC checklist in `docs/qc/`. Planned
+  as research slice 4 of 5.
+- Container images are now built multi-arch (`linux/amd64` + `linux/arm64`) on
+  tags; PR verification stays build-only.
+- Repository secret-scanning validity checks and non-provider patterns need
+  GitHub Advanced Security and remain disabled (platform limitation).
