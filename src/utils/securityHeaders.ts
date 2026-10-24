@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction } from 'express'
 
 /**
  * Baseline security headers for the local-first monitoring enclave.
@@ -11,18 +11,18 @@ import { Request, Response, NextFunction } from 'express';
 
 export interface SecurityHeaderOptions {
   /** When true, emit HSTS. Enable only when the app is served over HTTPS. */
-  enableHsts?: boolean;
+  enableHsts?: boolean
   /**
    * When true, relaxes the CSP for the Vite dev server (inline React Refresh
    * preamble and the HMR websocket). Never enable this in production.
    */
-  dev?: boolean;
+  dev?: boolean
 }
 
 function buildCsp(dev: boolean): string {
-  const scriptSrc = dev ? "script-src 'self' 'unsafe-inline'" : "script-src 'self'";
-  const connectSrc = dev ? "connect-src 'self' ws: wss:" : "connect-src 'self'";
-  const styleSrc = "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com";
+  const scriptSrc = dev ? "script-src 'self' 'unsafe-inline'" : "script-src 'self'"
+  const connectSrc = dev ? "connect-src 'self' ws: wss:" : "connect-src 'self'"
+  const styleSrc = "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"
 
   return [
     "default-src 'self'",
@@ -39,29 +39,29 @@ function buildCsp(dev: boolean): string {
     "worker-src 'self'",
     "manifest-src 'self'",
     "frame-src 'none'",
-    "form-action 'self'"
-  ].join('; ');
+    "form-action 'self'",
+  ].join('; ')
 }
 
 export function securityHeaders(options: SecurityHeaderOptions = {}) {
-  const { enableHsts = false, dev = false } = options;
-  const csp = buildCsp(dev);
+  const { enableHsts = false, dev = false } = options
+  const csp = buildCsp(dev)
 
   return (_req: Request, res: Response, next: NextFunction): void => {
-    res.setHeader('Content-Security-Policy', csp);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()');
-    res.removeHeader('X-Powered-By');
+    res.setHeader('Content-Security-Policy', csp)
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('Referrer-Policy', 'no-referrer')
+    res.setHeader('X-Permitted-Cross-Domain-Policies', 'none')
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()')
+    res.removeHeader('X-Powered-By')
 
     if (enableHsts) {
-      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     }
 
-    next();
-  };
+    next()
+  }
 }

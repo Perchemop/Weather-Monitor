@@ -1,17 +1,17 @@
-import React from 'react';
-import { ShieldAlert, AlertTriangle, Zap, CheckCircle2, X } from 'lucide-react';
-import { AlertItem } from '../types';
+import React from 'react'
+import { ShieldAlert, AlertTriangle, Zap, CheckCircle2, X } from 'lucide-react'
+import { AlertItem } from '../types'
 
 interface ActiveAlertsPanelProps {
-  alerts: AlertItem[];
-  onDismissAlert?: (id: string) => void;
-  onViewAllAlerts?: () => void;
+  alerts: AlertItem[]
+  onDismissAlert?: (id: string) => void
+  onViewAllAlerts?: () => void
 }
 
 const ActiveAlertsPanelComponent: React.FC<ActiveAlertsPanelProps> = ({
   alerts,
   onDismissAlert,
-  onViewAllAlerts
+  onViewAllAlerts,
 }) => {
   return (
     <div id="active-alerts-panel" className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-5">
@@ -52,24 +52,20 @@ const ActiveAlertsPanelComponent: React.FC<ActiveAlertsPanelProps> = ({
       ) : (
         <div className="mt-4 space-y-2.5">
           {alerts.map((alert) => {
-            const isCritical = alert.severity === 'CRITICAL';
-            const isHigh = alert.severity === 'HIGH';
+            const isCritical = alert.severity === 'CRITICAL'
+            const isHigh = alert.severity === 'HIGH'
 
             const accent = isCritical
               ? 'border-red-500/60 bg-red-950/30'
               : isHigh
-              ? 'border-orange-500/60 bg-orange-950/25'
-              : 'border-amber-500/50 bg-amber-950/20';
+                ? 'border-orange-500/60 bg-orange-950/25'
+                : 'border-amber-500/50 bg-amber-950/20'
             const chip = isCritical
               ? 'bg-red-500 text-white'
               : isHigh
-              ? 'bg-orange-500 text-slate-950'
-              : 'bg-amber-400 text-slate-950';
-            const iconColor = isCritical
-              ? 'text-red-400'
-              : isHigh
-              ? 'text-orange-400'
-              : 'text-amber-400';
+                ? 'bg-orange-500 text-slate-950'
+                : 'bg-amber-400 text-slate-950'
+            const iconColor = isCritical ? 'text-red-400' : isHigh ? 'text-orange-400' : 'text-amber-400'
 
             return (
               <div
@@ -126,12 +122,12 @@ const ActiveAlertsPanelComponent: React.FC<ActiveAlertsPanelProps> = ({
                   )}
                 </div>
               </div>
-            );
+            )
           })}
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export const ActiveAlertsPanel = React.memo(ActiveAlertsPanelComponent);
+export const ActiveAlertsPanel = React.memo(ActiveAlertsPanelComponent)

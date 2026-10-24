@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { Sun } from 'lucide-react';
+import React, { useEffect, useState } from 'react'
+import { Sun } from 'lucide-react'
 import {
   isActive,
   keepAwakePreference,
   onWakeLockChange,
   setKeepAwake,
-  wakeLockSupported
-} from '../utils/wakeLock';
+  wakeLockSupported,
+} from '../utils/wakeLock'
 
 interface KeepAwakeToggleProps {
   /** Renders a full-width row (mobile menu) instead of a compact icon button. */
-  fullWidth?: boolean;
+  fullWidth?: boolean
 }
 
 /**
@@ -19,26 +19,26 @@ interface KeepAwakeToggleProps {
  * (which the browser can drop at any time) rather than just the preference.
  */
 export const KeepAwakeToggle: React.FC<KeepAwakeToggleProps> = ({ fullWidth = false }) => {
-  const supported = wakeLockSupported();
-  const [enabled, setEnabled] = useState<boolean>(() => keepAwakePreference());
-  const [active, setActive] = useState<boolean>(() => isActive());
-  const [busy, setBusy] = useState(false);
+  const supported = wakeLockSupported()
+  const [enabled, setEnabled] = useState<boolean>(() => keepAwakePreference())
+  const [active, setActive] = useState<boolean>(() => isActive())
+  const [busy, setBusy] = useState(false)
 
-  useEffect(() => onWakeLockChange(setActive), []);
+  useEffect(() => onWakeLockChange(setActive), [])
 
-  if (!supported) return null;
+  if (!supported) return null
 
   const toggle = async () => {
-    if (busy) return;
-    setBusy(true);
-    const next = !enabled;
-    setEnabled(next);
-    await setKeepAwake(next);
-    setActive(isActive());
-    setBusy(false);
-  };
+    if (busy) return
+    setBusy(true)
+    const next = !enabled
+    setEnabled(next)
+    await setKeepAwake(next)
+    setActive(isActive())
+    setBusy(false)
+  }
 
-  const label = active ? 'Screen awake' : enabled ? 'Reconnecting…' : 'Keep awake';
+  const label = active ? 'Screen awake' : enabled ? 'Reconnecting…' : 'Keep awake'
 
   if (fullWidth) {
     return (
@@ -56,7 +56,7 @@ export const KeepAwakeToggle: React.FC<KeepAwakeToggleProps> = ({ fullWidth = fa
         <Sun className={`w-4 h-4 ${active ? 'text-amber-400' : 'text-slate-400'}`} />
         <span>{label}</span>
       </button>
-    );
+    )
   }
 
   return (
@@ -75,5 +75,5 @@ export const KeepAwakeToggle: React.FC<KeepAwakeToggleProps> = ({ fullWidth = fa
       <Sun className={`w-3.5 h-3.5 ${active ? 'text-amber-400' : 'text-slate-400'}`} />
       <span className="hidden lg:inline">{label}</span>
     </button>
-  );
-};
+  )
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'
 import {
   Settings,
   Save,
@@ -23,24 +23,24 @@ import {
   Monitor,
   Info,
   ExternalLink,
-  CircleAlert
-} from 'lucide-react';
-import { OwnerSettings, RiskThresholds, SecretsStatus, SessionInfo, UserRole } from '../types';
-import { useToast } from './ToastProvider';
-import { apiFetch } from '../utils/api';
-import { STATIC_MODE } from '../static/mode';
-import { requestNotificationPermission } from '../static/notifications';
-import { emailRelayConfigured } from '../static/emailRelay';
-import { APP_VERSION } from '../version';
-import { resolveUpdateState, UpdateState } from '../utils/updateCheck';
+  CircleAlert,
+} from 'lucide-react'
+import { OwnerSettings, RiskThresholds, SecretsStatus, SessionInfo, UserRole } from '../types'
+import { useToast } from './ToastProvider'
+import { apiFetch } from '../utils/api'
+import { STATIC_MODE } from '../static/mode'
+import { requestNotificationPermission } from '../static/notifications'
+import { emailRelayConfigured } from '../static/emailRelay'
+import { APP_VERSION } from '../version'
+import { resolveUpdateState, UpdateState } from '../utils/updateCheck'
 
 interface SettingsViewProps {
-  onSettingsSaved?: () => void;
+  onSettingsSaved?: () => void
   /**
    * The signed-in role. Only OWNERs may change site configuration; every role
    * owns its own password, MFA, sessions and push preferences.
    */
-  userRole?: UserRole;
+  userRole?: UserRole
 }
 
 /**
@@ -48,452 +48,462 @@ interface SettingsViewProps {
  * is presentation-only; the raw UA is never used for any security decision.
  */
 function describeUserAgent(ua: string | null): string {
-  if (!ua) return 'Unknown device';
-  const browser =
-    /Edg\//.test(ua) ? 'Edge'
-    : /OPR\/|Opera/.test(ua) ? 'Opera'
-    : /Firefox\//.test(ua) ? 'Firefox'
-    : /Chrome\//.test(ua) ? 'Chrome'
-    : /Safari\//.test(ua) ? 'Safari'
-    : 'Browser';
-  const os =
-    /Windows/.test(ua) ? 'Windows'
-    : /Android/.test(ua) ? 'Android'
-    : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
-    : /Mac OS X/.test(ua) ? 'macOS'
-    : /Linux/.test(ua) ? 'Linux'
-    : '';
-  return os ? `${browser} on ${os}` : browser;
+  if (!ua) return 'Unknown device'
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /OPR\/|Opera/.test(ua)
+      ? 'Opera'
+      : /Firefox\//.test(ua)
+        ? 'Firefox'
+        : /Chrome\//.test(ua)
+          ? 'Chrome'
+          : /Safari\//.test(ua)
+            ? 'Safari'
+            : 'Browser'
+  const os = /Windows/.test(ua)
+    ? 'Windows'
+    : /Android/.test(ua)
+      ? 'Android'
+      : /iPhone|iPad|iPod/.test(ua)
+        ? 'iOS'
+        : /Mac OS X/.test(ua)
+          ? 'macOS'
+          : /Linux/.test(ua)
+            ? 'Linux'
+            : ''
+  return os ? `${browser} on ${os}` : browser
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, userRole = 'OWNER' }) => {
-  const toast = useToast();
-  const isOwner = userRole === 'OWNER';
-  const [activeTab, setActiveTab] = useState<'general' | 'thresholds' | 'monitoring' | 'smtp' | 'storage' | 'security' | 'about'>(
-    isOwner ? 'general' : 'security'
-  );
-  const [settings, setSettings] = useState<OwnerSettings | null>(null);
-  const [smtpConfigured, setSmtpConfigured] = useState(false);
-  const [secretsStatus, setSecretsStatus] = useState<SecretsStatus | null>(null);
-  const [retentionRunning, setRetentionRunning] = useState(false);
-  const [retentionMessage, setRetentionMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isTestingEmail, setIsTestingEmail] = useState(false);
-  const [backups, setBackups] = useState<{ filename: string; size: number; createdAt: string }[]>([]);
-  const [creatingBackup, setCreatingBackup] = useState(false);
+  const toast = useToast()
+  const isOwner = userRole === 'OWNER'
+  const [activeTab, setActiveTab] = useState<
+    'general' | 'thresholds' | 'monitoring' | 'smtp' | 'storage' | 'security' | 'about'
+  >(isOwner ? 'general' : 'security')
+  const [settings, setSettings] = useState<OwnerSettings | null>(null)
+  const [smtpConfigured, setSmtpConfigured] = useState(false)
+  const [secretsStatus, setSecretsStatus] = useState<SecretsStatus | null>(null)
+  const [retentionRunning, setRetentionRunning] = useState(false)
+  const [retentionMessage, setRetentionMessage] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isTestingEmail, setIsTestingEmail] = useState(false)
+  const [backups, setBackups] = useState<{ filename: string; size: number; createdAt: string }[]>([])
+  const [creatingBackup, setCreatingBackup] = useState(false)
 
   // ----------------- About / update check (guide §7.2) -----------------
   // Fails soft offline, caches for an hour so we never hammer the Releases
   // API, and reports honestly when the version cannot be determined.
-  const [updateState, setUpdateState] = useState<UpdateState | null>(null);
-  const [updateCheckedAt, setUpdateCheckedAt] = useState<Date | null>(null);
-  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateState, setUpdateState] = useState<UpdateState | null>(null)
+  const [updateCheckedAt, setUpdateCheckedAt] = useState<Date | null>(null)
+  const [updateChecking, setUpdateChecking] = useState(false)
 
   const runUpdateCheck = React.useCallback(async (force: boolean) => {
-    const CACHE_KEY = 'cwm.update-check.v1';
-    const CACHE_TTL_MS = 60 * 60 * 1000;
+    const CACHE_KEY = 'cwm.update-check.v1'
+    const CACHE_TTL_MS = 60 * 60 * 1000
     if (!force) {
       try {
-        const raw = sessionStorage.getItem(CACHE_KEY);
+        const raw = sessionStorage.getItem(CACHE_KEY)
         if (raw) {
-          const cached = JSON.parse(raw) as { checkedAt: number; state: UpdateState };
+          const cached = JSON.parse(raw) as { checkedAt: number; state: UpdateState }
           if (typeof cached?.checkedAt === 'number' && Date.now() - cached.checkedAt < CACHE_TTL_MS) {
-            setUpdateState(cached.state);
-            setUpdateCheckedAt(new Date(cached.checkedAt));
-            return;
+            setUpdateState(cached.state)
+            setUpdateCheckedAt(new Date(cached.checkedAt))
+            return
           }
         }
       } catch {
         // Corrupt cache is equivalent to no cache.
       }
     }
-    setUpdateChecking(true);
+    setUpdateChecking(true)
     try {
       const res = await fetch('https://api.github.com/repos/Perchemop/Weather-Monitor/releases/latest', {
-        headers: { Accept: 'application/vnd.github+json' }
-      });
-      if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
-      const data = (await res.json()) as { tag_name?: string; html_url?: string };
-      const state = resolveUpdateState(APP_VERSION, data.tag_name ?? null, data.html_url ?? null);
-      setUpdateState(state);
-      setUpdateCheckedAt(new Date());
+        headers: { Accept: 'application/vnd.github+json' },
+      })
+      if (!res.ok) throw new Error(`GitHub API returned ${res.status}`)
+      const data = (await res.json()) as { tag_name?: string; html_url?: string }
+      const state = resolveUpdateState(APP_VERSION, data.tag_name ?? null, data.html_url ?? null)
+      setUpdateState(state)
+      setUpdateCheckedAt(new Date())
       try {
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ checkedAt: Date.now(), state }));
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ checkedAt: Date.now(), state }))
       } catch {
         // Storage unavailable (private mode) — the check simply is not cached.
       }
     } catch {
-      setUpdateState({ status: 'unknown', latestVersion: null, url: null });
-      setUpdateCheckedAt(new Date());
+      setUpdateState({ status: 'unknown', latestVersion: null, url: null })
+      setUpdateCheckedAt(new Date())
     } finally {
-      setUpdateChecking(false);
+      setUpdateChecking(false)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    void runUpdateCheck(false);
-  }, [runUpdateCheck]);
+    void runUpdateCheck(false)
+  }, [runUpdateCheck])
 
   const reportIssueUrl = `https://github.com/Perchemop/Weather-Monitor/issues/new?title=${encodeURIComponent(
-    '[bug] '
+    '[bug] ',
   )}&body=${encodeURIComponent(
-    `### Description\n\n\n### What happened vs what you expected\n\n\n### Environment\n- App version: ${APP_VERSION}\n- Mode: ${STATIC_MODE ? 'Static (browser build)' : 'Server build'}\n- Browser: ${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}\n\n> Please review before submitting and remove anything you do not want to publish.\n> Do not include passwords, tokens, or site locations.`
-  )}`;
+    `### Description\n\n\n### What happened vs what you expected\n\n\n### Environment\n- App version: ${APP_VERSION}\n- Mode: ${STATIC_MODE ? 'Static (browser build)' : 'Server build'}\n- Browser: ${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}\n\n> Please review before submitting and remove anything you do not want to publish.\n> Do not include passwords, tokens, or site locations.`,
+  )}`
 
   // Confirmation modal state (replaces window.confirm)
   const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void;
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
   }>({
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {}
-  });
+    onConfirm: () => {},
+  })
 
   // Password change form
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [newEmail, setNewEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [newEmail, setNewEmail] = useState('')
 
   // Multi-factor authentication state
-  const [mfaEnabled, setMfaEnabled] = useState(false);
-  const [mfaSetupSecret, setMfaSetupSecret] = useState<string | null>(null);
-  const [mfaOtpauthUrl, setMfaOtpauthUrl] = useState<string | null>(null);
-  const [mfaCode, setMfaCode] = useState('');
-  const [mfaBusy, setMfaBusy] = useState(false);
-  const [mfaDisablePassword, setMfaDisablePassword] = useState('');
+  const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [mfaSetupSecret, setMfaSetupSecret] = useState<string | null>(null)
+  const [mfaOtpauthUrl, setMfaOtpauthUrl] = useState<string | null>(null)
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaBusy, setMfaBusy] = useState(false)
+  const [mfaDisablePassword, setMfaDisablePassword] = useState('')
 
   // Web push notification state
-  const [pushSupported, setPushSupported] = useState(false);
-  const [pushSubscribed, setPushSubscribed] = useState(false);
-  const [pushBusy, setPushBusy] = useState(false);
-  const [pushConfigured, setPushConfigured] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false)
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushConfigured, setPushConfigured] = useState(false)
 
   // Native browser notification permission (the static build's alert channel).
   const [notifPermission, setNotifPermission] = useState<string>(() =>
-    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
-  );
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+  )
 
   // Per-user push delivery preferences (server build).
   const [pushPrefs, setPushPrefs] = useState<{
-    enabled: boolean;
-    minSeverity: string;
-    notifyRecovery: boolean;
-  } | null>(null);
-  const [prefsSaving, setPrefsSaving] = useState(false);
+    enabled: boolean
+    minSeverity: string
+    notifyRecovery: boolean
+  } | null>(null)
+  const [prefsSaving, setPrefsSaving] = useState(false)
 
   // Active session (device) management state
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [sessionsBusy, setSessionsBusy] = useState(false);
+  const [sessions, setSessions] = useState<SessionInfo[]>([])
+  const [sessionsBusy, setSessionsBusy] = useState(false)
 
   // Authorized API helper (cookie auth + CSRF handled centrally)
   useEffect(() => {
-    fetchSettings();
+    fetchSettings()
     // Backups are an OWNER-only server resource; requesting them as another
     // role would only produce noise.
-    if (isOwner) fetchBackups();
-    fetchMfaStatus();
-    detectPushState();
-    fetchPushPreferences();
-    fetchSessions();
-  }, []);
+    if (isOwner) fetchBackups()
+    fetchMfaStatus()
+    detectPushState()
+    fetchPushPreferences()
+    fetchSessions()
+  }, [])
 
   // If the account is not an owner, keep it on the self-service Security tab.
   useEffect(() => {
-    if (!isOwner && activeTab !== 'security') setActiveTab('security');
-  }, [isOwner, activeTab]);
+    if (!isOwner && activeTab !== 'security') setActiveTab('security')
+  }, [isOwner, activeTab])
   const fetchSettings = async () => {
     try {
-      const res = await apiFetch('/api/settings');
+      const res = await apiFetch('/api/settings')
       if (res.ok) {
-        const data = await res.json();
-        setSettings(data.settings);
-        setSmtpConfigured(data.smtpConfigured);
-        setNewEmail(data.settings.ownerEmail);
+        const data = await res.json()
+        setSettings(data.settings)
+        setSmtpConfigured(data.smtpConfigured)
+        setNewEmail(data.settings.ownerEmail)
       }
 
-      const secRes = await apiFetch('/api/secrets/status');
+      const secRes = await apiFetch('/api/secrets/status')
       if (secRes.ok) {
-        const secData = await secRes.json();
-        setSecretsStatus(secData);
+        const secData = await secRes.json()
+        setSecretsStatus(secData)
       }
     } catch {
-      toast.error('Failed to load system settings.');
+      toast.error('Failed to load system settings.')
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   const fetchBackups = async () => {
     try {
-      const res = await apiFetch('/api/data/backup/list');
+      const res = await apiFetch('/api/data/backup/list')
       if (res.ok) {
-        const data = await res.json();
-        setBackups(data.backups || []);
+        const data = await res.json()
+        setBackups(data.backups || [])
       }
     } catch {}
-  };
+  }
 
   const handleCreateBackup = async () => {
-    setCreatingBackup(true);
+    setCreatingBackup(true)
     try {
-      const res = await apiFetch('/api/data/backup/create', { method: 'POST' });
-      const data = await res.json();
+      const res = await apiFetch('/api/data/backup/create', { method: 'POST' })
+      const data = await res.json()
       if (res.ok) {
-        toast.success(`Backup created: ${data.filename}`);
-        fetchBackups();
+        toast.success(`Backup created: ${data.filename}`)
+        fetchBackups()
       } else {
-        toast.error(data.error || 'Failed to create backup.');
+        toast.error(data.error || 'Failed to create backup.')
       }
     } catch {
-      toast.error('Connection error creating backup.');
+      toast.error('Connection error creating backup.')
     } finally {
-      setCreatingBackup(false);
+      setCreatingBackup(false)
     }
-  };
+  }
 
   const handleRunRetention = async () => {
-    setRetentionRunning(true);
-    setRetentionMessage(null);
+    setRetentionRunning(true)
+    setRetentionMessage(null)
     try {
-      const res = await apiFetch('/api/data/retention/run', { method: 'POST' });
-      const data = await res.json();
+      const res = await apiFetch('/api/data/retention/run', { method: 'POST' })
+      const data = await res.json()
       if (res.ok) {
-        const msg = `Pruned: ${data.result.observationsDeleted} observations, ${data.result.alertsPruned} alerts, ${data.result.snapshotsDeleted} snapshots.`;
-        setRetentionMessage(msg);
-        toast.success(msg);
+        const msg = `Pruned: ${data.result.observationsDeleted} observations, ${data.result.alertsPruned} alerts, ${data.result.snapshotsDeleted} snapshots.`
+        setRetentionMessage(msg)
+        toast.success(msg)
       } else {
-        toast.error(data.error || 'Failed to run retention cleanup.');
+        toast.error(data.error || 'Failed to run retention cleanup.')
       }
     } catch {
-      toast.error('Failed to execute retention cleanup.');
+      toast.error('Failed to execute retention cleanup.')
     } finally {
-      setRetentionRunning(false);
+      setRetentionRunning(false)
     }
-  };
+  }
 
   const handleSaveSettings = async () => {
-    if (!settings) return;
-    setIsSaving(true);
+    if (!settings) return
+    setIsSaving(true)
     try {
       const res = await apiFetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
-      });
+        body: JSON.stringify(settings),
+      })
       if (res.ok) {
-        toast.success('Owner configuration and thresholds updated.');
-        if (onSettingsSaved) onSettingsSaved();
+        toast.success('Owner configuration and thresholds updated.')
+        if (onSettingsSaved) onSettingsSaved()
       } else {
-        toast.error('Failed to save settings.');
+        toast.error('Failed to save settings.')
       }
     } catch {
-      toast.error('Network error saving settings.');
+      toast.error('Network error saving settings.')
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
-  };
+  }
 
   const handleRestoreDefaultsConfirm = () => {
     setConfirmModal({
       isOpen: true,
       title: 'Restore Default Thresholds?',
-      message: 'This will reset all wind, gust, rain, heat, and UV safety limits and monitoring intervals back to the construction standard baseline.',
+      message:
+        'This will reset all wind, gust, rain, heat, and UV safety limits and monitoring intervals back to the construction standard baseline.',
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }))
         try {
-          const res = await apiFetch('/api/settings/restore-defaults', { method: 'POST' });
+          const res = await apiFetch('/api/settings/restore-defaults', { method: 'POST' })
           if (res.ok) {
-            await fetchSettings();
-            toast.success('Safety thresholds restored to system defaults.');
-            if (onSettingsSaved) onSettingsSaved();
+            await fetchSettings()
+            toast.success('Safety thresholds restored to system defaults.')
+            if (onSettingsSaved) onSettingsSaved()
           } else {
-            toast.error('Failed to restore default settings.');
+            toast.error('Failed to restore default settings.')
           }
         } catch {
-          toast.error('Connection error restoring defaults.');
+          toast.error('Connection error restoring defaults.')
         }
-      }
-    });
-  };
+      },
+    })
+  }
 
   const handleClearDataConfirm = (target: 'cache' | 'history' | 'all') => {
     const titles = {
       cache: 'Clear Cached Forecast Data?',
       history: 'Wipe Historical Observations?',
-      all: 'Complete Database Wipe?'
-    };
+      all: 'Complete Database Wipe?',
+    }
     const messages = {
       cache: 'Cached forecast snapshots will be purged. Real-time data will re-fetch on the next cycle.',
-      history: 'All past logged weather observations in SQLite will be permanently erased. Active settings and alerts will be kept.',
-      all: 'ALL observations, alerts, delivery audits, and snapshots will be permanently wiped. This action is irreversible.'
-    };
+      history:
+        'All past logged weather observations in SQLite will be permanently erased. Active settings and alerts will be kept.',
+      all: 'ALL observations, alerts, delivery audits, and snapshots will be permanently wiped. This action is irreversible.',
+    }
 
     setConfirmModal({
       isOpen: true,
       title: titles[target],
       message: messages[target],
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }))
         try {
           const res = await apiFetch('/api/data/clear', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target })
-          });
+            body: JSON.stringify({ target }),
+          })
           if (res.ok) {
-            toast.success(`Data cleared: ${target.toUpperCase()}`);
-            if (onSettingsSaved) onSettingsSaved();
+            toast.success(`Data cleared: ${target.toUpperCase()}`)
+            if (onSettingsSaved) onSettingsSaved()
           } else {
-            toast.error('Failed to clear data.');
+            toast.error('Failed to clear data.')
           }
         } catch {
-          toast.error('Error clearing data.');
+          toast.error('Error clearing data.')
         }
-      }
-    });
-  };
+      },
+    })
+  }
 
   const handleTestEmail = async () => {
-    if (!settings?.ownerEmail) return;
-    setIsTestingEmail(true);
-    toast.info('Dispatching test notification email...');
+    if (!settings?.ownerEmail) return
+    setIsTestingEmail(true)
+    toast.info('Dispatching test notification email...')
     try {
       const res = await apiFetch('/api/email/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: settings.ownerEmail })
-      });
-      const data = await res.json();
+        body: JSON.stringify({ email: settings.ownerEmail }),
+      })
+      const data = await res.json()
       if (res.ok) {
-        toast.success(data.message || 'Test email dispatched successfully.');
+        toast.success(data.message || 'Test email dispatched successfully.')
       } else {
-        toast.error(data.error || 'Failed to dispatch test email.');
+        toast.error(data.error || 'Failed to dispatch test email.')
       }
     } catch (err: any) {
-      toast.error(err?.message || 'SMTP connection failed.');
+      toast.error(err?.message || 'SMTP connection failed.')
     } finally {
-      setIsTestingEmail(false);
+      setIsTestingEmail(false)
     }
-  };
+  }
 
   const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     if (newPassword !== confirmPassword) {
-      toast.error('New passwords do not match.');
-      return;
+      toast.error('New passwords do not match.')
+      return
     }
     if (newPassword.length < 10 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-      toast.error('Password must be at least 10 characters and include a letter and a number.');
-      return;
+      toast.error('Password must be at least 10 characters and include a letter and a number.')
+      return
     }
 
     try {
       const res = await apiFetch('/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword, newPassword, newEmail })
-      });
-      const data = await res.json();
+        body: JSON.stringify({ currentPassword, newPassword, newEmail }),
+      })
+      const data = await res.json()
       if (res.ok) {
-        toast.success('Master supervisor password updated successfully.');
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
+        toast.success('Master supervisor password updated successfully.')
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
       } else {
-        toast.error(data.error || 'Failed to update master password.');
+        toast.error(data.error || 'Failed to update master password.')
       }
     } catch {
-      toast.error('Failed to update password.');
+      toast.error('Failed to update password.')
     }
-  };
+  }
 
   // ---- Web push notification state detection ----
   const detectPushState = async () => {
     const supported =
-      typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window;
-    setPushSupported(supported);
+      typeof navigator !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window
+    setPushSupported(supported)
     try {
-      const statusRes = await apiFetch('/api/push/status');
+      const statusRes = await apiFetch('/api/push/status')
       if (statusRes.ok) {
-        const data = await statusRes.json();
-        setPushConfigured(Boolean(data.configured));
+        const data = await statusRes.json()
+        setPushConfigured(Boolean(data.configured))
       }
     } catch {}
     if (supported) {
       try {
-        const reg = await navigator.serviceWorker.ready;
-        const sub = await reg.pushManager.getSubscription();
-        setPushSubscribed(Boolean(sub));
+        const reg = await navigator.serviceWorker.ready
+        const sub = await reg.pushManager.getSubscription()
+        setPushSubscribed(Boolean(sub))
       } catch {}
     }
-  };
+  }
 
   // ---- Per-user push preferences ----
   const fetchPushPreferences = async () => {
     try {
-      const res = await apiFetch('/api/push/preferences');
+      const res = await apiFetch('/api/push/preferences')
       if (res.ok) {
-        const data = await res.json();
+        const data = await res.json()
         if (data.preferences) {
           setPushPrefs({
             enabled: Boolean(data.preferences.enabled),
             minSeverity: data.preferences.minSeverity || 'LOW',
-            notifyRecovery: Boolean(data.preferences.notifyRecovery)
-          });
+            notifyRecovery: Boolean(data.preferences.notifyRecovery),
+          })
         }
       }
     } catch {}
-  };
+  }
 
   const handleSavePushPreferences = async (next: {
-    enabled: boolean;
-    minSeverity: string;
-    notifyRecovery: boolean;
+    enabled: boolean
+    minSeverity: string
+    notifyRecovery: boolean
   }) => {
-    const previous = pushPrefs;
-    setPushPrefs(next);
-    setPrefsSaving(true);
+    const previous = pushPrefs
+    setPushPrefs(next)
+    setPrefsSaving(true)
     try {
       const res = await apiFetch('/api/push/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(next)
-      });
+        body: JSON.stringify(next),
+      })
       if (res.ok) {
-        toast.success('Notification preferences saved.');
+        toast.success('Notification preferences saved.')
       } else {
-        setPushPrefs(previous);
-        toast.error('Failed to save notification preferences.');
+        setPushPrefs(previous)
+        toast.error('Failed to save notification preferences.')
       }
     } catch {
-      setPushPrefs(previous);
-      toast.error('Failed to save notification preferences.');
+      setPushPrefs(previous)
+      toast.error('Failed to save notification preferences.')
     } finally {
-      setPrefsSaving(false);
+      setPrefsSaving(false)
     }
-  };
+  }
 
   // ---- Active session (device) management ----
   const fetchSessions = async () => {
     try {
-      const res = await apiFetch('/api/auth/sessions');
+      const res = await apiFetch('/api/auth/sessions')
       if (res.ok) {
-        const data = await res.json();
-        setSessions(Array.isArray(data.sessions) ? data.sessions : []);
+        const data = await res.json()
+        setSessions(Array.isArray(data.sessions) ? data.sessions : [])
       }
     } catch {}
-  };
+  }
 
   const handleRevokeSession = (session: SessionInfo) => {
     if (session.current) {
-      toast.error('Use “Sign out” to end the current session.');
-      return;
+      toast.error('Use “Sign out” to end the current session.')
+      return
     }
     setConfirmModal({
       isOpen: true,
@@ -501,24 +511,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
       message:
         'The selected device will be signed out immediately and must authenticate again to regain access.',
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-        setSessionsBusy(true);
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+        setSessionsBusy(true)
         try {
-          const res = await apiFetch(`/api/auth/sessions/${session.id}`, { method: 'DELETE' });
+          const res = await apiFetch(`/api/auth/sessions/${session.id}`, { method: 'DELETE' })
           if (res.ok) {
-            toast.success('Device session revoked.');
-            await fetchSessions();
+            toast.success('Device session revoked.')
+            await fetchSessions()
           } else {
-            toast.error('Failed to revoke session.');
+            toast.error('Failed to revoke session.')
           }
         } catch {
-          toast.error('Connection error revoking session.');
+          toast.error('Connection error revoking session.')
         } finally {
-          setSessionsBusy(false);
+          setSessionsBusy(false)
         }
-      }
-    });
-  };
+      },
+    })
+  }
 
   const handleRevokeAllSessions = () => {
     setConfirmModal({
@@ -527,193 +537,194 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
       message:
         'Every session for your account — including this one — will be revoked. You will need to sign in again.',
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-        setSessionsBusy(true);
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+        setSessionsBusy(true)
         try {
-          const res = await apiFetch('/api/auth/logout-all', { method: 'POST' });
+          const res = await apiFetch('/api/auth/logout-all', { method: 'POST' })
           if (res.ok) {
-            window.location.reload();
+            window.location.reload()
           } else {
-            toast.error('Failed to revoke sessions.');
+            toast.error('Failed to revoke sessions.')
           }
         } catch {
-          toast.error('Connection error revoking sessions.');
+          toast.error('Connection error revoking sessions.')
         } finally {
-          setSessionsBusy(false);
+          setSessionsBusy(false)
         }
-      }
-    });
-  };
+      },
+    })
+  }
 
   // ---- Multi-factor authentication handlers ----
-  const fetchMfaStatus = async () => {    try {
-      const res = await apiFetch('/api/auth/mfa/status');
+  const fetchMfaStatus = async () => {
+    try {
+      const res = await apiFetch('/api/auth/mfa/status')
       if (res.ok) {
-        const data = await res.json();
-        setMfaEnabled(Boolean(data.enabled));
+        const data = await res.json()
+        setMfaEnabled(Boolean(data.enabled))
       }
     } catch {}
-  };
+  }
 
   const handleStartMfaSetup = async () => {
-    setMfaBusy(true);
+    setMfaBusy(true)
     try {
-      const res = await apiFetch('/api/auth/mfa/setup', { method: 'POST' });
-      const data = await res.json();
+      const res = await apiFetch('/api/auth/mfa/setup', { method: 'POST' })
+      const data = await res.json()
       if (res.ok) {
-        setMfaSetupSecret(data.secret);
-        setMfaOtpauthUrl(data.otpauthUrl);
+        setMfaSetupSecret(data.secret)
+        setMfaOtpauthUrl(data.otpauthUrl)
       } else {
-        toast.error(data.error || 'Failed to start MFA setup.');
+        toast.error(data.error || 'Failed to start MFA setup.')
       }
     } catch {
-      toast.error('Failed to start MFA setup.');
+      toast.error('Failed to start MFA setup.')
     } finally {
-      setMfaBusy(false);
+      setMfaBusy(false)
     }
-  };
+  }
 
   const handleEnableMfa = async () => {
-    setMfaBusy(true);
+    setMfaBusy(true)
     try {
       const res = await apiFetch('/api/auth/mfa/enable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: mfaCode })
-      });
-      const data = await res.json();
+        body: JSON.stringify({ code: mfaCode }),
+      })
+      const data = await res.json()
       if (res.ok) {
-        setMfaEnabled(true);
-        setMfaSetupSecret(null);
-        setMfaOtpauthUrl(null);
-        setMfaCode('');
-        toast.success('Multi-factor authentication enabled.');
+        setMfaEnabled(true)
+        setMfaSetupSecret(null)
+        setMfaOtpauthUrl(null)
+        setMfaCode('')
+        toast.success('Multi-factor authentication enabled.')
       } else {
-        toast.error(data.error || 'Failed to enable MFA.');
+        toast.error(data.error || 'Failed to enable MFA.')
       }
     } catch {
-      toast.error('Failed to enable MFA.');
+      toast.error('Failed to enable MFA.')
     } finally {
-      setMfaBusy(false);
+      setMfaBusy(false)
     }
-  };
+  }
 
   const handleDisableMfa = async () => {
-    setMfaBusy(true);
+    setMfaBusy(true)
     try {
       const res = await apiFetch('/api/auth/mfa/disable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: mfaDisablePassword })
-      });
-      const data = await res.json();
+        body: JSON.stringify({ password: mfaDisablePassword }),
+      })
+      const data = await res.json()
       if (res.ok) {
-        setMfaEnabled(false);
-        setMfaDisablePassword('');
-        toast.success('Multi-factor authentication disabled.');
+        setMfaEnabled(false)
+        setMfaDisablePassword('')
+        toast.success('Multi-factor authentication disabled.')
       } else {
-        toast.error(data.error || 'Failed to disable MFA.');
+        toast.error(data.error || 'Failed to disable MFA.')
       }
     } catch {
-      toast.error('Failed to disable MFA.');
+      toast.error('Failed to disable MFA.')
     } finally {
-      setMfaBusy(false);
+      setMfaBusy(false)
     }
-  };
+  }
 
   // ---- Web push notification handlers ----
   const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-    return outputArray;
-  };
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+    const rawData = window.atob(base64)
+    const outputArray = new Uint8Array(rawData.length)
+    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i)
+    return outputArray
+  }
 
   const handleEnablePush = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      toast.error('This browser does not support push notifications.');
-      return;
+      toast.error('This browser does not support push notifications.')
+      return
     }
-    setPushBusy(true);
+    setPushBusy(true)
     try {
-      const permission = await Notification.requestPermission();
+      const permission = await Notification.requestPermission()
       if (permission !== 'granted') {
-        toast.error('Notification permission was not granted.');
-        return;
+        toast.error('Notification permission was not granted.')
+        return
       }
-      const keyRes = await apiFetch('/api/push/public-key');
-      const keyData = await keyRes.json();
+      const keyRes = await apiFetch('/api/push/public-key')
+      const keyData = await keyRes.json()
       if (!keyData.publicKey) {
-        toast.error('Push notifications are not configured on the server.');
-        return;
+        toast.error('Push notifications are not configured on the server.')
+        return
       }
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await navigator.serviceWorker.ready
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
-      });
+        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+      })
       const res = await apiFetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(subscription.toJSON())
-      });
+        body: JSON.stringify(subscription.toJSON()),
+      })
       if (res.ok) {
-        setPushSubscribed(true);
-        toast.success('This device will now receive safety alerts.');
+        setPushSubscribed(true)
+        toast.success('This device will now receive safety alerts.')
       } else {
-        toast.error('Failed to register this device for alerts.');
+        toast.error('Failed to register this device for alerts.')
       }
     } catch {
-      toast.error('Failed to enable push notifications.');
+      toast.error('Failed to enable push notifications.')
     } finally {
-      setPushBusy(false);
+      setPushBusy(false)
     }
-  };
+  }
 
   const handleDisablePush = async () => {
-    setPushBusy(true);
+    setPushBusy(true)
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.getSubscription()
       if (subscription) {
         await apiFetch('/api/push/unsubscribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint: subscription.endpoint })
-        });
-        await subscription.unsubscribe();
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        })
+        await subscription.unsubscribe()
       }
-      setPushSubscribed(false);
-      toast.info('This device will no longer receive push alerts.');
+      setPushSubscribed(false)
+      toast.info('This device will no longer receive push alerts.')
     } catch {
-      toast.error('Failed to disable push notifications.');
+      toast.error('Failed to disable push notifications.')
     } finally {
-      setPushBusy(false);
+      setPushBusy(false)
     }
-  };
+  }
 
   const handleTestPush = async () => {
-    setPushBusy(true);
+    setPushBusy(true)
     try {
-      const res = await apiFetch('/api/push/test', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) toast.success(`Test notification sent to ${data.sent} device(s).`);
-      else toast.error(data.error || 'Failed to send test notification.');
+      const res = await apiFetch('/api/push/test', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) toast.success(`Test notification sent to ${data.sent} device(s).`)
+      else toast.error(data.error || 'Failed to send test notification.')
     } catch {
-      toast.error('Failed to send test notification.');
+      toast.error('Failed to send test notification.')
     } finally {
-      setPushBusy(false);
+      setPushBusy(false)
     }
-  };
+  }
 
   if (isLoading || !settings) {
     return (
       <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 font-mono text-sm animate-pulse">
         Loading safety enclave configuration...
       </div>
-    );
+    )
   }
 
   const updateThreshold = (key: keyof RiskThresholds, val: number) => {
@@ -721,18 +732,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
       ...settings,
       thresholds: {
         ...settings.thresholds,
-        [key]: val
-      }
-    });
-  };
+        [key]: val,
+      },
+    })
+  }
 
   // SMTP, storage/backup and account security are server concerns; the static
   // browser build has no such backend, so those tabs are omitted there. Site
   // configuration tabs are further restricted to the OWNER role, mirroring the
   // server's OWNER-only settings route. The About tab is visible to every
   // signed-in role in both build modes.
-  const serverOnlyTabs = new Set(['smtp', 'storage', 'security']);
-  const ownerOnlyTabs = new Set(['general', 'thresholds', 'monitoring', 'smtp', 'storage']);
+  const serverOnlyTabs = new Set(['smtp', 'storage', 'security'])
+  const ownerOnlyTabs = new Set(['general', 'thresholds', 'monitoring', 'smtp', 'storage'])
   const tabs = [
     { id: 'general', label: 'General & Units', icon: Sliders },
     { id: 'thresholds', label: 'Safety Thresholds', icon: Shield },
@@ -740,12 +751,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
     { id: 'smtp', label: 'Email Gateway', icon: Mail },
     { id: 'storage', label: 'Storage & Backup', icon: Database },
     { id: 'security', label: 'Security & Auth', icon: Lock },
-    { id: 'about', label: 'About', icon: Info }
-  ].filter(
-    (tab) =>
-      (!STATIC_MODE || !serverOnlyTabs.has(tab.id)) &&
-      (isOwner || !ownerOnlyTabs.has(tab.id))
-  );
+    { id: 'about', label: 'About', icon: Info },
+  ].filter((tab) => (!STATIC_MODE || !serverOnlyTabs.has(tab.id)) && (isOwner || !ownerOnlyTabs.has(tab.id)))
 
   return (
     <div className="space-y-6 pb-20">
@@ -791,8 +798,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
       {/* Internal Navigation Tabs */}
       <div className="flex items-center gap-1 overflow-x-auto no-scrollbar border-b border-slate-800 pb-2">
         {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
+          const Icon = tab.icon
+          const isActive = activeTab === tab.id
           return (
             <button
               type="button"
@@ -807,7 +814,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               <Icon className="w-3.5 h-3.5" />
               <span>{tab.label}</span>
             </button>
-          );
+          )
         })}
       </div>
 
@@ -858,7 +865,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 <label className="text-slate-400 block mb-1">Wind Speed & Gust Unit:</label>
                 <select
                   value={settings.windUnit}
-                  onChange={(e) => setSettings({ ...settings, windUnit: e.target.value as 'km/h' | 'mph' | 'm/s' })}
+                  onChange={(e) =>
+                    setSettings({ ...settings, windUnit: e.target.value as 'km/h' | 'mph' | 'm/s' })
+                  }
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
                 >
                   <option value="km/h">Kilometers per hour (km/h) — Crane standard</option>
@@ -892,7 +901,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 <div className="space-y-2">
                   <div className="flex justify-between text-slate-400">
                     <span>Warning Level (Amber):</span>
-                    <strong className="text-slate-200">{settings.thresholds.windWarning} {settings.windUnit}</strong>
+                    <strong className="text-slate-200">
+                      {settings.thresholds.windWarning} {settings.windUnit}
+                    </strong>
                   </div>
                   <input
                     type="range"
@@ -905,7 +916,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
                   <div className="flex justify-between text-slate-400 pt-2">
                     <span>High Risk Limit:</span>
-                    <strong className="text-orange-400">{settings.thresholds.windHigh} {settings.windUnit}</strong>
+                    <strong className="text-orange-400">
+                      {settings.thresholds.windHigh} {settings.windUnit}
+                    </strong>
                   </div>
                   <input
                     type="range"
@@ -918,7 +931,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
                   <div className="flex justify-between text-slate-400 pt-2">
                     <span>Critical Stop-Work:</span>
-                    <strong className="text-red-400">{settings.thresholds.windCritical} {settings.windUnit}</strong>
+                    <strong className="text-red-400">
+                      {settings.thresholds.windCritical} {settings.windUnit}
+                    </strong>
                   </div>
                   <input
                     type="range"
@@ -940,7 +955,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 <div className="space-y-2">
                   <div className="flex justify-between text-slate-400">
                     <span>Gust Warning:</span>
-                    <strong className="text-slate-200">{settings.thresholds.gustWarning} {settings.windUnit}</strong>
+                    <strong className="text-slate-200">
+                      {settings.thresholds.gustWarning} {settings.windUnit}
+                    </strong>
                   </div>
                   <input
                     type="range"
@@ -953,7 +970,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
                   <div className="flex justify-between text-slate-400 pt-2">
                     <span>Gust High Risk (MEWP/Scaffold):</span>
-                    <strong className="text-orange-400">{settings.thresholds.gustHigh} {settings.windUnit}</strong>
+                    <strong className="text-orange-400">
+                      {settings.thresholds.gustHigh} {settings.windUnit}
+                    </strong>
                   </div>
                   <input
                     type="range"
@@ -966,7 +985,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
                   <div className="flex justify-between text-slate-400 pt-2">
                     <span>Critical Gust Limit:</span>
-                    <strong className="text-red-400">{settings.thresholds.gustCritical} {settings.windUnit}</strong>
+                    <strong className="text-red-400">
+                      {settings.thresholds.gustCritical} {settings.windUnit}
+                    </strong>
                   </div>
                   <input
                     type="range"
@@ -1060,7 +1081,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 <label className="text-slate-400 block mb-1">Monitoring Interval:</label>
                 <select
                   value={settings.monitorIntervalMinutes}
-                  onChange={(e) => setSettings({ ...settings, monitorIntervalMinutes: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setSettings({ ...settings, monitorIntervalMinutes: Number(e.target.value) })
+                  }
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
                 >
                   <option value={5}>Every 5 Minutes (High-Risk Operation)</option>
@@ -1105,7 +1128,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 <input
                   type="checkbox"
                   checked={settings.recoveryNotificationsEnabled}
-                  onChange={(e) => setSettings({ ...settings, recoveryNotificationsEnabled: e.target.checked })}
+                  onChange={(e) =>
+                    setSettings({ ...settings, recoveryNotificationsEnabled: e.target.checked })
+                  }
                   className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-amber-500"
                 />
                 <span className="text-xs font-mono text-slate-200">
@@ -1128,10 +1153,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               <button
                 type="button"
                 onClick={async () => {
-                  const granted = await requestNotificationPermission();
-                  setNotifPermission(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
-                  if (granted) toast.success('Browser alerts enabled.');
-                  else toast.error('Notification permission was not granted.');
+                  const granted = await requestNotificationPermission()
+                  setNotifPermission(
+                    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+                  )
+                  if (granted) toast.success('Browser alerts enabled.')
+                  else toast.error('Notification permission was not granted.')
                 }}
                 disabled={notifPermission === 'granted' || notifPermission === 'unsupported'}
                 className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed text-slate-950 font-bold text-xs transition-all"
@@ -1202,10 +1229,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
             <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-xs font-mono text-slate-400 leading-relaxed space-y-2">
               <p>
-                SMTP credentials (<code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>) are read securely from the environment. Passwords remain isolated inside the server runtime and are never exposed or saved to SQLite.
+                SMTP credentials (<code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>,{' '}
+                <code>SMTP_PASSWORD</code>) are read securely from the environment. Passwords remain isolated
+                inside the server runtime and are never exposed or saved to SQLite.
               </p>
               <div className="text-slate-300">
-                Current Host: <strong className="text-amber-400 font-mono">{secretsStatus?.smtpHost || 'None (Local test mode)'}</strong>
+                Current Host:{' '}
+                <strong className="text-amber-400 font-mono">
+                  {secretsStatus?.smtpHost || 'None (Local test mode)'}
+                </strong>
               </div>
             </div>
 
@@ -1217,7 +1249,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-mono text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isTestingEmail ? 'Sending Test Notification...' : 'Send Test Notification Email Now'}</span>
+                <span>
+                  {isTestingEmail ? 'Sending Test Notification...' : 'Send Test Notification Email Now'}
+                </span>
               </button>
             </div>
           </div>
@@ -1240,9 +1274,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800/80 space-y-1">
                 <div className="text-slate-400 text-2xs">WEATHER API KEY</div>
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${secretsStatus?.weatherApiKeyConfigured ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                  <span
+                    className={`w-2 h-2 rounded-full ${secretsStatus?.weatherApiKeyConfigured ? 'bg-emerald-400' : 'bg-slate-600'}`}
+                  />
                   <span className="text-slate-200 font-bold">
-                    {secretsStatus?.weatherApiKeyConfigured ? secretsStatus.weatherApiKeyMasked : 'Not Configured'}
+                    {secretsStatus?.weatherApiKeyConfigured
+                      ? secretsStatus.weatherApiKeyMasked
+                      : 'Not Configured'}
                   </span>
                 </div>
                 <div className="text-2xs text-slate-500">Auto-falls back to Open-Meteo</div>
@@ -1251,7 +1289,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               <div className="p-3 rounded-lg bg-slate-950/80 border border-slate-800/80 space-y-1">
                 <div className="text-slate-400 text-2xs">SMTP EMAIL GATEWAY</div>
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${secretsStatus?.smtpConfigured ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                  <span
+                    className={`w-2 h-2 rounded-full ${secretsStatus?.smtpConfigured ? 'bg-emerald-400' : 'bg-slate-600'}`}
+                  />
                   <span className="text-slate-200 font-bold truncate">
                     {secretsStatus?.smtpConfigured ? secretsStatus.smtpHost : 'Not Configured'}
                   </span>
@@ -1307,7 +1347,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 <div className="text-xs font-mono text-slate-400 font-bold">Recent Saved Snapshots:</div>
                 <div className="divide-y divide-slate-800/80 bg-slate-950/60 rounded-lg border border-slate-800/80">
                   {backups.slice(0, 5).map((b) => (
-                    <div key={b.filename} className="p-2.5 flex items-center justify-between text-2xs font-mono text-slate-300">
+                    <div
+                      key={b.filename}
+                      className="p-2.5 flex items-center justify-between text-2xs font-mono text-slate-300"
+                    >
                       <span className="font-semibold text-slate-200">{b.filename}</span>
                       <div className="flex items-center gap-4 text-slate-500">
                         <span>{(b.size / 1024).toFixed(1)} KB</span>
@@ -1335,8 +1378,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
             </div>
 
             <p className="text-xs font-mono text-slate-400 leading-relaxed">
-              Pruning automatically drops historical logs older than the retention thresholds to keep the SQLite database light and performant:
-              Observations <strong>{settings?.dataRetentionDays ?? 30} days</strong>, Cleared Alerts <strong>90 days</strong>, Forecast Snapshots <strong>14 days</strong>.
+              Pruning automatically drops historical logs older than the retention thresholds to keep the
+              SQLite database light and performant: Observations{' '}
+              <strong>{settings?.dataRetentionDays ?? 30} days</strong>, Cleared Alerts{' '}
+              <strong>90 days</strong>, Forecast Snapshots <strong>14 days</strong>.
             </p>
 
             <div className="flex items-center gap-3">
@@ -1350,7 +1395,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 value={settings?.dataRetentionDays ?? 30}
                 onChange={(e) =>
                   setSettings((prev) =>
-                    prev ? { ...prev, dataRetentionDays: Math.max(1, Number(e.target.value) || 1) } : prev
+                    prev ? { ...prev, dataRetentionDays: Math.max(1, Number(e.target.value) || 1) } : prev,
                   )
                 }
                 className="w-24 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500"
@@ -1499,8 +1544,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
             {!mfaEnabled && !mfaSetupSecret && (
               <div className="space-y-3">
                 <p className="text-xs font-mono text-slate-400 leading-relaxed">
-                  Add a time-based one-time password as a second factor for your account. Compatible
-                  with Google Authenticator, Authy and 1Password.
+                  Add a time-based one-time password as a second factor for your account. Compatible with
+                  Google Authenticator, Authy and 1Password.
                 </p>
                 <button
                   type="button"
@@ -1549,9 +1594,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   <button
                     type="button"
                     onClick={() => {
-                      setMfaSetupSecret(null);
-                      setMfaOtpauthUrl(null);
-                      setMfaCode('');
+                      setMfaSetupSecret(null)
+                      setMfaOtpauthUrl(null)
+                      setMfaCode('')
                     }}
                     className="px-3 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
                   >
@@ -1610,8 +1655,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               </span>
             </div>
             <p className="text-xs font-mono text-slate-400 leading-relaxed">
-              Receive safety alerts as device notifications, even when this tab is closed. Works with
-              the installed app or a supported browser.
+              Receive safety alerts as device notifications, even when this tab is closed. Works with the
+              installed app or a supported browser.
             </p>
             {!pushSupported ? (
               <p className="text-xs font-mono text-amber-400">
@@ -1666,9 +1711,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                     onChange={(e) => handleSavePushPreferences({ ...pushPrefs, enabled: e.target.checked })}
                     className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-cyan-500 focus:ring-cyan-500"
                   />
-                  <span className="text-xs font-mono text-slate-200">
-                    Receive push alerts on my devices
-                  </span>
+                  <span className="text-xs font-mono text-slate-200">Receive push alerts on my devices</span>
                 </label>
 
                 <label className="flex items-center justify-between gap-3 text-xs font-mono text-slate-300">
@@ -1691,7 +1734,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                     type="checkbox"
                     checked={pushPrefs.notifyRecovery}
                     disabled={prefsSaving || !pushPrefs.enabled}
-                    onChange={(e) => handleSavePushPreferences({ ...pushPrefs, notifyRecovery: e.target.checked })}
+                    onChange={(e) =>
+                      handleSavePushPreferences({ ...pushPrefs, notifyRecovery: e.target.checked })
+                    }
                     className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-cyan-500 focus:ring-cyan-500"
                   />
                   <span className="text-xs font-mono text-slate-200">
@@ -1707,9 +1752,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Monitor className="w-4 h-4 text-sky-400" />
-                <h4 className="text-xs font-mono font-bold uppercase text-slate-300">
-                  Active Sessions
-                </h4>
+                <h4 className="text-xs font-mono font-bold uppercase text-slate-300">Active Sessions</h4>
               </div>
               {sessions.length > 1 && (
                 <button
@@ -1782,8 +1825,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               </span>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-slate-400">
-              Deterministic construction weather risk monitoring and automated safety alerting.
-              Free and open source (MIT).{' '}
+              Deterministic construction weather risk monitoring and automated safety alerting. Free and open
+              source (MIT).{' '}
               {STATIC_MODE
                 ? 'Running in browser-only static mode: weather from Open-Meteo, data stored locally in IndexedDB.'
                 : 'Running in server mode: WeatherAPI with Open-Meteo cross-reference, data stored locally in SQLite.'}
@@ -1806,16 +1849,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
             </div>
 
             <div className="mt-3.5 text-xs">
-              {!updateState && !updateChecking && (
-                <p className="text-slate-500">Not checked yet.</p>
-              )}
+              {!updateState && !updateChecking && <p className="text-slate-500">Not checked yet.</p>}
               {updateChecking && <p className="text-slate-500">Checking GitHub Releases…</p>}
               {!updateChecking && updateState?.status === 'up-to-date' && (
                 <p className="flex items-center gap-2 text-slate-300">
                   <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
                   <span>
                     Up to date — v{updateState.latestVersion} is the latest release.
-                    {updateCheckedAt && <span className="text-slate-500"> Checked {updateCheckedAt.toLocaleTimeString()}.</span>}
+                    {updateCheckedAt && (
+                      <span className="text-slate-500"> Checked {updateCheckedAt.toLocaleTimeString()}.</span>
+                    )}
                   </span>
                 </p>
               )}
@@ -1841,14 +1884,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 <p className="flex items-center gap-2 text-slate-400">
                   <CircleAlert className="h-4 w-4 shrink-0 text-slate-500" />
                   <span>
-                    Could not reach GitHub Releases{updateCheckedAt ? ` (checked ${updateCheckedAt.toLocaleTimeString()})` : ''}.
-                    The app keeps working offline; try again later.
+                    Could not reach GitHub Releases
+                    {updateCheckedAt ? ` (checked ${updateCheckedAt.toLocaleTimeString()})` : ''}. The app
+                    keeps working offline; try again later.
                   </span>
                 </p>
               )}
               <p className="mt-2.5 text-[11px] text-slate-600">
-                Checks happen only when you open this tab or press the button — at most hourly — and never send any
-                information from this device.
+                Checks happen only when you open this tab or press the button — at most hourly — and never
+                send any information from this device.
               </p>
             </div>
           </div>
@@ -1872,8 +1916,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               Open a GitHub issue
             </a>
             <p className="mt-2.5 text-[11px] text-slate-600">
-              Nothing is sent automatically — you review and submit the report yourself. Do not include passwords,
-              tokens or site locations.
+              Nothing is sent automatically — you review and submit the report yourself. Do not include
+              passwords, tokens or site locations.
             </p>
           </div>
         </div>
@@ -1886,9 +1930,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
             <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
               {confirmModal.title}
             </h3>
-            <p className="text-xs text-slate-400 font-mono leading-relaxed">
-              {confirmModal.message}
-            </p>
+            <p className="text-xs text-slate-400 font-mono leading-relaxed">{confirmModal.message}</p>
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
               <button
                 type="button"
@@ -1909,5 +1951,5 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
         </div>
       )}
     </div>
-  );
-};
+  )
+}

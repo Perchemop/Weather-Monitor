@@ -1,7 +1,7 @@
-import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
-import {defineConfig} from 'vite';
+import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
+import { defineConfig } from 'vite'
 
 export default defineConfig(({ mode }) => {
   // The static (serverless) build targets GitHub Pages and runs entirely in the
@@ -11,8 +11,8 @@ export default defineConfig(({ mode }) => {
   //
   // `--mode static` is the portable trigger (works on Windows too); the
   // VITE_APP_MODE env var is still honoured for existing CI/pages setups.
-  const isStatic = mode === 'static' || process.env.VITE_APP_MODE === 'static';
-  const base = process.env.VITE_BASE || '/';
+  const isStatic = mode === 'static' || process.env.VITE_APP_MODE === 'static'
+  const base = process.env.VITE_BASE || '/'
 
   return {
     base,
@@ -41,16 +41,17 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (!id.includes('node_modules')) return undefined;
-            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory')) return 'charts';
-            if (id.includes('leaflet')) return 'maps';
-            if (id.includes('lucide-react')) return 'icons';
-            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('scheduler')) return 'react';
-            return 'vendor';
-          }
-        }
+            if (!id.includes('node_modules')) return undefined
+            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory')) return 'charts'
+            if (id.includes('leaflet')) return 'maps'
+            if (id.includes('lucide-react')) return 'icons'
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('scheduler'))
+              return 'react'
+            return 'vendor'
+          },
+        },
       },
-      chunkSizeWarningLimit: 900
-    }
-  };
-});
+      chunkSizeWarningLimit: 900,
+    },
+  }
+})

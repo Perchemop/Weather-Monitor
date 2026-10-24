@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { ProviderComparison } from '../types';
-import { CheckCircle2, AlertTriangle, ArrowRightLeft, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
-import { STATIC_MODE } from '../static/mode';
+import React, { useState } from 'react'
+import { ProviderComparison } from '../types'
+import { CheckCircle2, AlertTriangle, ArrowRightLeft, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
+import { STATIC_MODE } from '../static/mode'
 
 interface CrossReferenceCardProps {
-  comparison: ProviderComparison | null;
-  hasApiKey: boolean;
-  activeProvider?: string;
-  onRefresh?: () => void;
-  isChecking?: boolean;
+  comparison: ProviderComparison | null
+  hasApiKey: boolean
+  activeProvider?: string
+  onRefresh?: () => void
+  isChecking?: boolean
 }
 
 const CrossReferenceCardComponent: React.FC<CrossReferenceCardProps> = ({
@@ -16,24 +16,24 @@ const CrossReferenceCardComponent: React.FC<CrossReferenceCardProps> = ({
   hasApiKey,
   activeProvider,
   onRefresh,
-  isChecking = false
+  isChecking = false,
 }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(false)
 
-  const isFallback = comparison?.isFallbackActive ?? false;
-  const isHighConcordance = comparison?.concordance === 'HIGH';
+  const isFallback = comparison?.isFallbackActive ?? false
+  const isHighConcordance = comparison?.concordance === 'HIGH'
 
   const chip = isFallback
     ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
     : isHighConcordance
-    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-    : 'bg-sky-500/10 text-sky-300 border-sky-500/30';
+      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+      : 'bg-sky-500/10 text-sky-300 border-sky-500/30'
 
   const chipLabel = isFallback
     ? 'Fallback active'
     : comparison
-    ? `${comparison.concordance} agreement · ${comparison.confidenceScore}%`
-    : 'Awaiting cross-check';
+      ? `${comparison.concordance} agreement · ${comparison.confidenceScore}%`
+      : 'Awaiting cross-check'
 
   return (
     <section
@@ -145,10 +145,9 @@ const CrossReferenceCardComponent: React.FC<CrossReferenceCardProps> = ({
                     comparison.variance.windDelta > 0 ? `±${comparison.variance.windDelta} km/h` : '0 km/h'
                   }
                   deltaFlag={comparison.variance.windDelta > 10}
-                  ok={Math.max(
-                    comparison.primaryReading.windSpeed,
-                    comparison.crossRefReading.windSpeed
-                  ) < 40}
+                  ok={
+                    Math.max(comparison.primaryReading.windSpeed, comparison.crossRefReading.windSpeed) < 40
+                  }
                   okLabel="Safe working band"
                   infoLabel="Elevated — threshold flagged"
                   okWhenFalse="text-amber-400"
@@ -161,10 +160,9 @@ const CrossReferenceCardComponent: React.FC<CrossReferenceCardProps> = ({
                     comparison.variance.gustDelta > 0 ? `±${comparison.variance.gustDelta} km/h` : '0 km/h'
                   }
                   deltaFlag={comparison.variance.gustDelta > 15}
-                  ok={Math.max(
-                    comparison.primaryReading.windGusts,
-                    comparison.crossRefReading.windGusts
-                  ) < 45}
+                  ok={
+                    Math.max(comparison.primaryReading.windGusts, comparison.crossRefReading.windGusts) < 45
+                  }
                   okLabel="Sub-threshold"
                   infoLabel="Crane limits enforced"
                   okWhenFalse="text-amber-400"
@@ -177,10 +175,12 @@ const CrossReferenceCardComponent: React.FC<CrossReferenceCardProps> = ({
                     comparison.variance.rainProbDelta > 0 ? `±${comparison.variance.rainProbDelta}%` : '0%'
                   }
                   deltaFlag={comparison.variance.rainProbDelta > 25}
-                  ok={Math.max(
-                    comparison.primaryReading.rainProbability,
-                    comparison.crossRefReading.rainProbability
-                  ) < 60}
+                  ok={
+                    Math.max(
+                      comparison.primaryReading.rainProbability,
+                      comparison.crossRefReading.rainProbability,
+                    ) < 60
+                  }
                   okLabel="Dry window"
                   infoLabel="Precipitation watch"
                   okWhenFalse="text-sky-400"
@@ -211,24 +211,24 @@ const CrossReferenceCardComponent: React.FC<CrossReferenceCardProps> = ({
           {STATIC_MODE
             ? 'Open-Meteo is the active source; dual-provider cross-referencing requires the server build.'
             : hasApiKey
-            ? 'Initialising WeatherAPI (main) and Open-Meteo (cross-check)...'
-            : 'Open-Meteo active — set WEATHER_API_KEY on the server to enable dual-model cross-referencing.'}
+              ? 'Initialising WeatherAPI (main) and Open-Meteo (cross-check)...'
+              : 'Open-Meteo active — set WEATHER_API_KEY on the server to enable dual-model cross-referencing.'}
         </p>
       )}
     </section>
-  );
-};
+  )
+}
 
 interface RowProps {
-  label: string;
-  primary: string;
-  cross: string;
-  delta: string;
-  deltaFlag: boolean;
-  ok: boolean;
-  okLabel: string;
-  infoLabel: string;
-  okWhenFalse?: string;
+  label: string
+  primary: string
+  cross: string
+  delta: string
+  deltaFlag: boolean
+  ok: boolean
+  okLabel: string
+  infoLabel: string
+  okWhenFalse?: string
 }
 
 const Row: React.FC<RowProps> = ({
@@ -240,20 +240,14 @@ const Row: React.FC<RowProps> = ({
   ok,
   okLabel,
   infoLabel,
-  okWhenFalse = 'text-slate-400'
+  okWhenFalse = 'text-slate-400',
 }) => (
   <tr className="transition-colors hover:bg-slate-800/20">
     <td className="px-3.5 py-2 font-medium text-slate-300">{label}</td>
     <td className="px-3.5 py-2 font-semibold tabular-nums text-slate-100">{primary}</td>
     <td className="px-3.5 py-2 tabular-nums text-slate-400">{cross}</td>
     <td className="px-3.5 py-2 tabular-nums">
-      <span
-        className={
-          deltaFlag ? 'font-semibold text-amber-400' : 'text-slate-500'
-        }
-      >
-        {delta}
-      </span>
+      <span className={deltaFlag ? 'font-semibold text-amber-400' : 'text-slate-500'}>{delta}</span>
     </td>
     <td className="px-3.5 py-2">
       {ok ? (
@@ -265,6 +259,6 @@ const Row: React.FC<RowProps> = ({
       )}
     </td>
   </tr>
-);
+)
 
-export const CrossReferenceCard = React.memo(CrossReferenceCardComponent);
+export const CrossReferenceCard = React.memo(CrossReferenceCardComponent)

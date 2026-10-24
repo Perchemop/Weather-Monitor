@@ -5,7 +5,7 @@ services:
     container_name: weather-monitor
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - '3000:3000'
     # Copy .env.example to .env and fill in your provider/security settings.
     env_file:
       - path: .env
@@ -34,9 +34,9 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     container_name: weather-monitor-mail
-    profiles: ["mail"]
+    profiles: ['mail']
     restart: unless-stopped
     ports:
-      - "1025:1025" # SMTP
-      - "8025:8025" # Web UI
+      - '1025:1025' # SMTP
+      - '8025:8025' # Web UI
 

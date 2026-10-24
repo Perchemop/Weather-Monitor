@@ -1,30 +1,41 @@
-import React, { useState } from 'react';
-import { ShieldAlert, Mail, CheckCircle2, XCircle, Filter, Calendar, Download } from 'lucide-react';
-import { AlertItem, AlertDelivery } from '../types';
-import { EmptyState } from './EmptyState';
+import React, { useState } from 'react'
+import { ShieldAlert, Mail, CheckCircle2, XCircle, Filter, Calendar, Download } from 'lucide-react'
+import { AlertItem, AlertDelivery } from '../types'
+import { EmptyState } from './EmptyState'
 
 interface AlertHistoryViewProps {
-  alerts: AlertItem[];
-  deliveries: AlertDelivery[];
+  alerts: AlertItem[]
+  deliveries: AlertDelivery[]
 }
 
 export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deliveries }) => {
-  const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL');
-  const [selectedType, setSelectedType] = useState<string>('ALL');
-  const [activeTab, setActiveTab] = useState<'alerts' | 'deliveries'>('alerts');
+  const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL')
+  const [selectedType, setSelectedType] = useState<string>('ALL')
+  const [activeTab, setActiveTab] = useState<'alerts' | 'deliveries'>('alerts')
 
   const filteredAlerts = alerts.filter((a) => {
-    if (selectedSeverity !== 'ALL' && a.severity !== selectedSeverity) return false;
-    if (selectedType !== 'ALL' && a.alertType !== selectedType) return false;
-    return true;
-  });
+    if (selectedSeverity !== 'ALL' && a.severity !== selectedSeverity) return false
+    if (selectedType !== 'ALL' && a.alertType !== selectedType) return false
+    return true
+  })
 
-  const uniqueTypes = Array.from(new Set(alerts.map((a) => a.alertType)));
+  const uniqueTypes = Array.from(new Set(alerts.map((a) => a.alertType)))
 
   const exportCsv = () => {
     if (activeTab === 'alerts') {
-      if (filteredAlerts.length === 0) return;
-      const headers = ['ID', 'Location', 'Severity', 'Type', 'Title', 'Message', 'ObservedValue', 'ThresholdValue', 'StartTime', 'Status'];
+      if (filteredAlerts.length === 0) return
+      const headers = [
+        'ID',
+        'Location',
+        'Severity',
+        'Type',
+        'Title',
+        'Message',
+        'ObservedValue',
+        'ThresholdValue',
+        'StartTime',
+        'Status',
+      ]
       const rows = filteredAlerts.map((a) => [
         a.id,
         `"${a.locationName.replace(/"/g, '""')}"`,
@@ -35,19 +46,19 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
         `"${a.observedValue}"`,
         `"${a.thresholdValue}"`,
         a.startTime,
-        a.status
-      ]);
-      const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `alerts-audit-${new Date().toISOString().slice(0, 10)}.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
+        a.status,
+      ])
+      const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `alerts-audit-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
     } else {
-      if (deliveries.length === 0) return;
-      const headers = ['ID', 'AlertID', 'AlertType', 'Recipient', 'SentAt', 'Status', 'Error'];
+      if (deliveries.length === 0) return
+      const headers = ['ID', 'AlertID', 'AlertType', 'Recipient', 'SentAt', 'Status', 'Error']
       const rows = deliveries.map((d) => [
         d.id,
         d.alertId,
@@ -55,18 +66,18 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
         d.recipientEmail,
         d.sentAt,
         d.status,
-        `"${(d.errorMessage || '').replace(/"/g, '""')}"`
-      ]);
-      const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `email-deliveries-${new Date().toISOString().slice(0, 10)}.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
+        `"${(d.errorMessage || '').replace(/"/g, '""')}"`,
+      ])
+      const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `email-deliveries-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
     }
-  };
+  }
 
   return (
     <div className="space-y-6">
@@ -86,7 +97,9 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
                 type="button"
                 onClick={() => setActiveTab('alerts')}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
-                  activeTab === 'alerts' ? 'bg-slate-800 text-amber-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+                  activeTab === 'alerts'
+                    ? 'bg-slate-800 text-amber-400 font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Alert Events ({alerts.length})
@@ -95,7 +108,9 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
                 type="button"
                 onClick={() => setActiveTab('deliveries')}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
-                  activeTab === 'deliveries' ? 'bg-slate-800 text-amber-400 font-semibold' : 'text-slate-400 hover:text-slate-200'
+                  activeTab === 'deliveries'
+                    ? 'bg-slate-800 text-amber-400 font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Email Deliveries ({deliveries.length})
@@ -163,8 +178,8 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
             />
           ) : (
             filteredAlerts.map((alert) => {
-              const isCritical = alert.severity === 'CRITICAL';
-              const isHigh = alert.severity === 'HIGH';
+              const isCritical = alert.severity === 'CRITICAL'
+              const isHigh = alert.severity === 'HIGH'
 
               return (
                 <div
@@ -178,8 +193,8 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
                           isCritical
                             ? 'bg-red-500 text-white'
                             : isHigh
-                            ? 'bg-orange-500 text-slate-950'
-                            : 'bg-amber-500 text-slate-950'
+                              ? 'bg-orange-500 text-slate-950'
+                              : 'bg-amber-500 text-slate-950'
                         }`}
                       >
                         {alert.severity}
@@ -220,7 +235,7 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
                     </div>
                   </div>
                 </div>
-              );
+              )
             })
           )}
         </div>
@@ -244,9 +259,12 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
           ) : (
             <div className="divide-y divide-slate-800">
               {deliveries.map((del) => {
-                const isSuccess = del.status === 'SUCCESS';
+                const isSuccess = del.status === 'SUCCESS'
                 return (
-                  <div key={del.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
+                  <div
+                    key={del.id}
+                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono"
+                  >
                     <div className="flex items-start sm:items-center gap-3">
                       {isSuccess ? (
                         <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
@@ -254,16 +272,10 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
                         <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5 sm:mt-0" />
                       )}
                       <div>
-                        <div className="font-bold text-slate-200">
-                          {del.alertType} Notification
-                        </div>
-                        <div className="text-slate-400 text-[11px]">
-                          Recipient: {del.recipientEmail}
-                        </div>
+                        <div className="font-bold text-slate-200">{del.alertType} Notification</div>
+                        <div className="text-slate-400 text-[11px]">Recipient: {del.recipientEmail}</div>
                         {del.errorMessage && (
-                          <div className="text-red-400 text-[11px] mt-0.5">
-                            Error: {del.errorMessage}
-                          </div>
+                          <div className="text-red-400 text-[11px] mt-0.5">Error: {del.errorMessage}</div>
                         )}
                       </div>
                     </div>
@@ -281,12 +293,12 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
                       <span className="text-slate-400">{new Date(del.sentAt).toLocaleString()}</span>
                     </div>
                   </div>
-                );
+                )
               })}
             </div>
           )}
         </div>
       )}
     </div>
-  );
-};
+  )
+}

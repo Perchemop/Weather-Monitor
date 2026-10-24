@@ -1,39 +1,39 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertOctagon, RefreshCw } from 'lucide-react';
+import React, { Component, ErrorInfo, ReactNode } from 'react'
+import { AlertOctagon, RefreshCw } from 'lucide-react'
 
 interface Props {
-  children: ReactNode;
+  children: ReactNode
 }
 
 interface State {
-  hasError: boolean;
-  error: Error | null;
+  hasError: boolean
+  error: Error | null
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
-    super(props);
+    super(props)
     this.state = {
       hasError: false,
-      error: null
-    };
+      error: null,
+    }
   }
 
   public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return { hasError: true, error }
   }
 
   public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[Safety Enclave ErrorBoundary] Uncaught render error:', error, errorInfo);
+    console.error('[Safety Enclave ErrorBoundary] Uncaught render error:', error, errorInfo)
   }
 
   private handleReload = () => {
-    window.location.reload();
-  };
+    window.location.reload()
+  }
 
   private handleReset = () => {
-    this.setState({ hasError: false, error: null });
-  };
+    this.setState({ hasError: false, error: null })
+  }
 
   public override render() {
     if (this.state.hasError) {
@@ -45,12 +45,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 <AlertOctagon className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-white tracking-wide">
-                  Application Render Halted
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Deterministic safety state preserved
-                </p>
+                <h2 className="text-base font-bold text-white tracking-wide">Application Render Halted</h2>
+                <p className="text-xs text-slate-400">Deterministic safety state preserved</p>
               </div>
             </div>
 
@@ -78,9 +74,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
             </div>
           </div>
         </div>
-      );
+      )
     }
 
-    return this.props.children;
+    return this.props.children
   }
 }

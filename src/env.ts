@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+import dotenv from 'dotenv'
 
 /**
  * Environment bootstrap.
@@ -7,4 +7,4 @@ import dotenv from 'dotenv';
  * before any other module evaluates `process.env` at import time (for example
  * the logger level or the password policy length).
  */
-dotenv.config({ quiet: true });
+dotenv.config({ quiet: true })
