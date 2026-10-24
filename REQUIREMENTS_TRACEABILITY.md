@@ -58,6 +58,7 @@ Automated verification runs in GitHub Actions (`npm test`): 59 unit/system tests
 | R-43 | Git identity enforcement `"<App Name> Dev" <dev@example.com>` | `ci.sh`, PR template, `docs/development.md` | ci.sh asserts before commit | Met |
 | R-44 | Pinned build inputs (action SHAs) | `.github/workflows/*.yml` | all `uses:` pinned to commit SHAs | Met |
 | R-45 | Prometheus observability: metrics catalogue + example alerts + runbook | `docs/runbook.md`, `deploy/prometheus/alerts.example.yml` | docs + rules; metrics documented | Met |
+| R-46 | In-app crash report submission (device-flow, memory-only, opt-in) | `src/utils/crashReport.ts`, `src/components/SettingsView.tsx` | UI + poll state machine + scrubber, tests | Met |
 
 ## Gaps / planned
 

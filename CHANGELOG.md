@@ -8,6 +8,12 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Crash/bug report submission (0.2.x, device-flow).** Settings → About now offers opt-in
+  GitHub device-flow connection (user token held in memory only), in-app report preview modal
+  with payload scrubbing, and direct issue creation via GitHub REST API. Falls back to pre-filled
+  URL if not connected or on failure. Added `src/utils/crashReport.ts` with pure poll state machine
+  and scrubber, unit-tested. Privacy note updated.
+
 - **Observability — Prometheus runbook + example alerts (slice 0.2.x).** Added
   `docs/runbook.md` documenting every `cwm_*` metric, scrape config with `METRICS_TOKEN`,
   normal ranges, and per-alert first actions. Added `deploy/prometheus/alerts.example.yml`
