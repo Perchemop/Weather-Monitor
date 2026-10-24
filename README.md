@@ -434,6 +434,24 @@ State (SQLite database, backups, and generated secrets) persists in `./data`.
 - **Contributing:** see `CONTRIBUTING.md`; the public plan lives in
   `ROADMAP.md`.
 
+## Community & policies
+
+- Read the [contributing guide](CONTRIBUTING.md) before opening a pull request.
+- Follow the [code of conduct](CODE_OF_CONDUCT.md) in all project spaces.
+- Report security issues privately via the [security policy](SECURITY.md).
+- Review the [accessibility statement](ACCESSIBILITY.md) and file an
+  [accessibility report](https://github.com/Perchemop/Weather-Monitor/issues/new?template=accessibility_report.yml)
+  if something blocks you.
+- See [governance](GOVERNANCE.md) for roles and decision-making, [vision](VISION.md)
+  for project goals, and [contributors](CONTRIBUTORS.md) for who helped.
+
+## Licence
+
+Released under the [MIT licence](LICENSE). Weather data by
+[Open-Meteo](https://open-meteo.com/) is used under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); see
+[ATTRIBUTION.md](ATTRIBUTION.md) for all third-party notices.
+
 ---
 
 ## Safety & Compliance Disclaimer
