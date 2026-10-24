@@ -7,6 +7,66 @@ questions live in `docs/project-brief.md` and
 
 ---
 
+## D-28 — Part II §26 open questions resolved (2026-10-24)
+
+The operating guide's Part II records six conflicts and leaves them to the human.
+Decisions taken (all reversible):
+
+- **§26.1 local tests vs no heavy local work:** keep the local-build restriction
+  for the maintainer's machine, and document the exact commands in
+  `CONTRIBUTING.md`, stating CI is authoritative here _only_ because that machine
+  is constrained. Implemented.
+- **§26.2 public-from-day-one:** keep public (Part I requires it for the release
+  and update-check flows) with the added hard gates — secret scanning + push
+  protection, SAST, branch protection from the start. Implemented.
+- **§26.3 direct push vs protected branch:** adopt the pull-request flow for every
+  change and enable branch protection requiring the CI checks. Implemented
+  (required: format-check, security-compliance, build-test ×3, docker).
+- **§26.4 agent credentials vs two admins:** agent automation uses repo-local
+  identity and least privilege; at least two human admins is a human action item
+  recorded in `GOVERNANCE.md`/`docs/assumptions-and-questions.md`.
+- **§26.5 guide stays local vs publishing process:** `guide.md` stays local; the
+  contributor-relevant parts are mirrored into `CONTRIBUTING.md`/`GOVERNANCE.md`.
+- **§26.6 licence:** deliberately **MIT-only** (not "MIT OR Apache-2.0");
+  recorded here and in `ATTRIBUTION.md`.
+
+## D-27 — Security posture: SAST, SCA, SBOM, protected branch (2026-10-24)
+
+Per Part II §20: CodeQL (SAST) and dependency-review run on every PR; Dependabot
+(npm/actions/docker) plus Dependabot security updates are enabled; a licence-policy
+check and a CycloneDX SBOM are produced in a dedicated `security-compliance` CI job;
+private vulnerability reporting is enabled; and `main` is protected (no force-push,
+no deletion, conversation resolution, required checks). `enforce_admins` is left
+`false` as a documented break-glass valve for the single maintainer.
+
+## D-26 — Community files and accessibility practice adopted (2026-10-24)
+
+Per Part II §16–17, §21–25: added `CODE_OF_CONDUCT.md`, `SECURITY.md`,
+`ACCESSIBILITY.md`, `VISION.md`, `GOVERNANCE.md`, `CONTRIBUTORS.md`, `CITATION.cff`,
+issue templates (bug/feature/accessibility), a PR accessibility checklist,
+contributor labels, and response-time expectations (7 days). Accessibility is written
+into the Definition of Done and the release checklist. Bilingual CoC wording is
+original, in the spirit of the Contributor Covenant (not a copy).
+
+## D-25 — Open-Meteo data attribution (CC BY 4.0) (2026-10-24)
+
+Open-Meteo data is CC BY 4.0 and requires attribution next to displayed data. The UI
+footer now links "Weather data by Open-Meteo" (with the licence noted) and the map
+credits OpenStreetMap with a link. `ATTRIBUTION.md` records the data licences and the
+free-tier non-commercial caveat.
+
+## D-24 — Dependency licence policy and AI provenance recorded (2026-10-24)
+
+`ATTRIBUTION.md` classifies dependencies (permissive; MPL-2.0 weak copyleft tracked;
+CC-BY-4.0 usage data) and records the model/API terms used during the build (§19.7).
+`scripts/check-licences.mjs` enforces an allowlist in CI.
+
+## D-23 — Git identity enforcement (guide §5.5) (2026-10-24)
+
+Every app git action is authored as `Construction Weather Monitor Dev
+<dev@example.com>`. `ci.sh` asserts the repository-local identity before committing
+and refuses otherwise; the PR template and `docs/development.md` restate it.
+
 ## D-22 — Suite infrastructure adapted to the web/TS stack (2026-10-24)
 
 The guide's shared `crash-report` / `update-check` Rust crates are implemented
