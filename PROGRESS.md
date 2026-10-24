@@ -11,7 +11,7 @@ detailed history lives in `CHANGELOG.md`.
   CI checks required to pass (guide Part II §20.2).
 - **CI:** green on every slice. The workflow runs `format-check`,
   `security-compliance` (licence policy + CycloneDX SBOM), `dependency-review`,
-  a multi-OS `build-test` matrix (Windows, macOS, Linux — type-check, 88 tests,
+  a multi-OS `build-test` matrix (Windows, macOS, Linux — type-check, 86 tests,
   production build, static build with artefact upload), and `docker`. CodeQL
   (SAST) runs on push/PR/weekly; Dependabot covers npm, actions and Docker.
   Actions are pinned to commit SHAs.

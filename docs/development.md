@@ -115,7 +115,7 @@ Both run in CI's `format-check` job. Two layers, distinct jobs:
 
 `npm test` runs both suites in order:
 
-- `src/tests/system.test.ts` — 59 unit/system tests (risk engine incl. property
+- `src/tests/system.test.ts` — 57 unit/system tests (risk engine incl. property
   tests, weather normalisation, time, sessions, retention, push,
   performance summary, persistence health).
 - `src/tests/api.test.ts` — 29 HTTP integration tests (auth, RBAC, CSRF, MFA,
