@@ -783,9 +783,33 @@ export default function App() {
             <span>Private local system — no advertising, analytics or tracking.</span>
           </div>
           <p className="text-slate-600 text-center sm:text-right">
-            {STATIC_MODE
-              ? 'Weather from Open-Meteo · data stored in your browser (IndexedDB)'
-              : 'WeatherAPI + Open-Meteo · data stored locally in SQLite with backup rotation'}
+            {STATIC_MODE ? (
+              <>
+                Weather data by{' '}
+                <a
+                  href="https://open-meteo.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-slate-400 underline decoration-slate-700"
+                >
+                  Open-Meteo
+                </a>{' '}
+                (CC BY 4.0) · data stored in your browser (IndexedDB)
+              </>
+            ) : (
+              <>
+                WeatherAPI +{' '}
+                <a
+                  href="https://open-meteo.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-slate-400 underline decoration-slate-700"
+                >
+                  Open-Meteo
+                </a>{' '}
+                (CC BY 4.0) · data stored locally in SQLite with backup rotation
+              </>
+            )}
           </p>
         </div>
       </footer>

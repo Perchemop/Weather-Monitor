@@ -21,6 +21,18 @@
 - [ ] ROADMAP / CHANGELOG / REQUIREMENTS_TRACEABILITY updated if this completes a tracked item
 - [ ] Secrets and tokens not committed (`.env*` ignored; no keys in code or logs)
 - [ ] User-facing strings and UI are original (no copied trade dress)
+- [ ] Commits authored as `"<App Name> Dev" <dev@example.com>` (guide §5.5)
+
+## Accessibility (if UI changes)
+
+- [ ] Keyboard accessible; visible focus indicator
+- [ ] Native semantics used or ARIA only where necessary
+- [ ] Labels present; errors announced
+- [ ] Colour not the only signal; contrast acceptable
+- [ ] Respects `prefers-reduced-motion`
+- [ ] Touch targets >= 44×44 on coarse pointers
+- [ ] No meaning conveyed by position/style alone
+- [ ] Alt text for meaningful images
 
 ## Local verification
 

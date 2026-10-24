@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: 'If you use this software, please cite it as below.'
+type: software
+title: 'Construction Weather Monitor'
+abstract: 'Autonomous, local-first microclimate risk evaluation and automated safety alerts for construction sites.'
+authors:
+  - name: 'Construction Weather Monitor Dev'
+    email: 'dev@example.com'
+repository-code: 'https://github.com/Perchemop/Weather-Monitor'
+url: 'https://perchemop.github.io/Weather-Monitor/'
+license: 'MIT'
+version: '0.1.1'
+date-released: '2026-10-24'
+keywords:
+  - construction
+  - weather
+  - safety
+  - alerts
+  - local-first
+  - risk-assessment
