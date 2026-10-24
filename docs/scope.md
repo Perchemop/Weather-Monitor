@@ -44,3 +44,7 @@ what is deferred.
   (Secure cookies, HSTS) are opt-in.
 - No secrets are committed; provider credentials are supplied via environment
   variables.
+- The optional RainViewer radar overlay uses a **non-commercial free tier**;
+  organisations using the app commercially must obtain their own RainViewer plan
+  or leave the radar disabled. The risk engine, alerts and forecast do not depend
+  on it (see `ATTRIBUTION.md`).
