@@ -2,13 +2,15 @@
 
 Public roadmap for the Construction Weather Monitor. Readiness is updated
 **only from evidence** (CI runs and local verification) — never optimism
-(operating guide §6.2).
+(operating guide §6.2). This file is the exhaustive completion plan: every
+remaining piece of work to a declared-finished 1.0.0 is staged below with its
+research note (where applicable), owner of the next step, and readiness.
 
-## Milestone: v0.1.0 — first tagged functional build
+## Stage 0.1.x — shipped (v0.1.0, tagged)
 
-**Status: shipped.** First tagged release; every claim below is backed by the
-CI workflow (format-check, build-test matrix on Windows/macOS/Linux, docker)
-and the 86-check automated suite.
+First tagged release; every claim below is backed by the CI workflow
+(format-check, build-test matrix on Windows/macOS/Linux, docker, Pages deploy)
+and the 88-check automated suite.
 
 | Capability | State | Evidence |
 | --- | --- | --- |
@@ -26,29 +28,53 @@ and the 86-check automated suite.
 | Update check: Settings → About vs GitHub Releases, fail-soft, cached | Done | system tests (comparison logic); manual QC |
 | In-app version surfacing (`/healthz`, `/api/health`, Settings) | Done | API tests |
 | CI: format-check + 3-OS build-test + docker + Pages deploy | Done | GitHub Actions runs |
-| Release path: `release.yml` on `v*` tags, checksummed artefacts, changelog notes | Done | release workflow run for this tag |
-| Governance: PR template, CONTRIBUTING, roadmap, legal checklist | Done | files in tree |
+| Release path: `release.yml` on `v*` tags, checksummed artefacts, changelog notes | Done | release run for `v0.1.0` |
+| Governance: PR template, CONTRIBUTING, ROADMAP, brand doc, research gate | Done | files in tree |
 
-**Readiness: 100% of the v0.1.0 scope above, verified.**
+**Feature breadth: 100% of the v1 in-scope scope, implemented and verified.**
+**Ready-for-work: n/a — stage closed.**
 
-## Milestone: v0.2.x — hardening & shared-capability deepening
+## Stage 0.2.x — hardening & shared-capability deepening
 
-Planned items. Anything requiring public research waits for research notes
-(original summaries + URLs) and the **human gate** before implementation.
+Every item now carries its research note (`docs/research/<capability>.md`).
+**All notes await the human gate** (guide §2.3/§8.4): nothing below is
+implemented until the human approves the note it depends on. Approval
+criteria: original wording, URLs present, no copyrighted paste, no UI cloning.
 
-| Candidate | Ready for work | Notes |
-| --- | --- | --- |
-| In-app crash report submission (GitHub Issues via user token/device flow) | Blocked on research + human gate | §7.1 full flow; pre-filled issue link already shipped as fallback |
-| Multi-architecture container images (arm64) | Ready | purely CI work |
-| Opinionated formatter (Prettier) adoption | Ready | one-off whole-repo reformat, separate release |
-| Browser-level (DOM) UI tests (e.g. Playwright) | Ready | complements the two existing suites |
-| Prometheus alert examples + runbook doc | Ready | docs only |
+| # | Item | Research note | Next step | Ready-for-work |
+| --- | --- | --- | --- | --- |
+| 1 | In-app crash report submission (device-flow user token, memory-only) | [`crash-report-submission.md`](docs/research/crash-report-submission.md) | Human approval of design (B) + acceptance criteria | 0% — blocked on gate |
+| 2 | Multi-architecture container images (amd64 + arm64 via Buildx) | [`multi-arch-container-images.md`](docs/research/multi-arch-container-images.md) | Approve, then one CI slice | 90% — note complete, pure CI work |
+| 3 | Prettier adoption (dedicated reformat release) | [`prettier-adoption.md`](docs/research/prettier-adoption.md) | Approve config; one reformat-only PR | 90% — note complete |
+| 4 | Browser-level (DOM) smoke tests (Playwright) | [`dom-ui-tests.md`](docs/research/dom-ui-tests.md) | Approve scope; one slice + CI job | 85% — note complete |
+| 5 | Prometheus alert examples + operations runbook | [`prometheus-runbook.md`](docs/research/prometheus-runbook.md) | Approve alert set; docs slice + promtool check | 85% — note complete |
 
-## Milestone: 1.0.0 — stability declaration
+**Feature breadth: unchanged (no new in-scope features in this stage).**
+**Ready-for-work: 0/5 implemented; 4/5 unblocked the moment the gate opens.**
 
-Declared when: v0.2.x hardening lands, one full release cycle runs without a
-data-loss or security defect, and the operating guide's finished-product gates
-(§9) plus the legal checklist (§2.5) pass on the release commit.
+## Stage 1.0.0 — stability declaration
+
+Declared when all of the following hold on the release commit — no date
+promises, evidence only:
+
+- [ ] All 0.2.x items merged and verified in CI.
+- [ ] One full release cycle (tag → release → in-app update check observes it)
+      completes without a data-loss or security defect.
+- [ ] `docs/qc/release-checklist.md` fully ticked, including the §2.5 legal
+      checklist, on the release commit.
+- [ ] `docs/parity.md` and `REQUIREMENTS_TRACEABILITY.md` show every
+      requirement Met with verification.
+- [ ] Manual QC checklist completed against the deployed build.
+- [ ] Operating guide finished-product gates (§9) reviewed one final time.
+
+**Feature breadth: gate criteria only — no new features planned for 1.0.0.**
+
+## Out of scope for 1.0.0 (recorded so "exhaustive" stays honest)
+
+Multi-instance/HA deployments, external schedulers for the monitor cycle,
+in-app WeatherAPI key management, native desktop/mobile store packaging, and
+any SaaS/telemetry component. These contradict the local-first, private-enclave
+discovery decisions; reopening them is a discovery-level change, not a task.
 
 ## Release cadence
 

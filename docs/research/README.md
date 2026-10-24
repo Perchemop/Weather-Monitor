@@ -16,5 +16,14 @@ Public clean-room research lives here (operating guide §2.3, §8.4).
 
 ## Index
 
-_(empty — no research-gated capabilities are currently in progress. Candidates
-tracked in `ROADMAP.md` v0.2.x will add their notes here first.)_
+| Note | Status | Gate |
+| --- | --- | --- |
+| [`crash-report-submission.md`](crash-report-submission.md) | Draft v1 | **Awaiting human approval** — blocks the 0.2.x crash-report implementation |
+| [`multi-arch-container-images.md`](multi-arch-container-images.md) | Draft v1 | Awaiting human approval |
+| [`prettier-adoption.md`](prettier-adoption.md) | Draft v1 | Awaiting human approval |
+| [`dom-ui-tests.md`](dom-ui-tests.md) | Draft v1 | Awaiting human approval |
+| [`prometheus-runbook.md`](prometheus-runbook.md) | Draft v1 | Awaiting human approval |
+
+All notes are original summaries with source URLs. Approval criteria (guide
+§8.4): original wording, URLs present, no substantial copyrighted paste, no
+instruction to clone a vendor's exact UI.
