@@ -25,6 +25,29 @@ Complete before tagging or merging a release-worthy branch.
 - [ ] Known limitations recorded in `docs/scope.md` and
       `docs/assumptions-and-questions.md`.
 
+## Part II open-source gates (operating guide §25 / §25.1)
+
+- [ ] `LICENSE`, `README`, `CONTRIBUTING`, `CODE_OF_CONDUCT` exist and current.
+- [ ] `SECURITY.md` exists covering private reporting; private vulnerability
+      reporting enabled on GitHub.
+- [ ] `ACCESSIBILITY.md` current; accessibility issue template present.
+- [ ] `VISION.md`, `GOVERNANCE.md`, `CONTRIBUTORS.md` current.
+- [ ] New dependencies within allowed licence classes; CI licence check green.
+- [ ] SBOM generated and attached (CycloneDX artefact).
+- [ ] Secret scanning clean; SAST (CodeQL) clean or findings triaged.
+- [ ] Protected branch + required status checks configured.
+- [ ] UI changes passed the accessibility checklist (§21.6).
+- [ ] Issue queue labelled; issue/PR templates in place.
+- [ ] Commits authored as `"Construction Weather Monitor Dev" <dev@example.com>`.
+
+## Accessibility smoke test (operating guide §21.6 — every release)
+
+- [ ] Keyboard-only run-through of the main flows works.
+- [ ] Focus is visible and in a logical order.
+- [ ] Screen-reader spot check of the dashboard.
+- [ ] 200% zoom and narrow reflow usable.
+- [ ] Reduced-motion respected; colour not the only signal.
+
 ## Manual pass
 
 - [ ] `docs/qc/manual-checklist.md` completed against a deployed build.
