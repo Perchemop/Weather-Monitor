@@ -57,6 +57,7 @@ Automated verification runs in GitHub Actions (`npm test`): 59 unit/system tests
 | R-42 | Data/asset attribution (Open-Meteo CC BY 4.0, OSM) and AI provenance | `ATTRIBUTION.md`, UI footer, map | code + docs | Met |
 | R-43 | Git identity enforcement `"<App Name> Dev" <dev@example.com>` | `ci.sh`, PR template, `docs/development.md` | ci.sh asserts before commit | Met |
 | R-44 | Pinned build inputs (action SHAs) | `.github/workflows/*.yml` | all `uses:` pinned to commit SHAs | Met |
+| R-45 | Prometheus observability: metrics catalogue + example alerts + runbook | `docs/runbook.md`, `deploy/prometheus/alerts.example.yml` | docs + rules; metrics documented | Met |
 
 ## Gaps / planned
 
