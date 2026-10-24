@@ -7,6 +7,34 @@ questions live in `docs/project-brief.md` and
 
 ---
 
+## D-22 — Suite infrastructure adapted to the web/TS stack (2026-10-24)
+
+The guide's shared `crash-report` / `update-check` Rust crates are implemented
+for this stack as first-party TypeScript: a React `ErrorBoundary` plus server
+process handlers (`unhandledRejection` log, `uncaughtException` → log + SQLite
+flush + bounded exit) form the crash stub; Settings → About provides the
+update check (GitHub Releases API, hourly cache, fail-soft) and a pre-filled
+GitHub issue form as the crash-report fallback (no token embedded, nothing
+sent automatically).
+
+**Why:** the discovery fixed a TypeScript web app, so a Rust crate is not
+consumable. The web-app equivalents deliver the same capabilities at the
+v0.1.0 gate level; the full in-app report flow (user token / device flow) is
+roadmapped for 0.2.x behind the research human gate.
+
+## D-21 — Versioning and release path: semver tags from v0.1.0 (2026-10-24)
+
+`package.json` version is `0.1.0` (was the untagged `1.0.0`), kept in sync with
+`src/version.ts` and git tags. A tag-triggered `release.yml` gates on the full
+verification suite, builds the server and static bundles, attaches SHA-256
+checksummed artefacts, and publishes a GitHub Release whose notes are
+extracted from the matching `CHANGELOG.md` section. The in-app update check
+compares `src/version.ts` against the latest release tag.
+
+**Why:** the guide requires the release path to exist from day one (§4) and a
+hard, honest v0.1.0 gate (§6.1). Starting the semver story at 0.1.0 keeps the
+pre-1.0 contract explicit and makes the update check meaningful.
+
 ## D-20 — Persistence failures are observable (2026-10-23)
 
 `persistDb()` records a failed write (`getPersistenceStatus()`) and exposes it

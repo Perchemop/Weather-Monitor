@@ -20,7 +20,10 @@ import {
   RefreshCw,
   HardHat,
   LogOut,
-  Monitor
+  Monitor,
+  Info,
+  ExternalLink,
+  CircleAlert
 } from 'lucide-react';
 import { OwnerSettings, RiskThresholds, SecretsStatus, SessionInfo, UserRole } from '../types';
 import { useToast } from './ToastProvider';
@@ -28,6 +31,8 @@ import { apiFetch } from '../utils/api';
 import { STATIC_MODE } from '../static/mode';
 import { requestNotificationPermission } from '../static/notifications';
 import { emailRelayConfigured } from '../static/emailRelay';
+import { APP_VERSION } from '../version';
+import { resolveUpdateState, UpdateState } from '../utils/updateCheck';
 
 interface SettingsViewProps {
   onSettingsSaved?: () => void;
@@ -64,7 +69,7 @@ function describeUserAgent(ua: string | null): string {
 export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, userRole = 'OWNER' }) => {
   const toast = useToast();
   const isOwner = userRole === 'OWNER';
-  const [activeTab, setActiveTab] = useState<'general' | 'thresholds' | 'monitoring' | 'smtp' | 'storage' | 'security'>(
+  const [activeTab, setActiveTab] = useState<'general' | 'thresholds' | 'monitoring' | 'smtp' | 'storage' | 'security' | 'about'>(
     isOwner ? 'general' : 'security'
   );
   const [settings, setSettings] = useState<OwnerSettings | null>(null);
@@ -77,6 +82,64 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [backups, setBackups] = useState<{ filename: string; size: number; createdAt: string }[]>([]);
   const [creatingBackup, setCreatingBackup] = useState(false);
+
+  // ----------------- About / update check (guide §7.2) -----------------
+  // Fails soft offline, caches for an hour so we never hammer the Releases
+  // API, and reports honestly when the version cannot be determined.
+  const [updateState, setUpdateState] = useState<UpdateState | null>(null);
+  const [updateCheckedAt, setUpdateCheckedAt] = useState<Date | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+
+  const runUpdateCheck = React.useCallback(async (force: boolean) => {
+    const CACHE_KEY = 'cwm.update-check.v1';
+    const CACHE_TTL_MS = 60 * 60 * 1000;
+    if (!force) {
+      try {
+        const raw = sessionStorage.getItem(CACHE_KEY);
+        if (raw) {
+          const cached = JSON.parse(raw) as { checkedAt: number; state: UpdateState };
+          if (typeof cached?.checkedAt === 'number' && Date.now() - cached.checkedAt < CACHE_TTL_MS) {
+            setUpdateState(cached.state);
+            setUpdateCheckedAt(new Date(cached.checkedAt));
+            return;
+          }
+        }
+      } catch {
+        // Corrupt cache is equivalent to no cache.
+      }
+    }
+    setUpdateChecking(true);
+    try {
+      const res = await fetch('https://api.github.com/repos/Perchemop/Weather-Monitor/releases/latest', {
+        headers: { Accept: 'application/vnd.github+json' }
+      });
+      if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
+      const data = (await res.json()) as { tag_name?: string; html_url?: string };
+      const state = resolveUpdateState(APP_VERSION, data.tag_name ?? null, data.html_url ?? null);
+      setUpdateState(state);
+      setUpdateCheckedAt(new Date());
+      try {
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ checkedAt: Date.now(), state }));
+      } catch {
+        // Storage unavailable (private mode) — the check simply is not cached.
+      }
+    } catch {
+      setUpdateState({ status: 'unknown', latestVersion: null, url: null });
+      setUpdateCheckedAt(new Date());
+    } finally {
+      setUpdateChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void runUpdateCheck(false);
+  }, [runUpdateCheck]);
+
+  const reportIssueUrl = `https://github.com/Perchemop/Weather-Monitor/issues/new?title=${encodeURIComponent(
+    '[bug] '
+  )}&body=${encodeURIComponent(
+    `### Description\n\n\n### What happened vs what you expected\n\n\n### Environment\n- App version: ${APP_VERSION}\n- Mode: ${STATIC_MODE ? 'Static (browser build)' : 'Server build'}\n- Browser: ${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}\n\n> Please review before submitting and remove anything you do not want to publish.\n> Do not include passwords, tokens, or site locations.`
+  )}`;
 
   // Confirmation modal state (replaces window.confirm)
   const [confirmModal, setConfirmModal] = useState<{
@@ -666,7 +729,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
   // SMTP, storage/backup and account security are server concerns; the static
   // browser build has no such backend, so those tabs are omitted there. Site
   // configuration tabs are further restricted to the OWNER role, mirroring the
-  // server's OWNER-only settings route.
+  // server's OWNER-only settings route. The About tab is visible to every
+  // signed-in role in both build modes.
   const serverOnlyTabs = new Set(['smtp', 'storage', 'security']);
   const ownerOnlyTabs = new Set(['general', 'thresholds', 'monitoring', 'smtp', 'storage']);
   const tabs = [
@@ -675,7 +739,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
     { id: 'monitoring', label: 'Cycle & Alerts', icon: Clock },
     { id: 'smtp', label: 'Email Gateway', icon: Mail },
     { id: 'storage', label: 'Storage & Backup', icon: Database },
-    { id: 'security', label: 'Security & Auth', icon: Lock }
+    { id: 'security', label: 'Security & Auth', icon: Lock },
+    { id: 'about', label: 'About', icon: Info }
   ].filter(
     (tab) =>
       (!STATIC_MODE || !serverOnlyTabs.has(tab.id)) &&
@@ -1699,6 +1764,117 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 ))}
               </ul>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* About: version, update check, issue reporting (guide §7) */}
+      {activeTab === 'about' && (
+        <div className="space-y-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+              <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-slate-200">
+                <HardHat className="h-4 w-4 text-amber-400" />
+                Construction Weather Monitor
+              </h3>
+              <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-0.5 text-xs font-semibold tabular-nums text-slate-300">
+                v{APP_VERSION}
+              </span>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-slate-400">
+              Deterministic construction weather risk monitoring and automated safety alerting.
+              Free and open source (MIT).{' '}
+              {STATIC_MODE
+                ? 'Running in browser-only static mode: weather from Open-Meteo, data stored locally in IndexedDB.'
+                : 'Running in server mode: WeatherAPI with Open-Meteo cross-reference, data stored locally in SQLite.'}
+            </p>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+              <h3 className="text-sm font-semibold tracking-tight text-slate-200">Updates</h3>
+              <button
+                type="button"
+                id="check-updates-btn"
+                onClick={() => void runUpdateCheck(true)}
+                disabled={updateChecking}
+                className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${updateChecking ? 'animate-spin' : ''}`} />
+                Check for updates
+              </button>
+            </div>
+
+            <div className="mt-3.5 text-xs">
+              {!updateState && !updateChecking && (
+                <p className="text-slate-500">Not checked yet.</p>
+              )}
+              {updateChecking && <p className="text-slate-500">Checking GitHub Releases…</p>}
+              {!updateChecking && updateState?.status === 'up-to-date' && (
+                <p className="flex items-center gap-2 text-slate-300">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Up to date — v{updateState.latestVersion} is the latest release.
+                    {updateCheckedAt && <span className="text-slate-500"> Checked {updateCheckedAt.toLocaleTimeString()}.</span>}
+                  </span>
+                </p>
+              )}
+              {!updateChecking && updateState?.status === 'update-available' && (
+                <p className="flex items-center gap-2 text-amber-300">
+                  <CircleAlert className="h-4 w-4 shrink-0" />
+                  <span>
+                    Update available: v{updateState.latestVersion}.{' '}
+                    {updateState.url && (
+                      <a
+                        href={updateState.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-semibold text-amber-300 underline decoration-amber-500/40 hover:decoration-amber-400"
+                      >
+                        View release <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </span>
+                </p>
+              )}
+              {!updateChecking && updateState?.status === 'unknown' && (
+                <p className="flex items-center gap-2 text-slate-400">
+                  <CircleAlert className="h-4 w-4 shrink-0 text-slate-500" />
+                  <span>
+                    Could not reach GitHub Releases{updateCheckedAt ? ` (checked ${updateCheckedAt.toLocaleTimeString()})` : ''}.
+                    The app keeps working offline; try again later.
+                  </span>
+                </p>
+              )}
+              <p className="mt-2.5 text-[11px] text-slate-600">
+                Checks happen only when you open this tab or press the button — at most hourly — and never send any
+                information from this device.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-md">
+            <h3 className="text-sm font-semibold tracking-tight text-slate-200 border-b border-slate-800/80 pb-3.5">
+              Report a problem
+            </h3>
+            <p className="mt-3 text-xs leading-relaxed text-slate-400">
+              Found a bug or an unsafe behaviour? Open a GitHub issue — the form comes pre-filled with the app
+              version and browser so the report is actionable.
+            </p>
+            <a
+              id="report-issue-link"
+              href={reportIssueUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open a GitHub issue
+            </a>
+            <p className="mt-2.5 text-[11px] text-slate-600">
+              Nothing is sent automatically — you review and submit the report yourself. Do not include passwords,
+              tokens or site locations.
+            </p>
           </div>
         </div>
       )}

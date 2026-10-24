@@ -1,0 +1,84 @@
+name: Release
+
+# Progressive semver releases (guide §4 / §6). A tag push builds the server
+# bundle and the static bundle, gates on the full verification suite, attaches
+# checksummed artefacts, and publishes a GitHub Release whose notes come from
+# the matching CHANGELOG section (falling back to generated notes).
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run lint
+
+      - name: Test suite (88 checks)
+        run: npm test
+
+      - name: Build server bundle
+        run: npm run build
+
+      - name: Build static bundle (GitHub Pages variant)
+        run: npm run build:static
+
+      - name: Package artefacts
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          tar -czf "construction-weather-monitor-${VERSION}-server.tar.gz" dist
+          cd dist-static && zip -qr "../construction-weather-monitor-${VERSION}-static.zip" . && cd ..
+          sha256sum "construction-weather-monitor-${VERSION}-server.tar.gz" \
+                    "construction-weather-monitor-${VERSION}-static.zip" > checksums-${VERSION}.txt
+          cat "checksums-${VERSION}.txt"
+
+      - name: Extract release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Take the body of the "## [x.y.z]" section that matches this tag.
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No CHANGELOG section for ${VERSION}; using generated notes." >&2
+            echo "Release ${GITHUB_REF_NAME} — see CHANGELOG.md for details." > release-notes.md
+          fi
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          files: |
+            construction-weather-monitor-*.tar.gz
+            construction-weather-monitor-*.zip
+            checksums-*.txt
+
+      - name: Upload build artefacts (workflow run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.ref_name }}
+          path: |
+            dist/
+            dist-static/
+          retention-days: 14

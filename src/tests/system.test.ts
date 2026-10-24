@@ -22,6 +22,7 @@ import {
   clearPersistenceFailure,
   getPersistenceStatus
 } from '../database/db.js';
+import { compareVersions, resolveUpdateState } from '../utils/updateCheck.js';
 import {
   createUserAccount,
   verifyUserCredentials,
@@ -1042,6 +1043,26 @@ async function runTests() {
 
     clearPersistenceFailure();
     assert.equal(getPersistenceStatus().healthy, true, 'a successful write clears the failure');
+  });
+
+  test('Update check: version comparison orders releases correctly', () => {
+    assert.equal(compareVersions('0.1.0', '0.1.0'), 0);
+    assert.ok(compareVersions('0.1.0', '0.2.0') < 0, 'older patch-minor is less');
+    assert.ok(compareVersions('0.2.10', '0.2.9') > 0, 'numeric compare, not lexical');
+    assert.ok(compareVersions('1.0.0', '0.9.9') > 0, 'major beats minor');
+    assert.ok(compareVersions('0.2.0-beta.1', '0.2.0') < 0, 'prerelease is older than its release');
+    assert.ok(compareVersions('v0.2.0', '0.2.0') === 0, 'leading v is ignored');
+    assert.equal(compareVersions('not-a-version', '0.1.0'), null, 'garbage parses to null');
+  });
+
+  test('Update check: state resolution is honest (no fake up-to-date)', () => {
+    assert.equal(resolveUpdateState('0.1.0', 'v0.1.0', 'u').status, 'up-to-date');
+    assert.equal(resolveUpdateState('0.1.0', 'v0.2.0', 'u').status, 'update-available');
+    assert.equal(resolveUpdateState('0.1.0', 'v0.2.0', 'u').url, 'u');
+    assert.equal(resolveUpdateState('0.2.0', 'v0.1.0', null).status, 'up-to-date', 'running ahead still fine');
+    // Unknown inputs must surface as unknown, never as "up to date".
+    assert.equal(resolveUpdateState('0.1.0', null, null).status, 'unknown');
+    assert.equal(resolveUpdateState('0.1.0', 'garbage', null).status, 'unknown');
   });
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
