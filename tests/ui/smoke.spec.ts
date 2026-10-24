@@ -9,11 +9,6 @@ const VIEWER_PASSWORD = 'ViewerPass123'
  * Helper to perform first-run setup if needed.
  */
 async function ensureSetup(page) {
-  const status = await page.request
-    .get('/api/auth/status')
-    .then((r) => r.json())
-    .catch(() => ({ isFirstRun: true }))
-  // If first run UI is shown, complete setup
   const isSetup = await page
     .locator('text=Initial Master Password Setup')
     .isVisible()
@@ -27,10 +22,21 @@ async function ensureSetup(page) {
   }
 }
 
-/**
- * Smoke tests for Construction Weather Monitor UI.
- * Covers first-run, login, dashboard render, role gating, manual check, alert dismiss, About version.
- */
+async function loginAs(page, email, password) {
+  const isLogin = await page
+    .locator('text=Site Supervisor Lock')
+    .isVisible()
+    .catch(() => false)
+  if (isLogin) {
+    await page.getByLabel(/Operator Email/i).fill(email)
+    await page.getByLabel(/Master Password/i).fill(password)
+    await page.getByRole('button', { name: /sign in/i }).click()
+  }
+  await expect(page.locator('#hero-risk-card')).toBeVisible({ timeout: 15000 })
+  // Let the dashboard finish hydrating async data (alerts panel, etc.)
+  await page.waitForLoadState('networkidle')
+}
+
 test.describe('UI Smoke Suite', () => {
   test.beforeEach(async ({ page }) => {
     // Block external weather providers to avoid real network.
@@ -62,49 +68,24 @@ test.describe('UI Smoke Suite', () => {
 
   test('login works after setup', async ({ page }) => {
     await page.goto('/')
-    // If already set up, we should be at login screen
-    const isLogin = await page
-      .locator('text=Site Supervisor Lock')
-      .isVisible()
-      .catch(() => false)
-    if (isLogin) {
-      await page.getByLabel(/Operator Email/i).fill(OWNER_EMAIL)
-      await page.getByLabel(/Master Password/i).fill(OWNER_PASSWORD)
-      await page.getByRole('button', { name: /sign in/i }).click()
-      await expect(page.locator('#hero-risk-card')).toBeVisible({ timeout: 15000 })
-    }
+    await loginAs(page, OWNER_EMAIL, OWNER_PASSWORD)
   })
 
   test('dashboard renders hero and conditions', async ({ page }) => {
     await page.goto('/')
     await ensureSetup(page)
-    // Login if needed
-    if (
-      await page
-        .locator('text=Site Supervisor Lock')
-        .isVisible()
-        .catch(() => false)
-    ) {
-      await page.getByLabel(/Operator Email/i).fill(OWNER_EMAIL)
-      await page.getByLabel(/Master Password/i).fill(OWNER_PASSWORD)
-      await page.getByRole('button', { name: /sign in/i }).click()
-    }
+    await loginAs(page, OWNER_EMAIL, OWNER_PASSWORD)
     await expect(page.locator('#hero-risk-card')).toBeVisible()
     // Conditions panel is rendered on dashboard
     await expect(page.getByText(/Current Conditions/i)).toBeVisible()
   })
 
   test('role gating Viewer lacks owner-only tabs', async ({ page }) => {
-    // Create viewer account via API as owner first
     await page.goto('/')
     await ensureSetup(page)
-    // Ensure logged in as owner
-    await page.getByLabel(/Operator Email/i).fill(OWNER_EMAIL)
-    await page.getByLabel(/Master Password/i).fill(OWNER_PASSWORD)
-    await page.getByRole('button', { name: /sign in/i }).click()
-    await expect(page.locator('#hero-risk-card')).toBeVisible()
+    await loginAs(page, OWNER_EMAIL, OWNER_PASSWORD)
 
-    // Create viewer via API
+    // Create viewer account via API as owner
     await page.request.post('/api/users', {
       data: { email: VIEWER_EMAIL, password: VIEWER_PASSWORD, role: 'VIEWER', displayName: 'Viewer' },
     })
@@ -113,14 +94,10 @@ test.describe('UI Smoke Suite', () => {
     await page.locator('#logout-btn').click()
 
     // Login as viewer
-    await page.getByLabel(/Operator Email/i).fill(VIEWER_EMAIL)
-    await page.getByLabel(/Master Password/i).fill(VIEWER_PASSWORD)
-    await page.getByRole('button', { name: /sign in/i }).click()
-    await expect(page.locator('#hero-risk-card')).toBeVisible()
+    await loginAs(page, VIEWER_EMAIL, VIEWER_PASSWORD)
 
     // Owner-only tabs should be hidden (e.g., Settings owner tabs)
-    const settingsTab = page.locator('#nav-tab-settings')
-    await settingsTab.click()
+    await page.locator('#nav-tab-settings').click()
     // Viewer should not see owner-only sections like thresholds
     await expect(page.getByText(/Safety Thresholds/i)).toBeHidden()
   })
@@ -128,16 +105,7 @@ test.describe('UI Smoke Suite', () => {
   test('manual Check now reflects checking state', async ({ page }) => {
     await page.goto('/')
     await ensureSetup(page)
-    if (
-      await page
-        .locator('text=Site Supervisor Lock')
-        .isVisible()
-        .catch(() => false)
-    ) {
-      await page.getByLabel(/Operator Email/i).fill(OWNER_EMAIL)
-      await page.getByLabel(/Master Password/i).fill(OWNER_PASSWORD)
-      await page.getByRole('button', { name: /sign in/i }).click()
-    }
+    await loginAs(page, OWNER_EMAIL, OWNER_PASSWORD)
     await expect(page.locator('#manual-check-btn')).toBeVisible()
     await page.locator('#manual-check-btn').click()
     // Button should show checking state temporarily
@@ -147,39 +115,21 @@ test.describe('UI Smoke Suite', () => {
   test('alert card dismiss flow', async ({ page }) => {
     await page.goto('/')
     await ensureSetup(page)
-    if (
-      await page
-        .locator('text=Site Supervisor Lock')
-        .isVisible()
-        .catch(() => false)
-    ) {
-      await page.getByLabel(/Operator Email/i).fill(OWNER_EMAIL)
-      await page.getByLabel(/Master Password/i).fill(OWNER_PASSWORD)
-      await page.getByRole('button', { name: /sign in/i }).click()
-    }
-    // Ensure alerts panel exists
-    await expect(page.locator('#active-alerts-panel')).toBeVisible()
+    await loginAs(page, OWNER_EMAIL, OWNER_PASSWORD)
+    // Ensure alerts panel exists (renders on dashboard tab)
+    await expect(page.locator('#active-alerts-panel')).toBeVisible({ timeout: 15000 })
     // If an alert is present, dismiss it
     const dismissBtn = page.locator('#active-alerts-panel >> button:has-text("Dismiss")').first()
     if (await dismissBtn.isVisible().catch(() => false)) {
       await dismissBtn.click()
-      await expect(page.locator('text=Active Alerts')).toBeVisible()
+      await expect(page.getByText(/Active Alerts/i)).toBeVisible()
     }
   })
 
   test('About tab shows version', async ({ page }) => {
     await page.goto('/')
     await ensureSetup(page)
-    if (
-      await page
-        .locator('text=Site Supervisor Lock')
-        .isVisible()
-        .catch(() => false)
-    ) {
-      await page.getByLabel(/Operator Email/i).fill(OWNER_EMAIL)
-      await page.getByLabel(/Master Password/i).fill(OWNER_PASSWORD)
-      await page.getByRole('button', { name: /sign in/i }).click()
-    }
+    await loginAs(page, OWNER_EMAIL, OWNER_PASSWORD)
     await page.locator('#nav-tab-settings').click()
     // About sub-tab is inside settings view
     await page.getByRole('button', { name: /about/i }).click()
