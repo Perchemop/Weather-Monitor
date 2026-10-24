@@ -45,6 +45,12 @@ Complete before tagging or merging a release-worthy branch.
       "drop-in replacement" claims.
 - [ ] Research files (if any) are summaries + URLs only.
 
+## Container image
+
+- [ ] Multi-platform image pushed: `ghcr.io/perchemop/weather-monitor:<version>`.
+- [ ] `docker manifest inspect` lists both `linux/amd64` and `linux/arm64`.
+- [ ] Image digest recorded in the release notes.
+
 ## Release notes standard (operating guide §6.3)
 
 The GitHub Release body (extracted from `CHANGELOG.md` by `release.yml`)

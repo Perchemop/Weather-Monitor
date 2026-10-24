@@ -8,35 +8,39 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Research phase complete (guide §2.3).** Five research notes drafted in
+- **Research phase complete (guide §2.3).** Five research notes in
   `docs/research/` — in-app crash report submission (device-flow user token,
   memory-only), multi-architecture container images, Prettier adoption,
   Playwright DOM smoke tests, and Prometheus alert examples + runbook. Each
   note is an original summary with acceptance criteria, edge cases, and source
-  URLs only.
-- `docs/current-model-map.md` now documents the research method (guide §2.4):
+  URLs only. **All five notes are approved** (human gate passed 2026-10-24);
+  implementation proceeds one slice per PR.
+- `docs/current-model-map.md` documents the research method (guide §2.4):
   orchestrator web access first, CI fetch assist second, human-pasted excerpts
   last; notes human-gated before dependent implementation.
 - `ROADMAP.md` expanded into the exhaustive completion plan: staged
   0.1.x → 0.2.x → 1.0.0 with feature-breadth and ready-for-work percentages
   updated from evidence only, plus an explicit out-of-scope record.
 
-### Known limitations
+## [0.1.1] — 2026-10-24
 
-- All five research notes are **awaiting the human gate**; no dependent
-  implementation exists yet.
+### Added
+
+- **Multi-architecture container images** (research-gated slice 2 of 5). The
+  release workflow now builds and publishes `linux/amd64` **and** `linux/arm64`
+  images to `ghcr.io/perchemop/weather-monitor` (version tags + `latest`),
+  via QEMU + Buildx. PR verification stays build-only (no registry push).
 
 ### Changed
 
 - **Prettier is now the style authority** (research-gated slice 1 of 5). One
   dedicated reformat across code, Markdown, JSON and YAML with no behavioural
-  change — the whole-repository formatting is the only change in this PR.
-  Config in `.prettierrc.json` (no semicolons, single quotes, width 110);
-  `npm run prettier:check` runs in CI alongside the unchanged hygiene checker
-  (`scripts/check-format.mjs`); `.prettierignore` keeps docs, generated output,
-  lockfiles, the service worker and the harness config (`.opencode/`,
-  `opencode.jsonc` — files the harness owns and rewrites, so they are not ours
-  to reformat) out of the formatter.
+  change. Config in `.prettierrc.json` (no semicolons, single quotes, width
+  110); `npm run prettier:check` runs in CI alongside the unchanged hygiene
+  checker (`scripts/check-format.mjs`); `.prettierignore` keeps docs,
+  generated output, lockfiles, the service worker and the harness config
+  (`.opencode/`, `opencode.jsonc` — files the harness owns and rewrites) out
+  of the formatter.
 
 ## [0.1.0] — 2026-10-24
 
