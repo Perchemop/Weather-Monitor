@@ -372,11 +372,11 @@ The server will start on port 3000 (`http://localhost:3000`).
 
 ```bash
 npm test              # both suites
-npm run test:unit     # deterministic engine + utilities (59 checks)
+npm run test:unit     # deterministic engine + utilities (57 checks)
 npm run test:api      # HTTP integration surface (29 checks)
 ```
 
-The suite is now an **88-point** verification run split across two layers:
+The suite is now an **86-point** verification run split across two layers:
 
 - **Unit suite** — deterministic risk calculation (including UV level handling
   and next-6-hour forecast windowing), WeatherAPI→WMO condition mapping,
