@@ -16,6 +16,12 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   template expanded with accessibility checklist and git-identity reminder;
   `CONTRIBUTING.md` expanded with local setup, identity instructions and
   response expectations.
+- **Security & supply chain (guide §20).** CodeQL SAST and a dependency-review
+  gate run on every PR; Dependabot (npm/actions/docker) and Dependabot security
+  updates enabled; a `security-compliance` CI job runs the dependency licence
+  policy check and produces a CycloneDX SBOM; all workflow actions are pinned to
+  commit SHAs; `main` is protected (required checks, no force-push, conversation
+  resolution); private vulnerability reporting enabled.
 - **Legal/compliance.** Open-Meteo data attribution added to the UI footer and
   map (CC BY 4.0); `ATTRIBUTION.md` extended with dependency classes, AI/model
   provenance and deliberate MIT-only licensing. Map tiles attribution clarified.
