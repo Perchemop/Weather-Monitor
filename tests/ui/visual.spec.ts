@@ -27,10 +27,7 @@ const VIEWPORTS = [
 async function settle(page: Page) {
   await page.waitForLoadState('networkidle')
   await page.evaluate(
-    () =>
-      new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      ),
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
   )
 }
 
