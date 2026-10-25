@@ -61,6 +61,8 @@ src/
   static/                  browser-only backend for the static build
   utils/                   helpers (auth, time, units, rate limit, …)
   tests/                   system.test.ts + api.test.ts
+tests/ui/                  Playwright DOM smoke suite (playwright.config.ts,
+                           smoke.spec.ts)
 public/                    PWA assets (service worker, manifest)
 integrations/              optional Cloudflare Worker email relay
 docs/                      this documentation set
@@ -120,6 +122,15 @@ Both run in CI's `format-check` job. Two layers, distinct jobs:
   performance summary, persistence health).
 - `src/tests/api.test.ts` — 29 HTTP integration tests (auth, RBAC, CSRF, MFA,
   sessions, backups, metrics, health, integrity).
+
+A third suite runs in its own CI job (`ui-tests`):
+
+- `tests/ui/smoke.spec.ts` — 7 Playwright DOM smoke tests (Chromium; first-run
+  setup, sign-in, dashboard shell, manual check state, alert dismiss,
+  Settings → About version, viewer role gating). It boots the built app against
+  a temporary `DATA_DIR`, stubs the external weather providers, and raises the
+  auth/API rate limits so per-test re-authentication is not throttled. Reports
+  and traces upload as artifacts.
 
 ## Workflow conventions
 
