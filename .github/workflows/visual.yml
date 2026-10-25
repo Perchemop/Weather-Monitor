@@ -1,0 +1,53 @@
+name: Visual evidence
+
+# Renders the app and uploads PNGs for the designer agent to review
+# (guide.md section 27.12). Artefacts only: no pixel baselines are committed.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # The project's own Playwright config is in tests/ui and starts the server
+      # itself (npm run build + node dist/server.cjs on a temporary DATA_DIR).
+      - name: Capture screenshots
+        working-directory: tests/ui
+        run: npx playwright test visual.spec.ts
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: visual-evidence
+          path: tests/ui/snapshots/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: visual-report
+          path: tests/ui/playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
