@@ -8,6 +8,18 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Browser-level (DOM) smoke tests (0.2.x, Playwright).** Added
+  `tests/ui/smoke.spec.ts` (7 tests) plus `tests/ui/playwright.config.ts`,
+  which builds the app and boots the production server against a temporary
+  `DATA_DIR` with stubbed external weather providers and raised auth/API rate
+  limits. Coverage: first-run setup, sign-in with existing credentials,
+  dashboard shell panels, manual-check in-flight state, alert-panel dismiss
+  flow, Settings → About version, and viewer role gating (owner-only tabs
+  filtered). New `ui-tests` CI job runs it on Chromium and uploads the HTML
+  report and traces as artifacts; `docker` now depends on `build-test` and
+  `ui-tests`. Also fixed a bug the tests exposed: a successful manual check left
+  the "Check now" button permanently disabled because `isChecking` was never
+  reset on the success path.
 - **Crash/bug report submission (0.2.x, device-flow).** Settings → About now offers opt-in
   GitHub device-flow connection (user token held in memory only), in-app report preview modal
   with payload scrubbing, and direct issue creation via GitHub REST API. Falls back to pre-filled
