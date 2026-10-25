@@ -292,3 +292,23 @@ repository's GitHub Actions workflow.
 
 **Why:** the development host is memory-constrained, and CI gives an
 authoritative, reproducible signal before a slice is considered done.
+
+## D-18 — DOM smoke tests assert the shell, not provider data
+
+The Playwright suite (`tests/ui/smoke.spec.ts`) verifies navigation, forms,
+in-flight control states and role gating — never values that depend on a
+weather provider or a configured location. The CI server starts with an empty
+temporary `DATA_DIR`, so `/api/weather/*` answers 404 and `HeroRiskCard` /
+`CurrentConditions` stay in their skeleton state; the tests therefore key on
+elements that always render (`#nav-tab-settings`, `#active-alerts-panel`).
+
+**Why:** smoke tests must be deterministic and independent of live network and
+of seeded data, otherwise they fail for reasons unrelated to the UI. Weather-dependent
+rendering stays covered by the system/api suites.
+
+The Playwright `webServer` raises `AUTH_RATE_LIMIT_MAX` / `API_RATE_LIMIT_MAX`
+for the test server only.
+
+**Why:** each test re-authenticates in a fresh browser context; the default
+limit of 10 auth attempts per 15 minutes otherwise turns retries into 429s.
+The limits stay at their hardened production defaults everywhere else.

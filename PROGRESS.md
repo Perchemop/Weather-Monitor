@@ -12,7 +12,8 @@ detailed history lives in `CHANGELOG.md`.
 - **CI:** green on every slice. The workflow runs `format-check`,
   `security-compliance` (licence policy + CycloneDX SBOM), `dependency-review`,
   a multi-OS `build-test` matrix (Windows, macOS, Linux — type-check, 86 tests,
-  production build, static build with artefact upload), and `docker`. CodeQL
+  production build, static build with artefact upload), `ui-tests`
+  (7 Playwright DOM smoke tests, Chromium), and `docker`. CodeQL
   (SAST) runs on push/PR/weekly; Dependabot covers npm, actions and Docker.
   Actions are pinned to commit SHAs.
 - **Open-source readiness (guide Part II):** community, security, accessibility,
@@ -52,11 +53,14 @@ UI permission mirroring.
 
 ## Next
 
-1. Merge the open PR once a human has reviewed it (guide §9: trust but verify).
-2. Optional follow-ups recorded in `docs/assumptions-and-questions.md`
+1. Tag `v0.1.1` so the multi-architecture image workflow (amd64 + arm64 Buildx
+   manifest) has the evidence the roadmap needs for item 2 of Stage 0.2.x.
+2. Keep the `ui-tests` job green as slices land; extend `tests/ui/smoke.spec.ts`
+   alongside new interactive behaviour.
+3. Optional follow-ups recorded in `docs/assumptions-and-questions.md`
    (licence confirmation, multi-arch images, SMS channel, CSV export, proxy hop
    count).
-3. Keep `docs/parity.md` and `REQUIREMENTS_TRACEABILITY.md` current as slices land.
+4. Keep `docs/parity.md` and `REQUIREMENTS_TRACEABILITY.md` current as slices land.
 
 ## Active provider / model map
 
