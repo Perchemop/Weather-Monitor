@@ -53,13 +53,13 @@ UI permission mirroring.
 
 ## Next
 
-1. Tag `v0.1.1` so the multi-architecture image workflow (amd64 + arm64 Buildx
-   manifest) has the evidence the roadmap needs for item 2 of Stage 0.2.x.
+1. All Stage 0.2.x items are verified (multi-arch images confirmed via v0.1.2
+   release). Proceed to Stage 1.0.0 stability gates per `docs/qc/release-checklist.md`
+   and the §2.5 legal checklist.
 2. Keep the `ui-tests` job green as slices land; extend `tests/ui/smoke.spec.ts`
    alongside new interactive behaviour.
 3. Optional follow-ups recorded in `docs/assumptions-and-questions.md`
-   (licence confirmation, multi-arch images, SMS channel, CSV export, proxy hop
-   count).
+   (licence confirmation, SMS channel, CSV export, proxy hop count).
 4. Keep `docs/parity.md` and `REQUIREMENTS_TRACEABILITY.md` current as slices land.
 
 ## Active provider / model map
