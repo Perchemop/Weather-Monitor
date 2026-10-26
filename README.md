@@ -422,6 +422,22 @@ docker compose up --build
 
 State (SQLite database, backups, and generated secrets) persists in `./data`.
 
+To run a **released image** instead of building locally, use the companion
+compose file, which pulls the multi-architecture image CI already published
+(`linux/amd64` + `linux/arm64`) from GitHub Container Registry:
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.release.yml up -d
+```
+
+Pin a specific version for reproducibility:
+
+```bash
+IMAGE=ghcr.io/perchemop/weather-monitor:v0.1.2 \
+  docker compose -f docker-compose.release.yml up -d
+```
+
 ### Staying current
 
 - **Releases:** every `v*.*.*` tag publishes a GitHub Release with build
