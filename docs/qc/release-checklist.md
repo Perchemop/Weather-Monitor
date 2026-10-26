@@ -5,6 +5,7 @@ Complete before tagging or merging a release-worthy branch.
 ## Build & test (all in CI)
 
 - [ ] GitHub Actions `build-test` job is green on the exact commit.
+- [ ] `ui-tests` job is green (7 Playwright DOM smoke tests).
 - [ ] `docker` job is green.
 - [ ] Type-check passes (`npm run lint` in CI).
 - [ ] Both suites pass: 57 system + 29 integration tests.

@@ -3,9 +3,10 @@
 Maps each requirement to where it is implemented and how it is verified.
 Status: **Met** (implemented and covered), **Partial**, or **Planned**.
 
-Automated verification runs in GitHub Actions (`npm test`): 59 unit/system tests
+Automated verification runs in GitHub Actions (`npm test`): 57 unit/system tests
 (`src/tests/system.test.ts`) and 29 HTTP integration tests
-(`src/tests/api.test.ts`), 88 total.
+(`src/tests/api.test.ts`), 86 total. A separate `ui-tests` job adds 7 Playwright
+DOM smoke tests (`tests/ui/smoke.spec.ts`).
 
 | #     | Requirement                                                     | Implementation                                                                                                         | Verification                                | Status |
 | ----- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------ |
@@ -38,6 +39,7 @@ Automated verification runs in GitHub Actions (`npm test`): 59 unit/system tests
 | R-26a | CI format check (guide §4)                                      | `scripts/check-format.mjs`, `format-check` job                                                                         | every CI run                                | Met    |
 | R-26b | CI: multi-OS matrix, permissions, caching, summaries, artefacts | `.github/workflows/ci.yml`                                                                                             | every CI run                                | Met    |
 | R-26c | Cross-platform build scripts                                    | `package.json`, `vite.config.ts`                                                                                       | Windows/macOS/Linux matrix                  | Met    |
+| R-26d | Browser-level (DOM) smoke tests                                 | `tests/ui/smoke.spec.ts`, `playwright.config.ts`, `ui-tests` job                                                       | 7 tests green in CI (run 40132982495)       | Met    |
 | R-27  | Operating-guide tracking documents                              | this file and the `docs/` set                                                                                          | review                                      | Met    |
 | R-28  | Licence and attribution recorded                                | `LICENSE`, `ATTRIBUTION.md`                                                                                            | review                                      | Met    |
 | R-29  | Persistence failures are visible (no silent data loss)          | `db.ts` persistence status, `server.ts` health + metrics                                                               | system + api tests                          | Met    |

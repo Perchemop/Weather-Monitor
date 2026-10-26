@@ -396,6 +396,11 @@ export default function App() {
       const res = await apiFetch('/api/monitor/check-now', { method: 'POST' })
       if (res.ok) {
         await loadDashboardData()
+        setMonitorStatus((prev) => ({
+          ...prev,
+          isChecking: false,
+          lastCheckTime: new Date().toISOString(),
+        }))
         toast.success('Site microclimate conditions updated.')
         return
       }
