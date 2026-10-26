@@ -7,5 +7,8 @@ coverage/
 *.log
 .env*
 !.env.example
-data/
+# Runtime state (SQLite database, backups, generated secrets). Anchored so a
+# renamed or copied data directory (e.g. `data.old/`, `data-backup/`) can never
+# be committed along with its session secret and VAPID private key.
+/data*/
 *.sqlite
