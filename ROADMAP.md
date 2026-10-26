@@ -76,6 +76,35 @@ in-app WeatherAPI key management, native desktop/mobile store packaging, and
 any SaaS/telemetry component. These contradict the local-first, private-enclave
 discovery decisions; reopening them is a discovery-level change, not a task.
 
+## Dependency modernisation — parked majors (post-1.0.0 candidate)
+
+Dependabot's patch and minor npm bumps are merged as they go green. The major
+upgrades below are **deliberately parked**: each needs code changes and a
+verification pass, not a merge. They are a scheduled slice, not free wins.
+
+| PR  | Upgrade                             | Why parked                                                                   |
+| --- | ----------------------------------- | ---------------------------------------------------------------------------- |
+| #21 | `vite` 6 → 8                        | 5 failing checks; Vite 7/8 rework config, plugin and build assumptions.      |
+| #19 | `express` 4 → 5 (+ types)           | 4 failing checks; Express 5 changes routing, error and middleware semantics. |
+| #13 | `@vitejs/plugin-react` 5 → 6        | Depends on the Vite major; 5 failing checks.                                 |
+| #12 | `typescript` 5 → 7                  | 3 failing checks; a new compiler line will surface type errors repo-wide.    |
+| #9  | `node` 22-slim → 25-slim (image)    | Pins the container runtime; needs a Dockerfile/CI and runtime smoke pass.    |
+| #14 | `lucide-react` 0.546 → 1.x          | Icon API major bump; bundle-wide visual/regression review required.          |
+| #17 | `dotenv` 17 → 18                    | Config-loading major; verify `.env` precedence and startup on all OSes.      |
+| #16 | `@types/node` 22 → 26               | Must move together with the runtime Node version, not before it.             |
+| #10 | `docker/build-push-action` 6 → 7    | CI-only, but release-path majors are verified at a tag, not on main.         |
+| #20 | `docker/login-action` 3 → 4         | As above — release-path action.                                              |
+| #22 | `dependency-review-action` 4 → 5    | As above — security-gate action.                                             |
+| #23 | `docker/setup-buildx-action` 3 → 4  | As above — release-path action.                                              |
+| #24 | `softprops/action-gh-release` 2 → 3 | As above — release-path action.                                              |
+| #26 | `docker/setup-qemu-action` 3 → 4    | As above — release-path action.                                              |
+| #35 | `actions/setup-node` 4 → 7          | CI-only; bundle with the Node runtime decision.                              |
+| #36 | `actions/upload-artifact` 4 → 7     | CI-only; artefacts feed the release path, so verify at a tag.                |
+
+Verification note (2026-10-27): several of these PRs show a `ui-tests` failure
+that pre-dates the smoke-test fixes in `#38`; a branch rebase clears it, so the
+failure is stale evidence, not a signal about the dependency.
+
 ## Release cadence
 
 Frequent semver releases (`0.1.1`, `0.2.0`, …). Each GitHub Release body
