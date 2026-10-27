@@ -78,7 +78,11 @@ export interface StaticState {
 
 const STATE_VERSION = 1
 
-/** The default site seeded on first run so the dashboard has data immediately. */
+/**
+ * The placeholder site seeded on first run so the dashboard renders. It carries
+ * no real place name or coordinates: the operator adds their own site, and the
+ * dashboard flags the unconfigured state until they do.
+ */
 const SEED_LOCATION = {
   name: 'Unconfigured Site',
   latitude: 0,

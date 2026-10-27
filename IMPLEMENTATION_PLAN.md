@@ -19,7 +19,9 @@ Primary goals:
 - Store all data locally in SQLite (via sql.js) with no cloud dependency for core functionality.
 - Support dual weather providers (WeatherAPI as primary reference + Open-Meteo as cross-reference / fallback).
 
-Default location shipped with the code: Unconfigured Site (−34.9285, 0, UTC).
+Default location shipped with the code: a neutral **Unconfigured Site** placeholder (0, 0, UTC).
+No real place is bundled — the operator adds their own site, and the dashboard
+flags the unconfigured state until they do.
 
 ---
 

@@ -359,7 +359,7 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                     <label className="text-slate-400 block mb-1">Site / Project Title:</label>
                     <input
                       type="text"
-                      placeholder="e.g. Adelaide Pier 4 Crane Site"
+                      placeholder="e.g. North Wharf Crane Pad"
                       value={customName}
                       onChange={(e) => setCustomName(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
@@ -371,7 +371,7 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                       <input
                         type="number"
                         step="any"
-                        placeholder="0"
+                        placeholder="e.g. 51.5074"
                         value={customLat}
                         onChange={(e) => setCustomLat(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
@@ -382,7 +382,7 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                       <input
                         type="number"
                         step="any"
-                        placeholder="0"
+                        placeholder="e.g. -0.1278"
                         value={customLon}
                         onChange={(e) => setCustomLon(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"

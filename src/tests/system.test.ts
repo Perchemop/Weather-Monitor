@@ -125,7 +125,7 @@ async function runTests() {
       uvIndex: 3,
     })
     const hourly: HourlyForecastItem[] = []
-    const risk = calculateDeterministicRisk(current, hourly, mockThresholds, 'UTC')
+    const risk = calculateDeterministicRisk(current, hourly, mockThresholds, 'Pacific/Chatham')
     assert.equal(risk.level, 'LOW')
     assert.ok(risk.score <= 25, `Score should be <= 25, got ${risk.score}`)
     assert.ok(risk.safetyDisclaimer.includes('SWMS'))
@@ -134,7 +134,7 @@ async function runTests() {
   test('Deterministic Risk: High wind gusts breach crane limit -> CRITICAL or HIGH risk', () => {
     const current = createMockWeather({ windSpeed: 35, windGusts: 58 }) // Exceeds gustHigh (55 km/h)
     const hourly: HourlyForecastItem[] = []
-    const risk = calculateDeterministicRisk(current, hourly, mockThresholds, 'UTC')
+    const risk = calculateDeterministicRisk(current, hourly, mockThresholds, 'Pacific/Chatham')
     assert.ok(
       risk.level === 'HIGH' || risk.level === 'CRITICAL',
       `Risk level should be HIGH or CRITICAL, got ${risk.level}`,
@@ -166,7 +166,7 @@ async function runTests() {
         riskLevel: 'CRITICAL',
       },
     ]
-    const risk = calculateDeterministicRisk(current, hourly, mockThresholds, 'UTC')
+    const risk = calculateDeterministicRisk(current, hourly, mockThresholds, 'Pacific/Chatham')
     assert.ok(risk.score >= 50, 'Severe upcoming gust in next 6h must trigger elevated risk score')
   })
 
@@ -184,7 +184,7 @@ async function runTests() {
 
   test('WeatherAPI: a clear-sky payload does not register a thunderstorm', () => {
     const raw = {
-      location: { tz_id: 'UTC' },
+      location: { tz_id: 'Pacific/Chatham' },
       current: {
         last_updated_epoch: 1769000000,
         temp_c: 24,
@@ -228,14 +228,14 @@ async function runTests() {
         ],
       },
     }
-    const normalized = normalizeWeatherApiData(raw as any, 'loc-x', 'Test Site', -34.9, 138.6)
+    const normalized = normalizeWeatherApiData(raw as any, 'loc-x', 'Test Site', -43.95, -176.56)
     assert.equal(normalized.current.weatherCode, 0, 'current code must be mapped to WMO clear')
     assert.equal(normalized.hourly[0].weatherCode, 0)
     const risk = calculateDeterministicRisk(
       normalized.current,
       normalized.hourly,
       mockThresholds,
-      'UTC',
+      'Pacific/Chatham',
     )
     assert.notEqual(risk.level, 'CRITICAL', `clear sky must never be CRITICAL (was ${risk.level})`)
     assert.ok(
@@ -259,16 +259,17 @@ async function runTests() {
         condition: { code: 1276, text: 'Thunderstorm' },
       },
     }
-    const normalized = normalizeWeatherApiData(raw as any, 'loc-x', 'Test Site', -34.9, 138.6)
+    const normalized = normalizeWeatherApiData(raw as any, 'loc-x', 'Test Site', -43.95, -176.56)
     assert.ok(normalized.current.weatherCode >= 95, 'thunder codes must stay above the WMO 95 threshold')
   })
 
   test('Open-Meteo: wall-clock times convert to true UTC instants', () => {
-    // Adelaide summer: UTC+10:30. 10:00 local on 2026-01-15 is 23:30 UTC the
-    // previous day; a naive parse in a UTC container would read 10:00 UTC.
+    // Chatham summer: a half-hour zone on UTC+13:45. 10:00 local on 2026-01-15
+    // is 20:15 UTC the previous day; a naive parse in a UTC container would
+    // read 10:00 UTC. The half-hour offset is the edge case under test.
     const raw = {
-      utc_offset_seconds: 37800,
-      timezone: 'UTC',
+      utc_offset_seconds: 49500,
+      timezone: 'Pacific/Chatham',
       current: {
         time: '2026-01-15T10:00',
         temperature_2m: 25,
@@ -286,15 +287,15 @@ async function runTests() {
       },
       hourly: { time: ['2026-01-15T10:00', '2026-01-15T11:00'], temperature_2m: [25, 26] },
     }
-    const normalized = validateAndNormalizeOpenMeteoData(raw as any, 'loc-x', 'Test Site', -34.9, 138.6)
-    assert.equal(normalized.current.timestamp, '2026-01-14T23:30:00.000Z')
-    assert.equal(normalized.hourly[0].time, '2026-01-14T23:30:00.000Z')
-    assert.equal(normalized.hourly[1].time, '2026-01-15T00:30:00.000Z')
+    const normalized = validateAndNormalizeOpenMeteoData(raw as any, 'loc-x', 'Test Site', -43.95, -176.56)
+    assert.equal(normalized.current.timestamp, '2026-01-14T20:15:00.000Z')
+    assert.equal(normalized.hourly[0].time, '2026-01-14T20:15:00.000Z')
+    assert.equal(normalized.hourly[1].time, '2026-01-14T21:15:00.000Z')
   })
 
   test('Deterministic Risk: extreme UV raises the headline level to HIGH', () => {
     const current = createMockWeather({ uvIndex: 12, windSpeed: 15, windGusts: 25 })
-    const risk = calculateDeterministicRisk(current, [], mockThresholds, 'UTC')
+    const risk = calculateDeterministicRisk(current, [], mockThresholds, 'Pacific/Chatham')
     assert.equal(risk.level, 'HIGH', `expected HIGH for extreme UV, got ${risk.level}`)
     assert.ok(risk.factors.some((f) => f.id === 'uv-extreme'))
     assert.ok(risk.score >= 60, 'extreme UV must lift the score')
@@ -302,7 +303,7 @@ async function runTests() {
 
   test('Deterministic Risk: very high UV is visible in level and score', () => {
     const current = createMockWeather({ uvIndex: 9, windSpeed: 15, windGusts: 25 })
-    const risk = calculateDeterministicRisk(current, [], mockThresholds, 'UTC')
+    const risk = calculateDeterministicRisk(current, [], mockThresholds, 'Pacific/Chatham')
     assert.ok(
       risk.factors.some((f) => f.id === 'uv-very-high'),
       'the UV factor must be listed',
@@ -313,7 +314,7 @@ async function runTests() {
 
   test('Deterministic Risk: Building convective energy raises STORM lightning risk', () => {
     const current = createMockWeather({ windSpeed: 10, windGusts: 15, lightningPotential: 1200, cape: 2600 })
-    const risk = calculateDeterministicRisk(current, [], mockThresholds, 'UTC')
+    const risk = calculateDeterministicRisk(current, [], mockThresholds, 'Pacific/Chatham')
     assert.equal(risk.level, 'CRITICAL', `Expected CRITICAL, got ${risk.level}`)
     assert.ok(
       risk.factors.some((f) => f.id === 'lightning-critical'),
@@ -414,21 +415,21 @@ async function runTests() {
   // 3. Stale Data & Freshness Semantics Tests
   test('Freshness Evaluation: Fresh observation under 30 minutes is marked LIVE', () => {
     const recentIso = new Date().toISOString()
-    const freshness = evaluateDataFreshness(recentIso, 'UTC', false)
+    const freshness = evaluateDataFreshness(recentIso, 'Pacific/Chatham', false)
     assert.equal(freshness.status, 'LIVE')
     assert.equal(freshness.isStale, false)
   })
 
   test('Freshness Evaluation: Old observation over 60 minutes is marked STALE', () => {
     const oldDate = new Date(Date.now() - 75 * 60 * 1000).toISOString()
-    const freshness = evaluateDataFreshness(oldDate, 'UTC', false)
+    const freshness = evaluateDataFreshness(oldDate, 'Pacific/Chatham', false)
     assert.equal(freshness.status, 'STALE')
     assert.equal(freshness.isStale, true)
   })
 
   test('Freshness Evaluation: Offline monitor marked OFFLINE', () => {
     const recentIso = new Date().toISOString()
-    const freshness = evaluateDataFreshness(recentIso, 'UTC', true)
+    const freshness = evaluateDataFreshness(recentIso, 'Pacific/Chatham', true)
     assert.equal(freshness.status, 'OFFLINE')
   })
 
@@ -1108,9 +1109,9 @@ async function runTests() {
         riskLevel: 'HIGH',
       },
     ]
-    const first = calculateDeterministicRisk(current, hourly, mockThresholds, 'UTC')
+    const first = calculateDeterministicRisk(current, hourly, mockThresholds, 'Pacific/Chatham')
     for (let i = 0; i < 25; i++) {
-      const again = calculateDeterministicRisk(current, hourly, mockThresholds, 'UTC')
+      const again = calculateDeterministicRisk(current, hourly, mockThresholds, 'Pacific/Chatham')
       assert.equal(again.level, first.level, 'risk level must be stable across runs')
       assert.equal(again.score, first.score, 'risk score must be stable across runs')
       assert.equal(again.factors.length, first.factors.length, 'factor set must be stable')
@@ -1127,13 +1128,13 @@ async function runTests() {
         createMockWeather({ windGusts: gusts, windSpeed: Math.max(10, gusts - 10) }),
         [],
         mockThresholds,
-        'UTC',
+        'Pacific/Chatham',
       )
       const weaker = calculateDeterministicRisk(
         createMockWeather({ windGusts: Math.max(0, gusts - 10), windSpeed: Math.max(0, gusts - 20) }),
         [],
         mockThresholds,
-        'UTC',
+        'Pacific/Chatham',
       )
       assert.ok(
         rank(stronger.level) >= rank(weaker.level),
@@ -1148,7 +1149,7 @@ async function runTests() {
         createMockWeather({ windGusts: gusts }),
         [],
         mockThresholds,
-        'UTC',
+        'Pacific/Chatham',
       )
       assert.equal(risk.safetyDisclaimer, SAFETY_DISCLAIMER, 'the disclaimer is unconditional')
     }
