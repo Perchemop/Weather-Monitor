@@ -6,6 +6,28 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Privacy: no maintainer location or identity ships in the app (owner directive).**
+  The bundled default site is now a neutral **Unconfigured Site** placeholder
+  (0, 0, UTC) in every code path — the server seed, the browser-only static
+  build, the dashboard fallback and the map fallback — replacing a real place
+  that was visible to anyone on the public Pages deployment. The dashboard now
+  shows a "No site configured" prompt with an **Add site** action until the
+  operator configures their own site, so a placeholder is never mistaken for a
+  real site reading. Location-field placeholders no longer use examples drawn
+  from a real place.
+
+### Fixed
+
+- **Privacy: removed maintainer-identifying data from the repository.** Deleted
+  the owner's real name from `CONTRIBUTORS.md`, and removed the home-directory
+  paths (`/home/<user>/…`) that disclosed the maintainer's OS username from the
+  tracked `.opencode/agents/*.md` configs (the equivalent `~/…` rules remain).
+  Timezone and coordinate fixtures in the unit suite were moved off the
+  maintainer's locale to a neutral half-hour-offset zone with identical test
+  intent.
+
 ### Added
 
 - **Browser-level (DOM) smoke tests (0.2.x, Playwright).** Added

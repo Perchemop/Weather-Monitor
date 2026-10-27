@@ -457,22 +457,18 @@ function initializeSchema(db: Database) {
     }
   }
 
-  // Seed default location if empty
+  // Seed a neutral placeholder location if empty, so the dashboard renders and
+  // the locations list is never empty. It carries no real place name or
+  // coordinates: the operator adds their own site, and the UI flags the
+  // unconfigured state until they do. Nothing about a maintainer's location
+  // ships in the database.
   const locCount = db.exec('SELECT COUNT(*) as count FROM locations')
   const count = locCount[0]?.values[0]?.[0] as number
   if (!count || count === 0) {
-    const defaultId = 'loc-' + crypto.randomUUID()
     db.run(
       `INSERT INTO locations (id, name, latitude, longitude, timezone, is_default, created_at)
        VALUES (?, ?, ?, ?, ?, 1, ?)`,
-      [
-        defaultId,
-        'Adelaide, South Australia',
-        -34.9285,
-        138.6007,
-        'Australia/Adelaide',
-        new Date().toISOString(),
-      ],
+      ['loc-unconfigured', 'Unconfigured Site', 0, 0, 'UTC', new Date().toISOString()],
     )
   }
 

@@ -120,9 +120,10 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
   const [timeAxis, setTimeAxis] = useState<string[]>([])
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
-  const lat = location?.latitude ?? -34.9285
-  const lon = location?.longitude ?? 138.6007
-  const place = location?.name ?? 'Monitored Site'
+  // Neutral fallback (open ocean) until the operator configures their site.
+  const lat = location?.latitude ?? 0
+  const lon = location?.longitude ?? 0
+  const place = location?.name ?? 'Unconfigured Site'
 
   const toggleLayer = useCallback((layer: MapLayer) => {
     setActiveLayers((prev) => {
