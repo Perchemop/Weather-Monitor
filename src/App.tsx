@@ -43,16 +43,27 @@ import { apiFetch } from './utils/api'
 import { deepEqual, setStateIfChanged } from './utils/state'
 import { initKeepAwake } from './utils/wakeLock'
 import { STATIC_MODE } from './static/mode'
-import { ShieldCheck, HardHat, WifiOff } from 'lucide-react'
+import { ShieldCheck, HardHat, WifiOff, MapPin } from 'lucide-react'
 
+/**
+ * Neutral placeholder used only until the operator configures their own site.
+ * It deliberately carries no real place name or coordinates so that no
+ * deployment ships with a maintainer's location baked in, and the dashboard
+ * flags the unconfigured state instead of presenting invented data as real.
+ */
 const FALLBACK_SITE: LocationItem = {
-  id: 'loc-default',
-  name: 'Adelaide, South Australia',
-  latitude: -34.9285,
-  longitude: 138.6007,
-  timezone: 'Australia/Adelaide',
+  id: 'loc-unconfigured',
+  name: 'Unconfigured Site',
+  latitude: 0,
+  longitude: 0,
+  timezone: 'UTC',
   isDefault: true,
   createdAt: new Date().toISOString(),
+}
+
+/** True while the placeholder site is still in use (no operator site added). */
+function isSiteUnconfigured(location: LocationItem | null): boolean {
+  return !location || (location.latitude === 0 && location.longitude === 0)
 }
 
 export default function App() {
@@ -624,6 +635,25 @@ export default function App() {
               Offline — showing the last cached snapshot. Live checks resume automatically when the connection
               returns.
             </span>
+          </div>
+        )}
+        {!isDashboardLoading && isSiteUnconfigured(currentLocation) && (
+          <div
+            id="unconfigured-site-banner"
+            className="flex flex-wrap items-center gap-2.5 rounded-xl border border-sky-800/50 bg-sky-950/30 p-3 text-xs text-sky-200"
+          >
+            <MapPin className="h-4 w-4 shrink-0 text-sky-400" />
+            <span>
+              No site configured — these readings are placeholders. Add your construction site under
+              <strong className="font-semibold"> Locations</strong> to monitor its real conditions.
+            </span>
+            <button
+              type="button"
+              onClick={openLocationModal}
+              className="rounded-lg border border-sky-700/60 px-2.5 py-1 font-mono text-[11px] font-semibold text-sky-100 transition-colors hover:border-sky-500 hover:bg-sky-900/40 cursor-pointer"
+            >
+              Add site
+            </button>
           </div>
         )}
         <Suspense fallback={<ViewLoadingFallback label="Loading module" />}>
