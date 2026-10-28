@@ -11,6 +11,8 @@ build-test (ubuntu-latest)
 build-test (macos-latest)
 build-test (windows-latest)
 docker
+# ci.yml (continued)
+security-compliance
 # codeql.yml / dependency-review
 Analyze (JavaScript/TypeScript) (javascript-typescript)
 dependency-review
@@ -20,5 +22,4 @@ ui-tests (Playwright smoke)
 Personal data scan
 
 # Not listed: `deploy` (runs on main only, not on pull requests) and
-# `security-compliance`, which is enforced by branch protection. Add a name
-# here once it is confirmed to report on every pull request.
+# `visual` (also runs on pull requests; add it if it becomes a gate).
