@@ -17,8 +17,11 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout (full history for the personal-data scan)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The release gate scans the whole history, not just the tagged tree.
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -49,6 +52,19 @@ jobs:
           sha256sum "construction-weather-monitor-${VERSION}-server.tar.gz" \
                     "construction-weather-monitor-${VERSION}-static.zip" > checksums-${VERSION}.txt
           cat "checksums-${VERSION}.txt"
+
+      # Full personal-data and secret scan (guide II.29.2/II.29.3/II.29.5): the
+      # whole tree, the whole history, the commit/tag metadata, and the built
+      # artefacts themselves — before any asset is attached to a release.
+      - name: Personal-data and secret scan (tree, history, metadata, artefacts)
+        env:
+          PERSONAL_DENYLIST: ${{ secrets.PERSONAL_DENYLIST }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          rm -rf /tmp/release-assets && mkdir -p /tmp/release-assets/static
+          tar -xzf "construction-weather-monitor-${VERSION}-server.tar.gz" -C /tmp/release-assets
+          unzip -q "construction-weather-monitor-${VERSION}-static.zip" -d /tmp/release-assets/static
+          node scripts/scan-personal-data.mjs --tree --metadata --history --paths /tmp/release-assets
 
       - name: Extract release notes from CHANGELOG
         run: |

@@ -6,6 +6,10 @@ Complete before tagging or merging a release-worthy branch.
 
 - [ ] GitHub Actions `build-test` job is green on the exact commit.
 - [ ] `ui-tests` job is green (7 Playwright DOM smoke tests).
+- [ ] `Personal data scan` job is green (tree + metadata; guide II.29.3).
+- [ ] The release job's full scan is green — tree, **history**, metadata and the
+      built artefacts (guide II.29.2/II.29.5).
+- [ ] `.ci-required.txt` lists the authoritative checks for this commit.
 - [ ] `docker` job is green.
 - [ ] Type-check passes (`npm run lint` in CI).
 - [ ] Both suites pass: 57 system + 29 integration tests.

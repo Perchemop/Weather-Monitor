@@ -6,6 +6,24 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Unified personal-data and secret scanner covering all four II.29 surfaces.**
+  `scripts/scan-personal-data.mjs` replaces the earlier tree-only shell scan and
+  covers what II.29.2 defines: the working tree (dot-directories included), the
+  whole git history (deduplicated blobs across every ref), the commit/tag
+  metadata, and extracted release artefacts. Two behaviour changes matter: it
+  **masks every matched value**, because this repository is public and echoing a
+  hit into a CI log would re-publish the value being removed (II.29.4.2); and it
+  **classifies** each hit as failing, informational (obviously-synthetic
+  fixtures) or third-party (upstream lockfile/vendored authorship), instead of
+  failing on every match. A `PERSONAL_DENYLIST` repository secret lets the gate
+  block values this project has had to remove without writing those values into
+  the tree. The pull-request check keeps the name `Personal data scan`, so
+  `.ci-required.txt` and branch protection stay valid; the release job now runs
+  the full scan — history and built artefacts included — before any asset is
+  attached (II.29.5).
+
 ### Changed
 
 - **Privacy: no maintainer location or identity ships in the app (owner directive).**

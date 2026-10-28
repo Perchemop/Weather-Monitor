@@ -1,11 +1,17 @@
 name: Personal data scan
 
 # Guide II.29 (owner directive 2026-10-27): personal data and secrets must
-# never be committed or released. This job fails when a real-looking home
-# path or email address is present in tracked files, so a leak cannot merge.
+# never be committed or released. This job fails when the working tree — or the
+# commit/tag metadata — carries a real-looking home path, email address or
+# credential, so a leak cannot merge.
 #
-# The whole-history scan and the release-artefact scan are release-time
-# duties (guide II.29.2 and II.29.6) and are run before any release is cut.
+# The whole-history scan and the release-artefact scan are release-time duties
+# (guide II.29.2, II.29.5, II.29.6) and run in release.yml before any asset is
+# attached, because a history awaiting purge would otherwise block every merge.
+#
+# The scan masks every matched value: this repository is public, so echoing a
+# hit into the CI log would re-publish the very value being removed
+# (guide II.29.4.2).
 
 on:
   pull_request:
@@ -19,7 +25,21 @@ jobs:
   personal-data:
     name: Personal data scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Scan tracked files for personal data
-        run: bash scripts/scan-personal-data.sh
+      - name: Checkout (full history for the metadata scan)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Scan tree and metadata for personal data and secrets
+        env:
+          # Values this project has had to remove. Held as a repository secret
+          # so the denylist itself never enters the tree (guide II.29.4.2).
+          PERSONAL_DENYLIST: ${{ secrets.PERSONAL_DENYLIST }}
+        run: node scripts/scan-personal-data.mjs --tree --metadata
