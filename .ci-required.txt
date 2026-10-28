@@ -1,0 +1,24 @@
+# Authoritative check names for the CI verification script (ci.sh).
+#
+# Each name below must match the check exactly as GitHub reports it; a stale
+# entry makes every run report FAILURE ("required check did not report") even
+# when everything passed. Update this file whenever a workflow's job names
+# change. Verified against the check runs on main (2026-10-28).
+
+# ci.yml
+format-check
+build-test (ubuntu-latest)
+build-test (macos-latest)
+build-test (windows-latest)
+docker
+# codeql.yml / dependency-review
+Analyze (JavaScript/TypeScript) (javascript-typescript)
+dependency-review
+# visual.yml
+ui-tests (Playwright smoke)
+# pii.yml — personal-data gate (guide II.29)
+Personal data scan
+
+# Not listed: `deploy` (runs on main only, not on pull requests) and
+# `security-compliance`, which is enforced by branch protection. Add a name
+# here once it is confirmed to report on every pull request.
