@@ -6,6 +6,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-30
+
 ### Security
 
 - **Hardening pass from a source audit of the whole application.** Fixed:
