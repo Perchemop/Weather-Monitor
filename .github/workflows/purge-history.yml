@@ -1,0 +1,90 @@
+name: Purge personal data from history
+
+# One-shot, manual, owner-approved (guide II.29.4). Values that were committed
+# and later removed from the tree are still readable in history, so they are
+# rewritten out of every branch and tag.
+#
+# Safety properties, deliberately:
+#   - the replacement rules live in the PURGE_REPLACE_RULES repository secret,
+#     so the values themselves never enter the tree (II.29.4.2);
+#   - the rewrite is verified with the repository's own history scan BEFORE
+#     anything is pushed, so a failed rewrite leaves the remote untouched;
+#   - it pushes ALL branches and tags, because a value reachable from any ref is
+#     still published.
+#
+# Consequences of running it (owner accepted): every commit SHA changes, clones
+# must re-fetch, and open pull requests need rebasing. GitHub may keep the old
+# objects reachable by SHA until its own garbage collection; forks keep their
+# own copy.
+#
+# After it succeeds: re-fetch locally, and note that `v*` release tags now point
+# at rewritten commits (cut the next release from the rewritten history).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  purge:
+    name: Purge history
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout (full history and tags)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Fetch every branch and tag, so the rewrite covers them all
+        run: |
+          # Detach first: a fetch cannot update the branch that is checked out.
+          git checkout --detach
+          git fetch --force --prune origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          echo "branches to rewrite:"; git for-each-ref --format='  %(refname:short)' refs/heads
+          echo "tags to rewrite:"; git for-each-ref --format='  %(refname:short)' refs/tags
+
+      - name: Write replacement rules from the repository secret
+        env:
+          PURGE_REPLACE_RULES: ${{ secrets.PURGE_REPLACE_RULES }}
+        run: |
+          if [ -z "${PURGE_REPLACE_RULES:-}" ]; then
+            echo "PURGE_REPLACE_RULES is not set; refusing to run." >&2
+            exit 1
+          fi
+          printf '%s\n' "$PURGE_REPLACE_RULES" > "$RUNNER_TEMP/replace-rules.txt"
+          echo "replacement rules: $(grep -c . "$RUNNER_TEMP/replace-rules.txt") line(s)"
+
+      - name: Install git-filter-repo
+        run: python3 -m pip install --quiet --user git-filter-repo
+
+      - name: Rewrite history, tags included
+        run: |
+          git config user.name "Weather-Monitor Dev"
+          git config user.email "dev@example.com"
+          python3 -m git_filter_repo --replace-text "$RUNNER_TEMP/replace-rules.txt" --force
+
+      - name: Verify the rewrite BEFORE pushing
+        env:
+          PERSONAL_DENYLIST: ${{ secrets.PERSONAL_DENYLIST }}
+        run: |
+          # The repository's own scanner must report a clean tree, a clean
+          # history and clean metadata. If it does not, this step fails and the
+          # remote is left exactly as it was.
+          node scripts/scan-personal-data.mjs --tree --history --metadata
+
+      - name: Force-push the rewritten history
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REMOTE="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force "$REMOTE" --all
+          git push --force "$REMOTE" --tags
+          echo "rewritten history pushed"
