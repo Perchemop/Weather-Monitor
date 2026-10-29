@@ -44,6 +44,7 @@ const ROOT = process.cwd()
 
 /** OS account names that are generic, not a person. Everything else fails. */
 const GENERIC_OS_USERS = new Set([
+  'dev',
   'runner',
   'user',
   'users',
@@ -56,6 +57,7 @@ const GENERIC_OS_USERS = new Set([
   'docker',
   'root',
   'admin',
+  'builder',
 ])
 
 /**
