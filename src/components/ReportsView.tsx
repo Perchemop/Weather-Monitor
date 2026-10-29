@@ -1,6 +1,7 @@
 import React from 'react'
 import { FileText, Printer, Download, HardHat, CheckCircle2, ShieldAlert } from 'lucide-react'
 import { LocationItem, CurrentWeather, RiskAssessment, AlertItem } from '../types'
+import { toCsv } from '../utils/csv'
 
 interface ReportsViewProps {
   location: LocationItem | null
@@ -23,7 +24,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, ris
       ['Coordinates', `${location.latitude}, ${location.longitude}`],
       ['Risk Level', risk?.level || 'N/A'],
       ['Risk Score', `${risk?.score || 0}/100`],
-      ['Risk Summary', `"${risk?.summary || ''}"`],
+      ['Risk Summary', risk?.summary || ''],
       ['Peak Period', risk?.peakPeriod ? `${risk.peakPeriod.start} - ${risk.peakPeriod.end}` : 'None'],
       ['Current Temperature', `${current.temperature}°C`],
       ['Feels Like', `${current.feelsLike}°C`],
@@ -36,14 +37,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, ris
       ['Active Alerts Count', `${alerts.length}`],
     ]
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + rows.map((e) => e.join(',')).join('\n')
-    const encodedUri = encodeURI(csvContent)
+    // A Blob download (not a data: URI) so commas, hashes and percent signs in
+    // the report text survive intact.
+    const blob = new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.setAttribute('href', encodedUri)
+    link.setAttribute('href', url)
     link.setAttribute('download', `weather-risk-report-${new Date().toISOString().slice(0, 10)}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   return (

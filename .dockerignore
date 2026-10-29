@@ -1,6 +1,9 @@
 node_modules
 dist
-data
+# Every runtime-state directory, not just `data`: a renamed copy (data-old,
+# data-backup) still holds the SQLite database, the session secret and the
+# VAPID private key, and must never enter the build context.
+data*
 coverage
 .git
 .gitignore

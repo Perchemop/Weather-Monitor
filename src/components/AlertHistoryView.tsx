@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { ShieldAlert, Mail, CheckCircle2, XCircle, Filter, Calendar, Download } from 'lucide-react'
 import { AlertItem, AlertDelivery } from '../types'
 import { EmptyState } from './EmptyState'
+import { toCsv } from '../utils/csv'
 
 interface AlertHistoryViewProps {
   alerts: AlertItem[]
@@ -38,17 +39,17 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
       ]
       const rows = filteredAlerts.map((a) => [
         a.id,
-        `"${a.locationName.replace(/"/g, '""')}"`,
+        a.locationName,
         a.severity,
         a.alertType,
-        `"${a.title.replace(/"/g, '""')}"`,
-        `"${a.message.replace(/"/g, '""')}"`,
-        `"${a.observedValue}"`,
-        `"${a.thresholdValue}"`,
+        a.title,
+        a.message,
+        a.observedValue,
+        a.thresholdValue,
         a.startTime,
         a.status,
       ])
-      const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+      const csv = toCsv([headers, ...rows])
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')

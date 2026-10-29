@@ -3,6 +3,22 @@ import { AlertItem, AlertDelivery } from '../types.js'
 import { recordAlertDelivery, getPendingAlertDeliveries, updateAlertDeliveryAttempt } from '../database/db.js'
 import { redactSecretsInError, maskSecret } from '../utils/security.js'
 
+/**
+ * Escapes a value before it is interpolated into the HTML alert body.
+ * Operator-set location names and provider-supplied condition text reach this
+ * template, so without escaping a crafted location name could inject markup —
+ * and a credential-phishing form — into the safety email an operator receives.
+ * The plain-text body needs no escaping.
+ */
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export interface SmtpConfig {
   host: string
   port: number
@@ -45,7 +61,11 @@ function createTransport(config: SmtpConfig) {
     port: config.port,
     secure: config.secure,
     ...(config.user && config.pass ? { auth: { user: config.user, pass: config.pass } } : {}),
-    tls: { rejectUnauthorized: false },
+    // Verify the relay's certificate by default. A network attacker between the
+    // server and the relay could otherwise read or alter safety-alert email and
+    // harvest the SMTP credentials during AUTH. The explicit opt-out exists only
+    // for a self-signed internal relay.
+    tls: { rejectUnauthorized: process.env.SMTP_TLS_INSECURE !== 'true' },
   })
 }
 
@@ -136,31 +156,31 @@ ${new Date().toISOString()}
     <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b;">Construction Weather Monitor</span>
     <h1 style="margin: 6px 0 0 0; font-size: 20px; font-weight: 800; color: ${
       alert.severity === 'CRITICAL' ? '#dc2626' : alert.severity === 'HIGH' ? '#ea580c' : '#d97706'
-    };">${alert.title}</h1>
+    };">${escapeHtml(alert.title)}</h1>
   </div>
 
   <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
     <tr>
       <td style="padding: 8px 0; color: #64748b; font-weight: 600; width: 40%;">Location</td>
-      <td style="padding: 8px 0; font-weight: 700; color: #0f172a;">${alert.locationName}</td>
+      <td style="padding: 8px 0; font-weight: 700; color: #0f172a;">${escapeHtml(alert.locationName)}</td>
     </tr>
     <tr>
       <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Observed / Expected Value</td>
-      <td style="padding: 8px 0; font-weight: 700; color: #0f172a;">${alert.observedValue}</td>
+      <td style="padding: 8px 0; font-weight: 700; color: #0f172a;">${escapeHtml(alert.observedValue)}</td>
     </tr>
     <tr>
       <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Configured Threshold</td>
-      <td style="padding: 8px 0; color: #334155;">${alert.thresholdValue}</td>
+      <td style="padding: 8px 0; color: #334155;">${escapeHtml(alert.thresholdValue)}</td>
     </tr>
     <tr>
       <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Expected Period</td>
-      <td style="padding: 8px 0; color: #334155;">${alert.startTime} (${alert.expectedDuration})</td>
+      <td style="padding: 8px 0; color: #334155;">${escapeHtml(alert.startTime)} (${escapeHtml(alert.expectedDuration)})</td>
     </tr>
     <tr>
       <td style="padding: 8px 0; color: #64748b; font-weight: 600;">Risk Level</td>
       <td style="padding: 8px 0; font-weight: 800; color: ${
         alert.severity === 'CRITICAL' ? '#dc2626' : alert.severity === 'HIGH' ? '#ea580c' : '#d97706'
-      };">${alert.severity}</td>
+      };">${escapeHtml(alert.severity)}</td>
     </tr>
   </table>
 
@@ -171,7 +191,7 @@ ${new Date().toISOString()}
         ? affectedActivities
         : ['Crane operations', 'Scaffold work', 'Roof work', 'Working at height']
       )
-        .map((act) => `<li>${act}</li>`)
+        .map((act) => `<li>${escapeHtml(act)}</li>`)
         .join('')}
     </ul>
   </div>
