@@ -471,8 +471,14 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     const metricsToken = process.env.METRICS_TOKEN
     const authHeader = req.headers.authorization || ''
     const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
-    const queryToken = typeof req.query.token === 'string' ? req.query.token : ''
-    const tokenOk = Boolean(metricsToken) && (bearer === metricsToken || queryToken === metricsToken)
+    // Header only, and compared in constant time: a query-string token leaks
+    // into proxy and browser history, and a byte-wise compare leaks the shared
+    // secret one character at a time.
+    const tokenOk =
+      Boolean(metricsToken) &&
+      bearer.length > 0 &&
+      bearer.length === metricsToken!.length &&
+      crypto.timingSafeEqual(Buffer.from(bearer), Buffer.from(metricsToken!))
 
     if (!tokenOk && !getSession(extractSessionToken(req))) {
       res.status(401).json({ error: 'Authentication required.' })
@@ -655,7 +661,12 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       return
     }
 
-    const lockKey = String(email || 'owner').toLowerCase()
+    // Trim before keying the lockout: credential lookup trims too, so an
+    // untrimmed key (" owner") would sidestep the per-account lockout entirely
+    // while still resolving to the same account.
+    const lockKey = String(email || 'owner')
+      .trim()
+      .toLowerCase()
     const remaining = lockoutRemainingMs(lockKey)
     if (remaining > 0) {
       res.status(429).json({
@@ -1388,6 +1399,47 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       updates.dataRetentionDays = Math.floor(days)
     }
 
+    // Safety thresholds drive every risk decision. The settings form sends
+    // `null` for a cleared numeric field, and a non-finite threshold silently
+    // disables the comparison it feeds: risk stays LOW and no severe-weather
+    // alert ever fires, with nothing shown to the operator. Validate every
+    // threshold the settings model actually has.
+    if (updates.thresholds !== undefined) {
+      const submitted = updates.thresholds
+      if (typeof submitted !== 'object' || submitted === null || Array.isArray(submitted)) {
+        res.status(400).json({ error: 'Thresholds must be an object.' })
+        return
+      }
+      const known = Object.keys((await getOwnerSettings()).thresholds || {})
+      const keys = Object.keys(submitted)
+      const unknown = keys.filter((key) => !known.includes(key))
+      if (unknown.length > 0) {
+        res.status(400).json({ error: `Unknown threshold field(s): ${unknown.join(', ')}.` })
+        return
+      }
+      for (const key of keys) {
+        const value = Number(submitted[key])
+        if (!Number.isFinite(value) || value < 0 || value > 100000) {
+          res.status(400).json({
+            error: `Threshold "${key}" must be a number between 0 and 100000.`,
+          })
+          return
+        }
+        submitted[key] = value
+      }
+    }
+
+    // An invalid cooldown makes the cooldown check always false, which turns a
+    // single weather condition into an alert storm.
+    if (updates.alertCooldownMinutes !== undefined) {
+      const cooldown = Number(updates.alertCooldownMinutes)
+      if (!Number.isFinite(cooldown) || cooldown < 0 || cooldown > 1440) {
+        res.status(400).json({ error: 'Alert cooldown must be between 0 and 1440 minutes.' })
+        return
+      }
+      updates.alertCooldownMinutes = Math.floor(cooldown)
+    }
+
     await saveOwnerSettings(updates)
     if (updates.monitorIntervalMinutes !== undefined) {
       monitoringService.updateInterval(updates.monitorIntervalMinutes)
@@ -1658,11 +1710,14 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   app.post('/api/push/unsubscribe', requireAuth, async (req: Request, res: Response) => {
-    await unsubscribeFromPush(req.body?.endpoint)
+    const session = (req as AuthedRequest).session!
+    await unsubscribeFromPush(req.body?.endpoint, session.userId)
     res.json({ success: true })
   })
 
-  app.post('/api/push/test', requireAuth, async (req: Request, res: Response) => {
+  // Sending a test notification broadcasts to every subscriber's device, so it
+  // is an operator action, not something any signed-in viewer may trigger.
+  app.post('/api/push/test', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     if (!isPushConfigured()) {
       res.status(400).json({ error: 'Push notifications are not configured.' })
       return
@@ -1685,6 +1740,17 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     app.use(vite.middlewares)
   } else if (staticMode === 'static') {
     const distPath = path.join(process.cwd(), 'dist')
+    // The server bundle lives in the web root for packaging convenience, but it
+    // must never be downloadable. Its source map embeds full sourcesContent, so
+    // serving it would hand any unauthenticated client the complete server
+    // source — auth, session and secret handling included.
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (/^\/server\.[cm]?js(\.map)?$/.test(req.path)) {
+        res.status(404).end()
+        return
+      }
+      next()
+    })
     app.use(express.static(distPath))
     app.get('*', (_req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'))

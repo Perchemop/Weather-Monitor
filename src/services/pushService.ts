@@ -91,10 +91,42 @@ export function isPushConfigured(): boolean {
   return getVapidPublicKey().length > 0
 }
 
+/**
+ * Hosts a browser push service actually uses. A subscription endpoint is
+ * attacker-supplied, and the server later issues an authenticated POST to it,
+ * so an unvalidated endpoint is a server-side request forgery primitive: any
+ * authenticated account could point it at an internal service and use the
+ * delivery attempt (and its timing) as a probe.
+ */
+const ALLOWED_PUSH_HOST_SUFFIXES = [
+  'fcm.googleapis.com',
+  'push.services.mozilla.com',
+  'web.push.apple.com',
+  'notify.windows.com',
+]
+
+function assertAllowedPushEndpoint(endpoint: string): void {
+  let url: URL
+  try {
+    url = new URL(endpoint)
+  } catch {
+    throw new Error('Invalid push subscription endpoint.')
+  }
+  if (url.protocol !== 'https:') {
+    throw new Error('Push subscription endpoints must use HTTPS.')
+  }
+  const host = url.hostname.toLowerCase()
+  const allowed = ALLOWED_PUSH_HOST_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))
+  if (!allowed) {
+    throw new Error('Push subscription endpoint host is not a recognised push service.')
+  }
+}
+
 export async function subscribeToPush(input: PushSubscriptionInput): Promise<void> {
   if (!input?.endpoint || !input?.keys?.p256dh || !input?.keys?.auth) {
     throw new Error('Invalid push subscription payload.')
   }
+  assertAllowedPushEndpoint(String(input.endpoint))
   await savePushSubscription({
     endpoint: input.endpoint,
     p256dh: input.keys.p256dh,
@@ -104,8 +136,16 @@ export async function subscribeToPush(input: PushSubscriptionInput): Promise<voi
   })
 }
 
-export async function unsubscribeFromPush(endpoint: string): Promise<void> {
+export async function unsubscribeFromPush(endpoint: string, userId?: string): Promise<void> {
   if (!endpoint) return
+  // Only the account that owns a subscription may remove it. Without this
+  // check any authenticated user (a Viewer included) could unhook another
+  // operator's device from safety alerts.
+  if (userId) {
+    const subscriptions = await getPushSubscriptions()
+    const target = subscriptions.find((s) => s.endpoint === endpoint)
+    if (!target || target.userId !== userId) return
+  }
   await deletePushSubscription(endpoint)
 }
 

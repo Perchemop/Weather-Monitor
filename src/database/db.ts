@@ -102,6 +102,14 @@ export function persistDb() {
     const data = dbInstance.export()
     const buffer = Buffer.from(data)
     fs.writeFileSync(DB_FILE, buffer)
+    // Owner-only at rest: the database holds password hashes, session tokens,
+    // MFA secrets and site data, so it must not be world-readable on a shared
+    // host. Matches the 0600 used for the generated secret files.
+    try {
+      fs.chmodSync(DB_FILE, 0o600)
+    } catch {
+      // Best effort: a filesystem without POSIX modes must not break persistence.
+    }
     clearPersistenceFailure()
   } catch (err: any) {
     // Keep the in-memory database usable (the process must not crash on a disk

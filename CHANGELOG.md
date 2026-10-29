@@ -6,6 +6,42 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- **Hardening pass from a source audit of the whole application.** Fixed:
+  - **Server source was downloadable by anyone.** `/server.cjs` and its
+    source map (which embeds full `sourcesContent`) sat in the served `dist/`;
+    the map is no longer built for production and the web root now refuses
+    `/server.cjs*` with a 404.
+  - **Per-account lockout was bypassable** by submitting the account email with
+    surrounding whitespace — the lockout key is now trimmed, matching the
+    credential lookup.
+  - **Push endpoints were an SSRF primitive.** `POST /api/push/subscribe`
+    accepted any endpoint, and the server later issued an authenticated POST to
+    it on every alert; endpoints are now restricted to HTTPS URLs on known push
+    services.
+  - **Push authorisation gaps.** Unsubscribing no longer works across accounts,
+    and the broadcast test notification now requires the Manager role.
+  - **Alert emails interpolated unescaped values** into HTML, so an
+    operator-set location name could inject markup into the safety email;
+    every interpolated value is escaped.
+  - **CSV exports were open to formula injection and mis-quoting.** One shared
+    serializer now quotes every field and neutralises leading `= + - @`.
+  - **Unvalidated safety thresholds could silently disable the engine.** A
+    cleared numeric field became `null`, every comparison went false and no
+    severe-weather alert could fire; thresholds and alert cooldown are now
+    validated server-side.
+  - **SMTP TLS verification was disabled** (`rejectUnauthorized: false`),
+    exposing alert mail and SMTP credentials to a network attacker; it now
+    verifies by default with an explicit `SMTP_TLS_INSECURE` opt-out.
+  - **`/metrics` accepted a token in the query string** and compared it
+    byte-wise; it is now header-only and compared in constant time.
+  - **The SQLite file was world-readable** — it holds password hashes, session
+    tokens and MFA secrets; it is now written `0600`.
+  - **`.dockerignore` missed renamed data directories** (`data*`), which would
+    have copied the database and private keys into a local image build.
+  - **`visual.yml` ran unpinned actions** without a `permissions` block.
+
 ### Added
 
 - **Unified personal-data and secret scanner covering all four II.29 surfaces.**

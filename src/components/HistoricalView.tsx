@@ -3,6 +3,7 @@ import { Clock, Database, Download } from 'lucide-react'
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { CurrentWeather, LocationItem } from '../types'
 import { EmptyState } from './EmptyState'
+import { toCsv } from '../utils/csv'
 
 interface HistoricalViewProps {
   location: LocationItem | null
@@ -76,9 +77,9 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
       o.humidity,
       o.pressure,
       o.uvIndex,
-      `"${(o.weatherDescription || '').replace(/"/g, '""')}"`,
+      o.weatherDescription || '',
     ])
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const csvContent = toCsv([headers, ...rows])
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
