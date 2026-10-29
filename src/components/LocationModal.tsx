@@ -69,6 +69,17 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
     return () => clearTimeout(timer)
   }, [searchQuery])
 
+  // A dialog must be dismissible from the keyboard. Without this, a keyboard or
+  // screen-reader user could open the site dialog and have no way to close it.
+  useEffect(() => {
+    if (!isOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const handleAddLocation = async (name: string, latitude: number, longitude: number, timezone?: string) => {
@@ -155,13 +166,21 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-      <div className="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-modal-in duration-150">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="location-modal-title"
+        className="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-modal-in duration-150"
+      >
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <MapPin className="w-5 h-5 text-amber-400" />
             <div>
-              <h3 className="text-sm font-mono font-bold uppercase tracking-wider text-slate-100">
+              <h3
+                id="location-modal-title"
+                className="text-sm font-mono font-bold uppercase tracking-wider text-slate-100"
+              >
                 MONITORED CONSTRUCTION SITES
               </h3>
               <p className="text-2xs text-slate-400">

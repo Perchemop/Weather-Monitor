@@ -59,7 +59,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               <button
                 type="button"
                 onClick={this.handleReload}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shadow-md shadow-amber-500/20 cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shadow-md shadow-amber-500/20 cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Reload Application
@@ -67,7 +67,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               <button
                 type="button"
                 onClick={this.handleReset}
-                className="px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition-colors border border-slate-700 cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+                className="px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition-colors border border-slate-700 cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none"
               >
                 Dismiss & Retry
               </button>

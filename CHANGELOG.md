@@ -74,6 +74,14 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Accessibility: the credential form and the site dialog work with assistive
+  technology.** Every login/setup field now has a programmatically associated
+  label (`htmlFor` + `id`) instead of label-looking text a screen reader cannot
+  connect to its control; the monitored-sites dialog is a real `role="dialog"`
+  with `aria-modal`, a labelled title and Escape-to-close; the login screen no
+  longer pre-fills an invented default email address; and a duplicated
+  `cursor-pointer` class was removed from the error boundary buttons.
+
 - **Privacy: removed maintainer-identifying data from the repository.** Deleted
   the owner's real name from `CONTRIBUTORS.md`, and removed the home-directory
   paths (`/home/<user>/…`) that disclosed the maintainer's OS username from the
