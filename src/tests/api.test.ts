@@ -429,8 +429,18 @@ async function main(): Promise<void> {
     assert.equal(key.body.configured, true)
 
     const before = await anon.get('/api/push/status')
+
+    // An endpoint on a host that is not a real push service is refused: the
+    // server POSTs to this URL on every alert, so an unvalidated endpoint is a
+    // server-side request forgery primitive.
+    const forged = await anon.postCsrf('/api/push/subscribe', {
+      endpoint: 'https://internal.example.com/admin/push',
+      keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
+    })
+    assert.equal(forged.status, 400, 'a non-push-service endpoint must be rejected')
+
     const sub = await anon.postCsrf('/api/push/subscribe', {
-      endpoint: 'https://push.example.com/integration-test',
+      endpoint: 'https://fcm.googleapis.com/fcm/send/integration-test',
       keys: { p256dh: 'p256dh-value', auth: 'auth-value' },
     })
     assert.equal(sub.status, 200)
@@ -439,7 +449,7 @@ async function main(): Promise<void> {
     assert.equal(after.body.subscriptions, before.body.subscriptions + 1)
 
     const unsub = await anon.postCsrf('/api/push/unsubscribe', {
-      endpoint: 'https://push.example.com/integration-test',
+      endpoint: 'https://fcm.googleapis.com/fcm/send/integration-test',
     })
     assert.equal(unsub.status, 200)
     const final = await anon.get('/api/push/status')
