@@ -28,7 +28,9 @@ function isStrongEnough(password: string): boolean {
 
 export function LoginScreen({
   isFirstRun = false,
-  ownerEmail = 'owner@local',
+  // No baked-in default address: the operator supplies their own, and an empty
+  // field is more honest than a placeholder identity the app invented.
+  ownerEmail = '',
   onAuthenticated,
 }: LoginScreenProps) {
   const [email, setEmail] = useState(ownerEmail)
@@ -148,10 +150,14 @@ export function LoginScreen({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase font-mono tracking-wider text-slate-400">
+            <label
+              htmlFor="cwm-login-email"
+              className="text-xs font-semibold uppercase font-mono tracking-wider text-slate-400"
+            >
               {isFirstRun ? 'Supervisor Email' : 'Operator Email'}
             </label>
             <input
+              id="cwm-login-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -163,13 +169,17 @@ export function LoginScreen({
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold uppercase font-mono tracking-wider text-slate-400">
+              <label
+                htmlFor="cwm-login-password"
+                className="text-xs font-semibold uppercase font-mono tracking-wider text-slate-400"
+              >
                 {isFirstRun ? 'New Master Password' : 'Master Password'}
               </label>
               <span className="text-2xs text-slate-500">Min 10 characters</span>
             </div>
             <div className="relative">
               <input
+                id="cwm-login-password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -192,10 +202,14 @@ export function LoginScreen({
 
           {isFirstRun && (
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase font-mono tracking-wider text-slate-400">
+              <label
+                htmlFor="cwm-login-confirm"
+                className="text-xs font-semibold uppercase font-mono tracking-wider text-slate-400"
+              >
                 Confirm Master Password
               </label>
               <input
+                id="cwm-login-confirm"
                 type={showPassword ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
