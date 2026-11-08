@@ -6,6 +6,22 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Process
+
+- **Guide.md synchronization (guide §12.3).** Reviewed the current `~/guide.md`
+  (2026-11-08) and diffed it against this repo's process ruleset. New
+  requirements now in force: §2.6 Never Crash Discipline, §4.5/§4.6 suite CI/QA
+  architecture, §5.5 House Rules, §7.2/§7.3 release pipeline, §9 QC gates
+  (GitHub hygiene + token metrics + in-app version/release-notes popup +
+  auto-update check + contributor credits), §10 UI verification evidence,
+  §11 source-of-truth additions (`docs/gaps.md`, `docs/devlog.md`), §12.1 suite
+  standards (`docs/tokens.json` ledger, pinned `crates/update-check` submodule,
+  signed releases + SHA256SUMS.txt, version UI bottom-right + standardized
+  popup), §12.2 parallel-agent staffing model, and Part II §II.29 mandatory
+  personal-data/secret scan gate. `addendum.md` is archived; `guide.md` Appendix
+  A carries the former addendum content and `guide.md` is the single source of
+  truth. Recorded in `docs/current-model-map.md`.
+
 ## [0.1.3] - 2026-10-30
 
 ### Security

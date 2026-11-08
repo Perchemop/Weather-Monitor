@@ -40,6 +40,21 @@ the failover plugin, so the structure never depends on which model is running.
 | ci-runner | `nvidia/openai/gpt-oss-20b` |
 | ui-dev (vision) | `nvidia/nvidia/nemotron-3.5-super-vl-120b-a12b` |
 
+## Guide synchronization (guide §12.3)
+
+`~/guide.md` is the single source of truth for this suite's process. At the start
+of every session the agent reads `guide.md` and diffs it against this ruleset;
+new requirements, standards, or workflows are implemented in the global
+instructions, MCP config, and repository process docs before continuing work.
+The guide version/date is recorded here and in `CHANGELOG.md`.
+
+- Guide version: none (single file, `~/guide.md`)
+- Guide date reviewed: 2026-11-08
+- Guide sections in force: §0–§18, Part II §II.18–§II.29, Appendix A (merged addendum)
+- `addendum.md` is archived to `addendum.md.archive`; `guide.md` Appendix A carries
+  the former addendum content. `guide.md` wins on all topics (the historical
+  "addendum wins on client/Rust/session" hierarchy is retired).
+
 ## Notes
 
 - Model IDs go stale. Verify against the live list at the start of a session and
