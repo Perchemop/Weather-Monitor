@@ -8,6 +8,16 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Process
 
+- **Guide.md re-synchronization (guide §12.3), revision 2026-11-09.** Re-read
+  `~/guide.md` and diffed it against this repo's process ruleset. The revision
+  adds **§II.30 Rust GUI/UX** (stack matching, one token source, a11y-as-code,
+  rendered evidence, component recipes, non-goals) and corrects the header
+  hierarchy so `guide.md` is the single source of truth and the _stricter_ rule
+  wins where Part I and Part II appear to disagree. §II.30 is Rust-GUI-specific
+  and therefore **not applicable** to this React web application; its
+  stack-neutral substance is already governed here by §10, II.21 and II.27. The
+  sync and the delta are recorded in `docs/current-model-map.md`.
+
 - **Guide.md synchronization (guide §12.3).** Reviewed the current `~/guide.md`
   (2026-11-08) and diffed it against this repo's process ruleset. New
   requirements now in force: §2.6 Never Crash Discipline, §4.5/§4.6 suite CI/QA
