@@ -49,11 +49,31 @@ instructions, MCP config, and repository process docs before continuing work.
 The guide version/date is recorded here and in `CHANGELOG.md`.
 
 - Guide version: none (single file, `~/guide.md`)
-- Guide date reviewed: 2026-11-08
-- Guide sections in force: §0–§18, Part II §II.18–§II.29, Appendix A (merged addendum)
+- Guide revision reviewed: **2026-11-09** (previous: 2026-11-08)
+- Guide sections in force: §0–§18, Part II §II.18–§II.30, Appendix A–O
 - `addendum.md` is archived to `addendum.md.archive`; `guide.md` Appendix A carries
-  the former addendum content. `guide.md` wins on all topics (the historical
-  "addendum wins on client/Rust/session" hierarchy is retired).
+  the former addendum content. Per the corrected header, `guide.md` is the
+  **single source of truth** and where Part I and Part II appear to disagree the
+  **stricter rule wins** (Part II on clean-room/legal; appendices refine
+  client/Rust/session). No document outside `guide.md` is authoritative.
+
+### Revision delta — 2026-11-09
+
+- **Added §II.30 — Rust GUI/UX (stack matching, tokens, evidence).** Applies to
+  native Rust GUIs (egui/eframe, iced, Slint, GPUI): detect the toolkit and its
+  **resolved** version before recommending anything; one token source with
+  semantic roles (no scattered `Color32::from_*`); a11y and contrast as headless
+  tests; state coverage; rendered/AccessKit evidence as CI artefacts; a UX slice
+  never bumps the toolkit; Astryx/React/CSS design systems are non-dependencies
+  for a native GUI. Cross-referenced from II.27.11, K.7, Appendix O and the
+  canonical session prompt (Appendix L).
+- **Not applicable to this repository.** Weather-Monitor is a React 19 + Vite
+  web front end, not a native Rust GUI, so the Rust-specific II.30 rules do not
+  bind here. Their stack-neutral substance is already governed for a web app by
+  §10 (tokens, UI evidence), II.21 (WCAG 2.2 AA) and II.27 (states, parity) —
+  the same areas this repository's 2026-10-30 audit reviewed.
+- **Header hierarchy corrected** to name `guide.md` the single source of truth
+  and to state that the stricter rule wins on apparent Part I/Part II conflict.
 
 ## Notes
 
