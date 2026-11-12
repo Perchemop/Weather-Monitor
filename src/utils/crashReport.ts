@@ -62,10 +62,7 @@ export function scrubText(input: string): string {
   out = out.replace(/\b[A-Za-z0-9_-]{40,}\b/g, '[REDACTED_TOKEN]')
   // Redact 32-char hex: match non-hex prefix, 32 hex chars, non-hex suffix.
   // Use a function to avoid lookbehind/lookahead issues with gi flags.
-  out = out.replace(
-    /(^|[^a-f0-9])([a-f0-9]{32})([^a-f0-9]|$)/gi,
-    (_, prefix, hex) => `${prefix}[REDACTED_TOKEN]`,
-  )
+  out = out.replace(/(^|[^a-f0-9])([a-f0-9]{32})($|[^a-f0-9])/gi, (_, prefix, hex) => `${prefix}[REDACTED_TOKEN]`)
   return out
 }
 
