@@ -215,8 +215,8 @@ jobs:
           IMAGE="ghcr.io/perchemop/weather-monitor"
           DIGEST="${{ steps.build.outputs.digest }}"
           {
-            printf '### Container image\n\n'
-            printf '- `%s:%s`\n' "${IMAGE}" "${GITHUB_REF_NAME}"
+            printf "### Container image\n\n"
+            printf "- \`%s:%s\`\n" "${IMAGE}" "${GITHUB_REF_NAME}"
             printf '- `%s@%s` (linux/amd64, linux/arm64)\n' "${IMAGE}" "${DIGEST}"
           } >> "${GITHUB_STEP_SUMMARY}"
           gh release view "${GITHUB_REF_NAME}" --json body -q .body > release-body.md
@@ -224,5 +224,5 @@ jobs:
             echo "digest already recorded; leaving the release notes unchanged"
             exit 0
           fi
-          printf '\n---\n\n### Container image\n\n`%s@%s` (linux/amd64, linux/arm64)\n' "$IMAGE" "$DIGEST" >> release-body.md
+          printf "\n---\n\n### Container image\n\n\`%s@%s\` (linux/amd64, linux/arm64)\n" "$IMAGE" "$DIGEST" >> release-body.md
           gh release edit "${GITHUB_REF_NAME}" --notes-file release-body.md
