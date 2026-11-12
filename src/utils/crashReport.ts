@@ -60,19 +60,9 @@ export function scrubText(input: string): string {
   out = out.replace(/ghp_[A-Za-z0-9]{20,}/g, '[REDACTED_TOKEN]')
   out = out.replace(/github_pat_[A-Za-z0-9_]{20,}/g, '[REDACTED_TOKEN]')
   out = out.replace(/\b[A-Za-z0-9_-]{40,}\b/g, '[REDACTED_TOKEN]')
-  // Redact 32-char hex: iterate through string to find isolated 32-char hex sequences.
-  // This avoids regex lookbehind/lookbehind issues with the 'gi' flags.
-  for (let i = 0; i <= out.length - 32; i++) {
-    const slice = out.slice(i, i + 32)
-    if (/^[a-f0-9]{32}$/i.test(slice)) {
-      const before = i === 0 || !/[a-f0-9]/i.test(out[i - 1])
-      const after = i + 32 === out.length || !/[a-f0-9]/i.test(out[i + 32])
-      if (before && after) {
-        out = out.slice(0, i) + '[REDACTED_TOKEN]' + out.slice(i + 32)
-        i += '[REDACTED_TOKEN]'.length - 1
-      }
-    }
-  }
+  // Redact 32-char hex: use negative lookbehind/lookahead (ES2018+).
+  // Matches 32 hex chars not preceded or followed by another hex char.
+  out = out.replace(/(?<![a-f0-9])([a-f0-9]{32})(?![a-f0-9])/gi, '[REDACTED_TOKEN]')
   return out
 }
 
