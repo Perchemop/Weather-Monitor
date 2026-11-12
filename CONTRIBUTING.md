@@ -22,12 +22,20 @@ the MIT licence (see `LICENSE`). See `CODE_OF_CONDUCT.md` for our expectations.
 ## Setting up your environment
 
 ```bash
-npm ci        # install dependencies
-npm run dev   # start dev server (http://localhost:3000)
-npm test      # run unit/system tests (tsx)
-npm run lint  # typecheck
+npm ci                  # install dependencies
+npm run dev             # start dev server (http://localhost:3000)
+npm test                # run both test suites: 66 system + 29 HTTP integration checks
+npm run test:unit       # system suite only (tsx)
+npm run test:api        # HTTP integration suite only
+npm run lint            # typecheck
 npm run prettier:check  # style check
+npm run build           # server build -> dist/ (Express + API)
+npm run build:static    # serverless static build -> dist-static/ (GitHub Pages)
+npm start               # run the production server build
 ```
+
+Heavy verification runs in GitHub Actions; the local commands above are
+convenience only (see "How to propose a change").
 
 ## Commit identity
 

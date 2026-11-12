@@ -14,14 +14,19 @@
 
 - [ ] Acceptance criteria for the Task are met with **real** behaviour (no fake UI, no dead controls)
 - [ ] Tests added or updated (system and/or API suite)
-- [ ] CI is green (format-check, build-test matrix, docker)
+- [ ] CI is green (format-check, build-test matrix, ui-tests (Playwright smoke), docker, security-compliance, Personal data scan)
 - [ ] No unbounded local full builds used to "verify" on a constrained machine — GitHub Actions only
 - [ ] No proprietary source, assets, or reverse-engineered material introduced
 - [ ] Public research notes are original summaries + URLs only (if applicable)
 - [ ] ROADMAP / CHANGELOG / REQUIREMENTS_TRACEABILITY updated if this completes a tracked item
 - [ ] Secrets and tokens not committed (`.env*` ignored; no keys in code or logs)
 - [ ] User-facing strings and UI are original (no copied trade dress)
-- [ ] Commits authored as `"<App Name> Dev" <dev@example.com>` (guide §5.5)
+- [ ] Commits authored as `"Construction Weather Monitor Dev" <dev@example.com>` (guide §5.5)
+
+## Screenshots (if UI changes)
+
+- [ ] Before/after screenshots attached (light and dark where relevant), or a
+      note explaining why no visual change occurred
 
 ## Accessibility (if UI changes)
 

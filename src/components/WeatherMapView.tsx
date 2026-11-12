@@ -28,6 +28,7 @@ interface WeatherMapViewProps {
   current: CurrentWeather | null
   /** Layers to enable on first render (e.g. ['radar','lightning'] from the storm card). */
   initialLayers?: MapLayer[]
+  windUnit?: 'km/h' | 'mph' | 'm/s'
 }
 
 interface RadarFrame {
@@ -93,7 +94,7 @@ function lightningColor(lpi: number): string {
   return '#6366f1'
 }
 
-export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, current, initialLayers }) => {
+export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, current, initialLayers, windUnit = 'km/h' }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const radarTileRef = useRef<L.TileLayer | null>(null)
@@ -617,6 +618,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                 disabled={radarFrames.length === 0}
                 className="flex-1 min-w-[130px] accent-amber-500"
                 aria-label="Radar frame"
+aria-valuetext={frameLabel}
               />
               <span className="text-2xs font-mono text-slate-300 tabular-nums w-14 text-right">
                 {frameLabel}
@@ -657,7 +659,8 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
             <span className="text-[10px] font-mono uppercase tracking-widest text-slate-400">Rain:</span>
             <button
               type="button"
-              onClick={() => setRainView('now')}
+              aria-pressed={rainView === 'now'}
+onClick={() => setRainView('now')}
               className={`px-2 py-1 rounded-lg text-2xs font-mono border transition-all cursor-pointer ${
                 rainView === 'now'
                   ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
@@ -681,7 +684,8 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                     ? 'bg-sky-500/20 text-sky-300'
                     : 'bg-slate-800/80 text-slate-300 hover:text-slate-100'
                 }`}
-                title="Rain that has already fallen (last N hours)"
+                aria-pressed={rainView === 'accum' && rainDirection === 'past'}
+title="Rain that has already fallen (last N hours)"
               >
                 Past
               </button>
@@ -696,7 +700,8 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                     ? 'bg-sky-500/20 text-sky-300'
                     : 'bg-slate-800/80 text-slate-300 hover:text-slate-100'
                 }`}
-                title="Rain forecast (next N hours)"
+                aria-pressed={rainView === 'accum' && rainDirection === 'next'}
+title="Rain forecast (next N hours)"
               >
                 Next
               </button>
@@ -707,7 +712,8 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                 <button
                   key={h}
                   type="button"
-                  onClick={() => setRainHours(h)}
+                  aria-pressed={rainHours === h}
+onClick={() => setRainHours(h)}
                   className={`px-2 py-1 rounded-lg text-2xs font-mono border transition-all cursor-pointer ${
                     rainHours === h
                       ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
@@ -721,14 +727,14 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
         )}
 
         <div className="relative rounded-2xl overflow-hidden border border-slate-800/80 shadow-sm">
-          <div ref={containerRef} className="h-[52vh] min-h-[340px] w-full bg-slate-950" />
+          <div ref={containerRef} className="h-[52vh] min-h-[340px] w-full bg-slate-950" role="region" aria-label="Weather map" />
 
           {/* Layer legend */}
           <div className="absolute bottom-2 left-2 z-[500] flex flex-col gap-1.5 bg-slate-950/90 border border-slate-800/80 rounded-xl px-2.5 py-2 text-[10px] font-mono text-slate-300 shadow-sm backdrop-blur">
             {activeLayers.has('wind') && (
               <div className="flex items-center gap-1.5">
                 <Wind className="w-3 h-3 text-cyan-400" />
-                <span>Wind arrows · colour = speed</span>
+                <span>Wind arrows · colour = speed (green &lt;20, amber 20-40, red &gt;40 km/h)</span>
               </div>
             )}
             {activeLayers.has('rain') && (
@@ -767,7 +773,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
             <div className="text-2xs font-mono uppercase text-slate-400">Wind (site)</div>
-            <div className="text-lg font-bold text-slate-100">{Math.round(current.windSpeed)} km/h</div>
+            <div className="text-lg font-bold text-slate-100">{Math.round(current.windSpeed)} {windUnit}</div>
             <div className="text-2xs font-mono text-slate-500">
               {typeof current.windDirection === 'number' ? `${Math.round(current.windDirection)}°` : '—'}
             </div>

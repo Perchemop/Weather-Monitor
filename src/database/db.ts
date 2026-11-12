@@ -432,6 +432,30 @@ const MIGRATIONS: Migration[] = [
       db.run('DROP TABLE IF EXISTS auth_owner')
     },
   },
+  {
+    version: 12,
+    name: '012_sessions_token_digest',
+    up: (db: Database) => {
+      // `sessions.token` now holds sha256(bearer token) instead of the raw
+      // credential. Rows written by an older version cannot be re-keyed (a
+      // digest is not reversible), so they are cleared and every client signs
+      // in again — the same contract as restoring a database snapshot.
+      db.run('DELETE FROM sessions')
+    },
+  },
+  {
+    version: 13,
+    name: '013_user_totp_last_step',
+    up: (db: Database) => {
+      // Highest TOTP step counter already consumed for this account. Without it
+      // a code stays replayable for its whole +/- window.
+      const info = db.exec('PRAGMA table_info(users)')
+      const columns = info[0]?.values?.map((v) => v[1] as string) || []
+      if (!columns.includes('totp_last_step')) {
+        db.run('ALTER TABLE users ADD COLUMN totp_last_step INTEGER')
+      }
+    },
+  },
 ]
 
 function initializeSchema(db: Database) {
@@ -822,7 +846,9 @@ export async function recordUserLogin(id: string): Promise<void> {
 
 export async function setUserMfaSecret(id: string, secret: string): Promise<void> {
   const db = await getDb()
-  db.run('UPDATE users SET mfa_secret = ?, updated_at = ? WHERE id = ?', [
+  // A new secret starts a fresh replay window: carrying the previous secret's
+  // last consumed step forward could reject the first codes of the new device.
+  db.run('UPDATE users SET mfa_secret = ?, totp_last_step = NULL, updated_at = ? WHERE id = ?', [
     secret,
     new Date().toISOString(),
     id,
@@ -838,8 +864,35 @@ export async function setUserMfaEnabled(id: string, enabled: boolean): Promise<v
     db.run('UPDATE users SET mfa_enabled = 1, updated_at = ? WHERE id = ?', [now, id])
   } else {
     db.run('UPDATE users SET mfa_enabled = 0, mfa_secret = NULL, updated_at = ? WHERE id = ?', [now, id])
+    db.run('UPDATE users SET totp_last_step = NULL WHERE id = ?', [id])
   }
   persistDb()
+}
+
+/**
+ * Records the TOTP step counter that was just used and reports whether it was
+ * fresh. A code remains valid for its whole +/- window, so accepting any code
+ * that merely *verifies* lets one observed code be replayed until the window
+ * closes. Only a counter strictly newer than the last consumed one is accepted;
+ * the read-and-write is a single tick (no await in between), so two concurrent
+ * logins cannot both consume the same step.
+ */
+export async function consumeTotpStep(userId: string, step: number): Promise<boolean> {
+  if (!Number.isFinite(step) || step <= 0) return false
+  const db = await getDb()
+  const res = db.exec('SELECT totp_last_step FROM users WHERE id = ? LIMIT 1', [userId])
+  if (!res[0] || !res[0].values[0]) return false
+  const stored = res[0].values[0][0]
+  const lastUsed = stored === null || stored === undefined ? 0 : Number(stored)
+  if (!Number.isFinite(lastUsed) || step <= lastUsed) return false
+
+  db.run('UPDATE users SET totp_last_step = ?, updated_at = ? WHERE id = ?', [
+    step,
+    new Date().toISOString(),
+    userId,
+  ])
+  persistDb()
+  return true
 }
 
 export async function getUserMfaByEmail(
@@ -879,7 +932,28 @@ export async function getUserMfaById(
 // Persistent sessions
 // ---------------------------------------------------------------------------
 
+/**
+ * Digest of a bearer session token. SQLite stores only this value: the raw
+ * token is a live credential, so a stolen database file — or an exported or
+ * restored backup — must never hand the reader a working session. Every
+ * lookup, touch and delete goes through this digest, and the raw token itself
+ * is never written to disk.
+ */
+export function hashSessionToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+/**
+ * Raw tokens for sessions created by *this* process, keyed by digest. The
+ * digest is enough to count, touch and revoke a session in storage; the raw
+ * value is only ever handed back to the client that already holds it. Nothing
+ * here survives a restart, and it is deliberately not persisted — that is the
+ * whole point of hashing the column.
+ */
+const rawSessionTokens = new Map<string, string>()
+
 export interface StoredSession {
+  /** Raw bearer token, held in memory only. Persisted as `hashSessionToken(token)`. */
   token: string
   userId: string
   email: string
@@ -894,12 +968,13 @@ export interface StoredSession {
 
 export async function saveSession(session: StoredSession): Promise<void> {
   const db = await getDb()
+  const digest = hashSessionToken(session.token)
   db.run(
     `INSERT OR REPLACE INTO sessions
        (token, user_id, email, role, display_name, created_at, expires_at, user_agent, ip, last_seen_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      session.token,
+      digest,
       session.userId,
       session.email,
       session.role,
@@ -916,36 +991,50 @@ export async function saveSession(session: StoredSession): Promise<void> {
 
 export async function touchSession(token: string, lastSeenAt: number): Promise<void> {
   const db = await getDb()
-  db.run('UPDATE sessions SET last_seen_at = ? WHERE token = ?', [lastSeenAt, token])
+  db.run('UPDATE sessions SET last_seen_at = ? WHERE token = ?', [lastSeenAt, hashSessionToken(token)])
   persistDb()
 }
 
 export async function deleteSession(token: string): Promise<void> {
   const db = await getDb()
-  db.run('DELETE FROM sessions WHERE token = ?', [token])
+  const digest = hashSessionToken(token)
+  db.run('DELETE FROM sessions WHERE token = ?', [digest])
+  rawSessionTokens.delete(digest)
   persistDb()
 }
 
 export async function deleteSessionsForUser(userId: string): Promise<number> {
   const db = await getDb()
-  const before = db.exec('SELECT COUNT(*) FROM sessions WHERE user_id = ?', [userId])
-  const count = (before[0]?.values[0]?.[0] as number) || 0
+  const before = db.exec('SELECT token FROM sessions WHERE user_id = ?', [userId])
+  const digests = before[0]?.values.map((v) => v[0] as string) || []
   db.run('DELETE FROM sessions WHERE user_id = ?', [userId])
+  for (const digest of digests) rawSessionTokens.delete(digest)
   persistDb()
-  return count
+  return digests.length
 }
 
 /**
  * Removes every persisted session. Used after restoring a database snapshot:
  * tokens minted against the replaced database must never become valid again on
- * a later restart.
+ * a later restart, and the same reasoning applies to any list this process
+ * still holds.
  */
 export async function deleteAllSessions(): Promise<void> {
   const db = await getDb()
   db.run('DELETE FROM sessions')
+  rawSessionTokens.clear()
   persistDb()
 }
 
+/**
+ * Sessions that are still valid *and* whose bearer token this process can
+ * present — i.e. the ones it minted itself.
+ *
+ * A row written by an earlier process holds only a digest, and a digest cannot
+ * be turned back into a credential, so those rows are skipped rather than
+ * resumed: after a restart every client signs in again. They are not silently
+ * trusted, and `pruneExpiredSessions` clears them once their TTL passes.
+ */
 export async function loadActiveSessions(): Promise<StoredSession[]> {
   const db = await getDb()
   const res = db.exec(
@@ -954,23 +1043,32 @@ export async function loadActiveSessions(): Promise<StoredSession[]> {
     [Date.now()],
   )
   if (!res[0]) return []
-  return res[0].values.map((v) => ({
-    token: v[0] as string,
-    userId: v[1] as string,
-    email: v[2] as string,
-    role: v[3] as UserRole,
-    displayName: (v[4] as string) || undefined,
-    createdAt: v[5] as string,
-    expiresAt: v[6] as number,
-    userAgent: (v[7] as string) || undefined,
-    ip: (v[8] as string) || undefined,
-    lastSeenAt: v[9] === null || v[9] === undefined ? undefined : (v[9] as number),
-  }))
+  const sessions: StoredSession[] = []
+  for (const v of res[0].values) {
+    const token = rawSessionTokens.get(v[0] as string)
+    if (!token) continue
+    sessions.push({
+      token,
+      userId: v[1] as string,
+      email: v[2] as string,
+      role: v[3] as UserRole,
+      displayName: (v[4] as string) || undefined,
+      createdAt: v[5] as string,
+      expiresAt: v[6] as number,
+      userAgent: (v[7] as string) || undefined,
+      ip: (v[8] as string) || undefined,
+      lastSeenAt: v[9] === null || v[9] === undefined ? undefined : (v[9] as number),
+    })
+  }
+  return sessions
 }
 
 export async function pruneExpiredSessions(): Promise<void> {
   const db = await getDb()
-  db.run('DELETE FROM sessions WHERE expires_at <= ?', [Date.now()])
+  const now = Date.now()
+  const expired = db.exec('SELECT token FROM sessions WHERE expires_at <= ?', [now])
+  for (const v of expired[0]?.values || []) rawSessionTokens.delete(v[0] as string)
+  db.run('DELETE FROM sessions WHERE expires_at <= ?', [now])
   persistDb()
 }
 

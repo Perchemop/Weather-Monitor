@@ -120,7 +120,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                 <span>{roleBadge.label}</span>
               </span>
             </div>
-            <p className="mt-1 flex items-center gap-1.5 text-[11px] leading-none text-slate-500">
+            <p className="mt-1 flex items-center gap-1.5 text-[11px] leading-none text-slate-400">
               <span
                 className={`inline-block h-1.5 w-1.5 rounded-full ${
                   monitorStatus === 'ACTIVE'
@@ -158,7 +158,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
             <span className="truncate max-w-[130px] sm:max-w-[200px]">
               {currentLocation ? currentLocation.name : 'Select Location'}
             </span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-slate-500" />
+            <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
           </button>
 
           {/* Keep-screen-awake toggle (Screen Wake Lock) */}
@@ -184,6 +184,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
               disabled={isChecking}
               className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3 py-1.5 text-xs sm:text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 outline-none cursor-pointer"
               title="Execute immediate weather check cycle"
+              aria-label="Execute immediate weather check cycle"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isChecking ? 'animate-spin' : ''}`} />
               <span className="hidden md:inline">Check now</span>
@@ -196,7 +197,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
               type="button"
               id="logout-btn"
               onClick={onLogout}
-              className="touch-square flex items-center justify-center rounded-xl border border-slate-800 bg-slate-900 p-2 text-slate-500 transition-colors hover:border-slate-700 hover:bg-slate-800/80 hover:text-red-300 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+              className="touch-square flex items-center justify-center rounded-xl border border-slate-800 bg-slate-900 p-2 text-slate-400 transition-colors hover:border-slate-700 hover:bg-slate-800/80 hover:text-red-300 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
               title="Lock safety enclave / log out"
               aria-label="Lock safety enclave"
             >
@@ -232,7 +233,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                   onClick={() => setActiveTab(item.id)}
                   aria-current={isActive ? 'page' : undefined}
                   className={`relative flex items-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-xs sm:text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer ${
-                    isActive ? 'text-slate-100' : 'text-slate-500 hover:text-slate-300'
+                    isActive ? 'text-slate-100' : 'text-slate-400 hover:text-slate-300'
                   }`}
                 >
                   <Icon className={`h-3.5 w-3.5 ${isActive ? 'text-amber-400' : ''}`} />
@@ -276,7 +277,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
             )
           })}
           <KeepAwakeToggle fullWidth />
-          <div className="pt-2 border-t border-slate-800/60 text-[11px] text-slate-500 flex items-center justify-between px-2">
+          <div className="pt-2 border-t border-slate-800/60 text-[11px] text-slate-400 flex items-center justify-between px-2">
             <span>
               {monitorStatus === 'ACTIVE'
                 ? 'Monitoring'

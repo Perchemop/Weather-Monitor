@@ -16,10 +16,12 @@ security-compliance
 # codeql.yml / dependency-review
 Analyze (JavaScript/TypeScript) (javascript-typescript)
 dependency-review
-# visual.yml
+# ci.yml (continued)
 ui-tests (Playwright smoke)
 # pii.yml — personal-data gate (guide II.29)
 Personal data scan
 
 # Not listed: `deploy` (runs on main only, not on pull requests) and
-# `visual` (also runs on pull requests; add it if it becomes a gate).
+# `visual` (visual.yml) — the visual-evidence job is intentionally
+# non-gating: it uploads rendered screenshots as artefacts for review and
+# must never block a merge. Add it here only if it becomes a gate.

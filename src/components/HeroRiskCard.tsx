@@ -132,12 +132,12 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
         {/* Context line */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
           <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-400">
-            Current risk <span className="text-slate-600">·</span>{' '}
+            Current risk <span className="text-slate-400">·</span>{' '}
             <span className="normal-case tracking-normal">{locationName}</span>
           </p>
           <p className={`text-xs tabular-nums ${scoreTone}`}>
             Score {risk.score}
-            <span className="text-slate-600"> / 100</span>
+            <span className="text-slate-400"> / 100</span>
           </p>
         </div>
 
@@ -218,7 +218,7 @@ const HeroRiskCardComponent: React.FC<HeroRiskCardProps> = ({ risk, locationName
                       </div>
                       <div className="mt-0.5 text-[11px] leading-snug text-slate-400">
                         Observed <span className="font-semibold tabular-nums text-slate-200">{f.value}</span>
-                        <span className="text-slate-600"> · threshold </span>
+                        <span className="text-slate-400"> · threshold </span>
                         <span className="tabular-nums">{f.threshold}</span>
                       </div>
                     </div>

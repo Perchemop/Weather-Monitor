@@ -1,10 +1,12 @@
 # Research: Browser-Level (DOM) UI Tests — Playwright
 
-Status: **ready for work**. Target milestone: 0.2.x.
+Status: **approved (human gate 2026-10-24) and implemented** — `ui-tests` CI job
+green since 0.1.3. Note kept as the original design record. Target milestone:
+0.2.x.
 
 ## Behaviour (original summary)
 
-Verification currently has three layers — type-check, the 88-check system/API
+Verification currently has three layers — type-check, the 95-check system/API
 suites, and manual QC — but nothing executes the rendered React UI. The
 capability is a small Playwright smoke suite that drives the real built app in
 a real browser: first-run setup, login, dashboard render, role-gated

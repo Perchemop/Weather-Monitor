@@ -57,11 +57,11 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       <div
         className={`${s.badge} mx-auto flex items-center justify-center bg-slate-950/60 border border-slate-800/80 shadow-sm`}
       >
-        <Icon className={`${s.icon} text-slate-500`} />
+        <Icon className={`${s.icon} text-slate-400`} />
       </div>
       <div className={`${s.title} tracking-tight text-slate-300`}>{title}</div>
       {description && (
-        <div className={`${s.desc} text-slate-500 max-w-md mx-auto leading-relaxed`}>{description}</div>
+        <div className={`${s.desc} text-slate-400 max-w-md mx-auto leading-relaxed`}>{description}</div>
       )}
     </div>
   )

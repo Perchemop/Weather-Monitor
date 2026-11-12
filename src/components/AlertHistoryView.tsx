@@ -93,10 +93,12 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-mono">
+            <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-mono" role="tablist">
               <button
                 type="button"
-                onClick={() => setActiveTab('alerts')}
+                role="tab"
+aria-selected={activeTab === 'alerts'}
+onClick={() => setActiveTab('alerts')}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
                   activeTab === 'alerts'
                     ? 'bg-slate-800 text-amber-400 font-semibold'
@@ -107,7 +109,9 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('deliveries')}
+                role="tab"
+aria-selected={activeTab === 'deliveries'}
+onClick={() => setActiveTab('deliveries')}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
                   activeTab === 'deliveries'
                     ? 'bg-slate-800 text-amber-400 font-semibold'
@@ -139,6 +143,8 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
             </span>
 
             <select
+              id="alert-severity-filter"
+              aria-label="Filter by severity"
               value={selectedSeverity}
               onChange={(e) => setSelectedSeverity(e.target.value)}
               className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-slate-300 focus:outline-none focus:border-amber-500"
@@ -151,6 +157,8 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
             </select>
 
             <select
+              id="alert-type-filter"
+              aria-label="Filter by alert type"
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
               className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-slate-300 focus:outline-none focus:border-amber-500"

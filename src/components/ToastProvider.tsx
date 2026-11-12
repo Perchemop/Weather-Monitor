@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react'
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { CheckCircle2, AlertTriangle, AlertCircle, Info, X } from 'lucide-react'
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
@@ -7,6 +7,7 @@ export interface ToastItem {
   id: string
   message: string
   type: ToastType
+  severity?: string
 }
 
 interface ToastContextValue {
@@ -38,23 +39,59 @@ const FALLBACK_TOAST: ToastContextValue = {
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
+  const [pausedIds, setPausedIds] = useState<Set<string>>(new Set())
+  const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const remainingRef = useRef<Record<string, number>>({})
+  const startRef = useRef<Record<string, number>>({})
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
+    if (timersRef.current[id]) {
+      clearTimeout(timersRef.current[id])
+      delete timersRef.current[id]
+    }
   }, [])
 
-  const showToast = useCallback(
-    (message: string, type: ToastType = 'info', durationMs = 4000) => {
-      const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
-      setToasts((prev) => [...prev, { id, message, type }])
+  // Schedule auto-dismiss for non-critical toasts.
+  useEffect(() => {
+    toasts.forEach((t) => {
+      if (t.severity === 'CRITICAL') return
+      if (timersRef.current[t.id]) return
+      remainingRef.current[t.id] = 4000
+      startRef.current[t.id] = Date.now()
+      timersRef.current[t.id] = setTimeout(() => removeToast(t.id), 4000)
+    })
+  }, [toasts, removeToast])
 
-      if (durationMs > 0) {
-        setTimeout(() => {
-          removeToast(id)
-        }, durationMs)
+  // Pause / resume on hover or focus.
+  useEffect(() => {
+    pausedIds.forEach((id) => {
+      const timer = timersRef.current[id]
+      if (timer) {
+        clearTimeout(timer)
+        delete timersRef.current[id]
+        const elapsed = Date.now() - (startRef.current[id] || Date.now())
+        remainingRef.current[id] = Math.max(0, (remainingRef.current[id] || 4000) - elapsed)
       }
+    })
+    toasts.forEach((t) => {
+      if (t.severity === 'CRITICAL') return
+      if (pausedIds.has(t.id)) return
+      if (timersRef.current[t.id]) return
+      const ms = remainingRef.current[t.id]
+      if (ms && ms > 0) {
+        startRef.current[t.id] = Date.now()
+        timersRef.current[t.id] = setTimeout(() => removeToast(t.id), ms)
+      }
+    })
+  }, [pausedIds, toasts, removeToast])
+
+  const showToast = useCallback(
+    (message: string, type: ToastType = 'info', durationMs = 4000, severity?: string) => {
+      const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+      setToasts((prev) => [...prev, { id, message, type, severity }])
     },
-    [removeToast],
+    [],
   )
 
   const success = useCallback((message: string) => showToast(message, 'success'), [showToast])
@@ -76,8 +113,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <div
         id="toast-notification-enclave"
         className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"
-        aria-live="polite"
-        aria-atomic="true"
       >
         {toasts.map((toast) => {
           let bgColor = 'bg-slate-900 border-slate-700 text-slate-100'
@@ -99,6 +134,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               key={toast.id}
               className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-200 animate-toast-in ${bgColor}`}
               role="alert"
+              onMouseEnter={() => setPausedIds((prev) => new Set(prev).add(toast.id))}
+              onMouseLeave={() => setPausedIds((prev) => {
+                const next = new Set(prev)
+                next.delete(toast.id)
+                return next
+              })}
+              onFocus={() => setPausedIds((prev) => new Set(prev).add(toast.id))}
+              onBlur={() => setPausedIds((prev) => {
+                const next = new Set(prev)
+                next.delete(toast.id)
+                return next
+              })}
             >
               {icon}
               <div className="flex-1 text-xs font-medium leading-relaxed">{toast.message}</div>

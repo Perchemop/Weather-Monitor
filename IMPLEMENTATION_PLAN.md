@@ -1,5 +1,12 @@
 # Construction Weather Monitor — Exhaustive Audit & Comprehensive Implementation Plan
 
+> **SUPERSEDED — historical document.**
+> This plan was the original pre-implementation audit. The **authoritative,
+> exhaustive completion plan now lives in `ROADMAP.md`** (Stage 0.1.x shipped,
+> Stage 0.2.x verified, Stage 1.0.0 gates) and the audit worklist in
+> `docs/gaps.md`. Phases below are marked ✅ where the work landed; nothing here
+> is pending work — do not pick items from this file.
+
 **Document Version:** 1.0  
 **Date:** 3 October 2026  
 **Application:** Construction Weather Monitor (Weather-Monitor-main)  
@@ -9,7 +16,7 @@
 
 ## 1. Application Overview
 
-The application is a **private, single-user, local-first construction weather monitoring and automated alerting system**.
+The application is a **private, multi-user, local-first construction weather monitoring and automated alerting system** (OWNER / MANAGER / VIEWER role-based access control; see Phase 5 below).
 
 Primary goals:
 
@@ -186,7 +193,7 @@ flags the unconfigured state until they do.
     `startServer()`; the process bootstrap moved to `server-entry.ts`, which the
     production bundle targets. `createApp` accepts `staticMode` / `startMonitoring`
     / `scheduleBackups` so tests run without pollers or a Vite dev server.
-- **Step 7.2: HTTP integration suite** (`src/tests/api.test.ts`, 20 checks)
+- **Step 7.2: HTTP integration suite** (`src/tests/api.test.ts`, now 29 checks)
   - Boots the real app in-process on an ephemeral port and drives it over HTTP:
     `/healthz`, account-enumeration resistance, cookie-only sessions, CSRF
     double-submit (missing / wrong / correct header), header-token CSRF exemption,
@@ -200,7 +207,10 @@ flags the unconfigured state until they do.
     developer's real `./data` is never touched).
   - Rate-limit caps are now env-configurable (`AUTH_RATE_LIMIT_MAX`,
     `API_RATE_LIMIT_MAX`).
-  - Test total: 33 unit + 20 integration = **53 checks**.
+  - Historic totals from this phase (33 unit + 20 integration = 53 checks) are
+    superseded: the suite now runs **95 checks** — 66 system + 29 integration —
+    plus 7 Playwright UI smoke tests in the separate `ui-tests` CI job (102
+    automated checks in total).
 
 ### Phase 8 — Active Session Management ✅
 

@@ -77,12 +77,19 @@ export function generateTotp(secret: string, atMs = Date.now(), stepSeconds = DE
 
 /**
  * Verifies a submitted token against the secret, allowing +/- `window` steps of
- * clock drift. Comparison is constant-time to avoid timing side channels.
+ * clock drift, and returns the step counter that matched (or `null`).
+ *
+ * Returning the counter is what makes replay defence possible: a code stays
+ * valid for its whole window, so a caller that only learns "valid" must accept
+ * the same code again and again. Callers persist the highest consumed counter
+ * and refuse anything at or below it, which also covers a code observed once
+ * (shoulder-surfed, written to an access log, or captured by a compromised
+ * client). Comparison is constant-time to avoid timing side channels.
  */
-export function verifyTotp(secret: string, token: string, window = 1): boolean {
-  if (!secret || !token) return false
+export function verifyTotpStep(secret: string, token: string, window = 1): number | null {
+  if (!secret || !token) return null
   const normalized = token.replace(/\s+/g, '')
-  if (!/^\d{6}$/.test(normalized)) return false
+  if (!/^\d{6}$/.test(normalized)) return null
 
   const counter = Math.floor(Date.now() / 1000 / DEFAULT_STEP_SECONDS)
   for (let offset = -window; offset <= window; offset++) {
@@ -90,10 +97,15 @@ export function verifyTotp(secret: string, token: string, window = 1): boolean {
     const a = Buffer.from(expected)
     const b = Buffer.from(normalized)
     if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
-      return true
+      return counter + offset
     }
   }
-  return false
+  return null
+}
+
+/** Verifies a submitted token against the secret, allowing +/- `window` steps. */
+export function verifyTotp(secret: string, token: string, window = 1): boolean {
+  return verifyTotpStep(secret, token, window) !== null
 }
 
 /** Builds the otpauth:// provisioning URI consumed by authenticator apps. */

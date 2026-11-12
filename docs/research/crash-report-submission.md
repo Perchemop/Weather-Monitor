@@ -1,6 +1,8 @@
 # Research: In-App Crash/Bug Report Submission
 
-Status: **draft — awaiting human approval** (operating guide §2.3/§8.4).
+Status: **approved (human gate 2026-10-24) and implemented** — Settings → About
+crash/bug report flow shipped in 0.1.3 (see `CHANGELOG.md`). The note is kept
+as the original design record (operating guide §2.3/§8.4).
 Target milestone: 0.2.x. The shipped fallback (pre-filled GitHub issue form)
 remains the default until this capability is approved and implemented.
 

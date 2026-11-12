@@ -132,7 +132,8 @@ const HourlyForecastBarComponent: React.FC<HourlyForecastBarProps> = ({
 
               <div className="mt-2.5 space-y-1 border-t border-slate-800/60 pt-2 text-[11px] tabular-nums">
                 <div className="flex items-center justify-between gap-1" title="Sustained wind / peak gust">
-                  <Wind className="h-3 w-3 shrink-0 text-slate-600" />
+                  <Wind className="h-3 w-3 shrink-0 text-slate-600" aria-hidden="true" />
+                  <span className="sr-only">Wind speed / peak gust</span>
                   <span className="text-slate-400">
                     {formatWind(item.windSpeed)}
                     <span className="text-slate-600"> / </span>
@@ -140,11 +141,13 @@ const HourlyForecastBarComponent: React.FC<HourlyForecastBarProps> = ({
                       className={item.windGusts >= 45 ? 'font-semibold text-orange-300' : 'text-slate-300'}
                     >
                       {formatWind(item.windGusts)}
+                      {item.windGusts >= 45 && <span className="sr-only"> (high gust)</span>}
                     </span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-1" title="Rain probability">
-                  <CloudRain className="h-3 w-3 shrink-0 text-slate-600" />
+                  <CloudRain className="h-3 w-3 shrink-0 text-slate-600" aria-hidden="true" />
+                  <span className="sr-only">Rain probability</span>
                   <span className={item.rainProbability > 40 ? 'font-medium text-sky-300' : 'text-slate-500'}>
                     {Math.round(item.rainProbability)}%
                   </span>

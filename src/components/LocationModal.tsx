@@ -203,7 +203,7 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
         {/* Modal Content */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
           {formError && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-mono">
+            <div role="alert" className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-mono">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
               <span>{formError}</span>
             </div>
@@ -222,42 +222,49 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                 return (
                   <div
                     key={loc.id}
-                    onClick={() => {
-                      onSelectLocation(loc)
-                      onClose()
-                    }}
-                    className={`p-3 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
+                    className={`rounded-xl border flex items-center justify-between transition-all ${
                       isSelected
                         ? 'bg-amber-500/10 border-amber-500/50 shadow-sm'
                         : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'bg-amber-400 ring-2 ring-amber-400/20' : 'bg-slate-600'}`}
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold text-slate-200">{loc.name}</span>
-                          {loc.isDefault && (
-                            <span className="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-2xs font-mono text-slate-500 mt-0.5">
-                          {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)} · {loc.timezone}
+                    <button
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => {
+                        onSelectLocation(loc)
+                        onClose()
+                      }}
+                      className="flex-1 text-left p-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'bg-amber-400 ring-2 ring-amber-400/20' : 'bg-slate-600'}`}
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono font-bold text-slate-200">{loc.name}</span>
+                            {loc.isDefault && (
+                              <span className="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-2xs font-mono text-slate-500 mt-0.5">
+                            {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)} · {loc.timezone}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    </button>
 
-                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1.5 px-2" onClick={(e) => e.stopPropagation()}>
                       {canManage && !loc.isDefault && (
                         <button
                           type="button"
                           onClick={(e) => handleSetDefault(loc.id, e)}
                           title="Set as Default Site"
-                          className="p-1.5 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition-colors"
+                          aria-label="Set as Default Site"
+                          className="p-1.5 rounded text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500"
                         >
                           <Star className="w-4 h-4" />
                         </button>
@@ -272,14 +279,16 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                             <button
                               type="button"
                               onClick={(e) => handleDeleteLocation(loc.id, e)}
-                              className="text-xs text-red-400 font-bold hover:underline"
+                              aria-label="Confirm delete site"
+                              className="text-xs text-red-400 font-bold hover:underline focus-visible:ring-2 focus-visible:ring-amber-500"
                             >
                               Yes
                             </button>
                             <button
                               type="button"
                               onClick={() => setDeletingId(null)}
-                              className="text-xs text-slate-400 hover:underline"
+                              aria-label="Cancel delete site"
+                              className="text-xs text-slate-400 hover:underline focus-visible:ring-2 focus-visible:ring-amber-500"
                             >
                               No
                             </button>
@@ -289,7 +298,8 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                             type="button"
                             onClick={() => setDeletingId(loc.id)}
                             title="Remove Site"
-                            className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-slate-800 transition-colors"
+                            aria-label="Remove Site"
+                            className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-slate-800 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -329,6 +339,7 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                     <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
                     <input
                       type="text"
+                      aria-label="Search city, suburb, or site landmark"
                       placeholder="Search city, suburb, or site landmark (e.g. Brisbane, Sydney)..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -375,8 +386,9 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                 /* Custom Coordinates Input */
                 <div className="space-y-3 text-xs font-mono bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
                   <div>
-                    <label className="text-slate-400 block mb-1">Site / Project Title:</label>
+                    <label htmlFor="custom-site-name" className="text-slate-400 block mb-1">Site / Project Title:</label>
                     <input
+                      id="custom-site-name"
                       type="text"
                       placeholder="e.g. North Wharf Crane Pad"
                       value={customName}
@@ -386,8 +398,9 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-slate-400 block mb-1">Latitude (-90 to +90):</label>
+                      <label htmlFor="custom-site-lat" className="text-slate-400 block mb-1">Latitude (-90 to +90):</label>
                       <input
+                        id="custom-site-lat"
                         type="number"
                         step="any"
                         placeholder="e.g. 51.5074"
@@ -397,8 +410,9 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="text-slate-400 block mb-1">Longitude (-180 to +180):</label>
+                      <label htmlFor="custom-site-lon" className="text-slate-400 block mb-1">Longitude (-180 to +180):</label>
                       <input
+                        id="custom-site-lon"
                         type="number"
                         step="any"
                         placeholder="e.g. -0.1278"

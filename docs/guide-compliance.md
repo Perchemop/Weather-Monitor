@@ -20,7 +20,7 @@ recorded deviation; **Deferred** = tracked gap with rationale.
 | Rule | Status | Where |
 | --- | --- | --- |
 | Real data models, persistence, validation, error handling | Met | `src/database/db.ts`, route validation in `server.ts` |
-| Runnable/testable/buildable from a clean checkout | Met | CI: install → type-check → 88 tests → server build → static build |
+| Runnable/testable/buildable from a clean checkout | Met | CI: install → type-check → 95 checks (66 system + 29 integration) → server build → static build |
 | Free and open-source tools and dependencies | Met | `ATTRIBUTION.md`; no proprietary runtime |
 | Traceability capability → implementation + tests | Met | `REQUIREMENTS_TRACEABILITY.md` |
 | No proprietary code, assets or reverse-engineered internals | Met | `docs/inspiration.md` (clean-room statement) |
@@ -38,7 +38,7 @@ runs on all three OSes. Recorded as D-18.
 | Inspiration limited to documented standards, black-box behaviour, and the recorded docs | Met | `docs/inspiration.md` (AS 2550.1, WMO codes, WeatherAPI/Open-Meteo API docs) |
 | Original data models, UI and interaction | Met | all first-party code |
 | Third-party assets permissively licensed and listed | Met | `ATTRIBUTION.md`; icons are Lucide (ISC), map tiles Leaflet/OSM/ RainViewer |
-| Clear open-source licence recorded | Met | `LICENSE` (MIT — see A-01/Q-01, decision D-13) |
+| Clear open-source licence recorded | Met | `LICENSE` (MIT-only — see A-01/Q-01 resolved 2026-10-24, decision D-28 §26.6) |
 
 ## §3 Technology stack
 
@@ -48,7 +48,7 @@ runs on all three OSes. Recorded as D-18.
 | Lightweight local persistence | Met | SQLite via `sql.js`, single file, `DATA_DIR` overridable |
 | Command-centric or clear use-case layer | **Adapted** | see below |
 | No panics in non-test code; never lose user data | Met | errors caught per route/location; persistence failures surfaced, never swallowed silently |
-| Testing: unit, property-based, integration, manual QC | Met | 59 system (incl. property tests + persistence health), 29 HTTP integration, `docs/qc/` |
+| Testing: unit, property-based, integration, manual QC | Met | 66 system (incl. property tests + persistence health), 29 HTTP integration, 7 Playwright UI smoke, `docs/qc/` |
 | CI on multiple OS runners | Met | `format-check` + matrix `build-test` (Windows/macOS/Linux) + `docker` |
 
 **Adapted — command-centric.** The guide prefers a command layer. This app is an
@@ -71,15 +71,15 @@ reported as healthy. Recorded as D-20.
 | Commit and push after every meaningful change; CI is the source of truth | Met | every slice pushed and verified; `ci.sh run "…"` |
 | CI: format check | Met | `scripts/check-format.mjs`, `format-check` job |
 | CI: lint with warnings denied | Met | `npm run lint` (`tsc --noEmit`) fails on any diagnostic |
-| CI: full test suite | Met | 88 tests in both suites |
+| CI: full test suite | Met | 95 checks in the two Node suites (66 + 29); 7 UI smoke tests in `ui-tests` |
 | CI: dependency + build caching | Met | `actions/setup-node` with `cache: npm` |
 | CI: clear summaries and artefacts | Met | job summary step, `upload-artifact` for `dist/` + `dist-static/` |
 
-**Adapted — format check.** No opinionated formatter is configured, so the check
-is a dependency-free hygiene script (line endings, conflict markers, final
-newline, spaces-not-tabs, trailing whitespace on added lines only). Adopting
-Prettier would require a one-off whole-repo reformat, which conflicts with the
-"small and reviewable" rule. Recorded as D-12.
+**Adapted — format check.** Two distinct layers run in the `format-check` job: a
+dependency-free hygiene script (line endings, conflict markers, final newline,
+spaces-not-tabs, trailing whitespace on added lines only) and Prettier, adopted
+in its own dedicated reformat release via the research gate. Recorded as D-17
+(updated 2026-10-24).
 
 ## §5 CTO.new-style operating model
 
@@ -118,7 +118,7 @@ Facts, assumptions and decisions are kept apart.
 | Hard v0.1.0 gate (installable, real workflow, crash stub, update-check stub, CI, docs, legal baseline, tag) | Met | `v0.1.0` release; crash stub = ErrorBoundary + server process handlers; update-check stub = Settings → About |
 | Release notes standard (summary, Added/Changed/Fixed, limitations, checksums) | Met | `release.yml` extraction step + standard recorded in `docs/qc/release-checklist.md` |
 | Readiness % only from evidence | Met | `ROADMAP.md` ties every Done claim to CI runs/tests |
-| Human gate on research before dependent feature work | Met | `docs/research/README.md` rules; 0.2.x research-gated items marked "Blocked on research" in `ROADMAP.md` |
+| Human gate on research before dependent feature work | Met | `docs/research/README.md` rules; all five 0.2.x research notes approved (gate passed 2026-10-24) and implemented |
 
 ## §6b Suite infrastructure — crash reporting & update check (guide §7)
 
@@ -212,7 +212,7 @@ known limitations documented ✅ (`docs/scope.md`, assumptions and questions).
 | --- | --- | --- |
 | MFA + two admins | Human action | recorded in `docs/assumptions-and-questions.md`, `GOVERNANCE.md` |
 | SAST | Met | CodeQL workflow (JS/TS) on push/PR/weekly |
-| Protected branch + required checks | Met | branch protection on `main` (6 required checks; no force-push/deletion) |
+| Protected branch + required checks | Met | branch protection on `main` (required checks incl. `format-check`, 3× `build-test`, `docker`, `security-compliance`, `dependency-review`, `ui-tests (Playwright smoke)`, `Personal data scan`; no force-push/deletion) |
 | SCA / dependency updates | Met | Dependabot (npm/actions/docker) + Dependabot security updates; `dependency-review` job |
 | Pin build inputs | Met | all `uses:` pinned to commit SHAs |
 | Private vulnerability reporting + threat model | Met | enabled on GitHub; `SECURITY.md` threat model + incident response |
@@ -244,6 +244,5 @@ employer/IP check (A-07).
 
 ## Deferred
 
-- In-app crash report submission via user token / device flow (0.2.x, research-gated — the pre-filled issue URL is the shipped fallback).
-- Browser-level (DOM) UI tests (Playwright) — covered today by type-check, build and manual QC; research slice 4 of 5.
 - Repository secret-scanning validity checks / non-provider patterns (need GitHub Advanced Security).
+- Ranked audit worklist: see `docs/gaps.md`.

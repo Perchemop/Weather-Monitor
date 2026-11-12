@@ -1,7 +1,8 @@
 # Research: Multi-Architecture Container Images (arm64)
 
-Status: **ready for work** (pure CI change; note recorded for review per
-guide §2.3 discipline). Target milestone: 0.2.x.
+Status: **approved (human gate 2026-10-24) and implemented** — multi-arch
+images shipped and verified at v0.1.2. Note kept as the original design record
+(guide §2.3 discipline). Target milestone: 0.2.x.
 
 ## Behaviour (original summary)
 
@@ -63,5 +64,5 @@ way.
 - Multi-platform builds: <https://docs.docker.com/build/building/multi-platform/>
 - Multi-platform image with GitHub Actions: <https://docs.docker.com/build/ci/github-actions/multi-platform/>
 - docker/build-push-action: <https://github.com/marketplace/actions/build-and-push-docker-images>
-- Playwright of thought on runners/QEMU trade-offs (public blog, behaviour only):
+- Line of thought on runners/QEMU trade-offs (public blog, behaviour only):
   <https://oneuptime.com/blog/post/2025-12-20-multi-platform-docker-builds-github-actions/view>

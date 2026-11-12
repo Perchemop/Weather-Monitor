@@ -148,7 +148,9 @@ test.describe('UI Smoke Suite', () => {
     await ensureAuthenticated(page)
     await page.locator('#nav-tab-settings').click()
     await page.getByRole('button', { name: 'About', exact: true }).click()
-    await expect(page.getByText(/v0\.1\.0/).first()).toBeVisible()
+    // Keep in step with `package.json`'s version (the release workflow fails if
+    // the tag and `package.json` disagree).
+    await expect(page.getByText(/v0\.1\.3/).first()).toBeVisible()
   })
 
   test('role gating Viewer lacks owner-only tabs', async ({ page }) => {

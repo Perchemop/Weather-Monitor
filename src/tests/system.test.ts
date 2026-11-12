@@ -5,6 +5,7 @@
  */
 import './setup.js'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { calculateDeterministicRisk, SAFETY_DISCLAIMER } from '../services/riskEngine.js'
 import { evaluateCandidateAlerts } from '../static/alerts.js'
 import { emailRelayConfigured } from '../static/emailRelay.js'
@@ -24,6 +25,8 @@ import { createDatabaseBackup, getDatabaseBackupsList, hashPasswordWithSalt } fr
 import { markPersistenceFailure, clearPersistenceFailure, getPersistenceStatus } from '../database/db.js'
 import { compareVersions, resolveUpdateState } from '../utils/updateCheck.js'
 import { classifyPollResponse, scrubText, buildReportPayload } from '../utils/crashReport.js'
+import { toCsv } from '../utils/csv.js'
+import { APP_VERSION } from '../version.js'
 import {
   createUserAccount,
   verifyUserCredentials,
@@ -1191,6 +1194,55 @@ async function runTests() {
     assert.equal(resolveUpdateState('0.1.0', 'garbage', null).status, 'unknown')
   })
 
+  // Version consistency (three audits found the app self-reporting a stale
+  // version, which made the in-app update check claim an update forever).
+  test('Version consistency: APP_VERSION is valid semver and matches package.json', () => {
+    const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
+      version: string
+    }
+    assert.match(APP_VERSION, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/, 'APP_VERSION must be valid semver')
+    assert.equal(APP_VERSION, pkg.version, 'APP_VERSION must stay in sync with package.json')
+    assert.notEqual(
+      compareVersions(APP_VERSION, `v${APP_VERSION}`),
+      null,
+      'the shipped version must be parseable by the update checker',
+    )
+    assert.equal(
+      resolveUpdateState(APP_VERSION, `v${APP_VERSION}`).status,
+      'up-to-date',
+      'the release the app already contains must not be offered back to it',
+    )
+  })
+
+  // CSV export hardening: formula injection and field quoting (RFC 4180).
+  test('CSV export: a leading = is neutralised and a comma stays inside quotes', () => {
+    assert.equal(toCsv([['=1+1', 'a,b']]), '"\'=1+1","a,b"')
+  })
+
+  test('CSV export: a double quote inside a value is escaped by doubling it', () => {
+    assert.equal(toCsv([['@SUM(A1)', 'say "hi"']]), '"\'@SUM(A1)","say ""hi"""')
+  })
+
+  test('CSV export: every formula-prefix character is neutralised', () => {
+    for (const prefix of ['=', '+', '-', '@', '\t', '\r']) {
+      const csv = toCsv([[`${prefix}x`]])
+      assert.ok(
+        !csv.startsWith(`"${prefix}x"`),
+        `a leading ${JSON.stringify(prefix)} must never survive unneutralised`,
+      )
+      assert.ok(
+        csv.startsWith(`"'${prefix}x"`),
+        `a leading ${JSON.stringify(prefix)} must be apostrophe-prefixed, got ${JSON.stringify(csv)}`,
+      )
+    }
+  })
+
+  test('CSV export: plain values stay quoted and degenerate rows are well-formed', () => {
+    assert.equal(toCsv([['plain', '42']]), '"plain","42"')
+    assert.equal(toCsv([]), '', 'no rows produce an empty document')
+    assert.equal(toCsv([[]]), '', 'an empty row serialises to an empty string')
+  })
+
   // Crash report utilities
   test('Crash report poll: access_token -> done', () => {
     const r = classifyPollResponse({ access_token: 'gho_abc' } as any)
@@ -1221,6 +1273,29 @@ async function runTests() {
     assert.ok(!s.includes('/home/user/secret/file.ts'))
     assert.ok(s.includes('[REDACTED_PATH]'))
     assert.ok(s.includes('[REDACTED_TOKEN]'))
+  })
+  test('Crash report scrub: GitHub tokens, API keys and home paths are redacted', () => {
+    // Short enough that only the dedicated `ghp_` rule can catch it — the
+    // generic 40-character rule alone would miss a truncated token.
+    const classic = scrubText('auth failed for ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234')
+    assert.ok(!classic.includes('ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'))
+    assert.ok(classic.includes('[REDACTED_TOKEN]'))
+
+    const fineGrained = scrubText('PAT github_pat_11ABCDEF0ghijklmnopqrst rejected')
+    assert.ok(!fineGrained.includes('github_pat_11ABCDEF0ghijklmnopqrst'))
+    assert.ok(fineGrained.includes('[REDACTED_TOKEN]'))
+
+    // 32-character hex — the shape of the Weather API key.
+    const apiKey = scrubText('key cdd94d05a2524ab9a04120657261505 rejected')
+    assert.ok(!apiKey.includes('cdd94d05a2524ab9a04120657261505'))
+    assert.ok(apiKey.includes('[REDACTED_TOKEN]'))
+
+    const home = scrubText('wrote /home/jane.doe/.weather-monitor/crash.log')
+    assert.ok(!home.includes('/home/jane.doe/.weather-monitor/crash.log'))
+    assert.ok(home.includes('[REDACTED_PATH]'))
+
+    const plain = 'Request timed out while fetching the forecast for the site.'
+    assert.equal(scrubText(plain), plain, 'ordinary text must survive untouched')
   })
   test('Crash report payload: builds title/body/labels', () => {
     const p = buildReportPayload(

@@ -14,9 +14,15 @@ const ActiveAlertsPanelComponent: React.FC<ActiveAlertsPanelProps> = ({
   onViewAllAlerts,
 }) => {
   return (
-    <div id="active-alerts-panel" className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-5">
+    <div
+      id="active-alerts-panel"
+      role="region"
+      aria-labelledby="active-alerts-title"
+      aria-live="polite"
+      className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-5"
+    >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-slate-800/70 pb-3.5">
-        <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-slate-200">
+        <h3 id="active-alerts-title" className="flex items-center gap-2 text-sm font-semibold tracking-tight text-slate-200">
           <ShieldAlert className={`h-4 w-4 ${alerts.length > 0 ? 'text-red-400' : 'text-slate-500'}`} />
           Active alerts
           <span

@@ -1,5 +1,5 @@
 import './src/env.js'
-import express, { Request, Response, NextFunction } from 'express'
+import express, { Request, Response, NextFunction, RequestHandler } from 'express'
 import path from 'path'
 import cookieParser from 'cookie-parser'
 import crypto from 'crypto'
@@ -63,6 +63,9 @@ import {
   loadActiveSessions,
   pruneExpiredSessions,
   touchSession,
+  hashSessionToken,
+  // TOTP replay defence
+  consumeTotpStep,
   // Persistence health
   getPersistenceStatus,
   // Web push
@@ -96,7 +99,7 @@ import { createRateLimiter } from './src/utils/rateLimiter.js'
 import { logger, requestLogger } from './src/utils/logger.js'
 import { APP_VERSION } from './src/version.js'
 import { validatePasswordStrength, describePasswordPolicy } from './src/utils/password.js'
-import { generateTotpSecret, verifyTotp, buildOtpauthUrl } from './src/utils/totp.js'
+import { generateTotpSecret, verifyTotp, verifyTotpStep, buildOtpauthUrl } from './src/utils/totp.js'
 import { loadOrCreateSessionSecret } from './src/utils/secretStore.js'
 import { UserAccount, UserRole } from './src/types.js'
 
@@ -133,9 +136,11 @@ const SESSION_TOUCH_INTERVAL_MS = 60 * 1000
 
 // A non-reversible public identifier for a session token. The raw token is the
 // bearer credential and must never be exposed to the client; this digest lets
-// the UI reference (and revoke) a session without revealing it.
+// the UI reference (and revoke) a session without revealing it. It is the same
+// digest `db.ts` stores as the `sessions.token` primary key, so nothing here
+// ever needs the raw token outside this process's memory.
 function sessionPublicId(token: string): string {
-  return crypto.createHash('sha256').update(token).digest('hex')
+  return hashSessionToken(token)
 }
 
 // Augments the Express request with the resolved session for downstream handlers.
@@ -158,6 +163,8 @@ function createSession(user: UserAccount, meta: { userAgent?: string; ip?: strin
   }
   activeSessions.set(token, entry)
   // Write-through persistence (best-effort; a failure must not block login).
+  // The raw token stays in this map only — `saveSession` stores its sha256
+  // digest, so the credential is never written to disk.
   saveSession({ token, ...entry }).catch((err) =>
     logger.warn('session_persist_failed', { error: String(err) }),
   )
@@ -172,6 +179,11 @@ function extractClientMeta(req: Request): { userAgent?: string; ip?: string } {
     userAgent: typeof ua === 'string' ? ua.slice(0, 400) : undefined,
     ip: req.ip,
   }
+}
+
+/** Minimal email shape check, shared by the setup and user-management routes. */
+function isValidEmail(value: unknown): boolean {
+  return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
 }
 
 function extractSessionToken(req: Request): string | undefined {
@@ -316,7 +328,27 @@ function requireRole(...roles: UserRole[]) {
 // ---------------------------------------------------------------------------
 const LOGIN_MAX_ATTEMPTS = Math.max(3, Number(process.env.LOGIN_MAX_ATTEMPTS) || 5)
 const LOGIN_LOCKOUT_MS = Math.max(1, Number(process.env.LOGIN_LOCKOUT_MINUTES) || 15) * 60 * 1000
-const loginAttempts = new Map<string, { count: number; lockedUntil: number }>()
+
+interface LoginAttemptEntry {
+  count: number
+  lockedUntil: number
+  lastAttemptAt: number
+}
+
+// Keyed by the submitted account identifier, which is attacker-chosen: without
+// both a sweep and a hard cap, a flood of distinct keys would grow this map
+// until the process ran out of memory (a denial of service on the whole app).
+const loginAttempts = new Map<string, LoginAttemptEntry>()
+const LOGIN_ATTEMPT_KEYS_MAX = 5000
+
+/** Drops entries that can no longer affect a decision (see `rateLimiter.ts`). */
+function sweepLoginAttempts(now: number): void {
+  for (const [key, entry] of loginAttempts) {
+    if (entry.lockedUntil <= now && now - entry.lastAttemptAt > LOGIN_LOCKOUT_MS) {
+      loginAttempts.delete(key)
+    }
+  }
+}
 
 function lockoutRemainingMs(key: string): number {
   const entry = loginAttempts.get(key)
@@ -326,10 +358,22 @@ function lockoutRemainingMs(key: string): number {
 }
 
 function recordLoginFailure(key: string): void {
-  const entry = loginAttempts.get(key) || { count: 0, lockedUntil: 0 }
+  const now = Date.now()
+  if (!loginAttempts.has(key)) {
+    sweepLoginAttempts(now)
+    // Still over the cap after sweeping: shed the oldest keys, keeping the map
+    // bounded no matter how many identifiers an attacker invents.
+    while (loginAttempts.size >= LOGIN_ATTEMPT_KEYS_MAX) {
+      const oldest = loginAttempts.keys().next()
+      if (oldest.done) break
+      loginAttempts.delete(oldest.value)
+    }
+  }
+  const entry = loginAttempts.get(key) || { count: 0, lockedUntil: 0, lastAttemptAt: now }
   entry.count += 1
+  entry.lastAttemptAt = now
   if (entry.count >= LOGIN_MAX_ATTEMPTS) {
-    entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS
+    entry.lockedUntil = now + LOGIN_LOCKOUT_MS
     entry.count = 0
   }
   loginAttempts.set(key, entry)
@@ -337,6 +381,38 @@ function recordLoginFailure(key: string): void {
 
 function clearLoginFailures(key: string): void {
   loginAttempts.delete(key)
+}
+
+// ---------------------------------------------------------------------------
+// Async-safe route registration
+// ---------------------------------------------------------------------------
+
+type RouteHandler = (req: Request, res: Response, next: NextFunction) => unknown
+
+/**
+ * Wraps a route handler so a thrown error or a rejected promise is forwarded to
+ * `next`, where the terminal error handler answers with a 500 instead of
+ * leaving the client hanging until it times out.
+ *
+ * Express 4 catches synchronous throws only. An `async` handler that rejects —
+ * a database, disk, SMTP or upstream failure — abandons the request silently,
+ * so every route in this file is registered through `guardedRoute` rather than
+ * on `app` directly.
+ */
+function wrap(handler: RouteHandler): RequestHandler {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch(next)
+  }
+}
+
+/**
+ * Builds a route-registration verb that applies `wrap` to every handler it is
+ * given, preserving Express's argument order (middleware first, handler last).
+ */
+function guardedRoute(register: (path: any, ...handlers: any[]) => unknown) {
+  return (path: string | string[] | RegExp, ...handlers: RouteHandler[]) => {
+    register(path, ...handlers.map(wrap))
+  }
 }
 
 export type StaticMode = 'vite' | 'static' | 'none'
@@ -360,6 +436,14 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   const scheduleBackups = options.scheduleBackups ?? true
 
   const app = express()
+
+  // Route registrations go through these verbs rather than `app.get`/`app.post`
+  // so every handler is wrapped and a rejection reaches the terminal error
+  // handler at the end of this function. See `guardedRoute`.
+  const appGet = guardedRoute((path: any, ...handlers: any[]) => app.get(path, ...handlers))
+  const appPost = guardedRoute((path: any, ...handlers: any[]) => app.post(path, ...handlers))
+  const appPut = guardedRoute((path: any, ...handlers: any[]) => app.put(path, ...handlers))
+  const appDelete = guardedRoute((path: any, ...handlers: any[]) => app.delete(path, ...handlers))
 
   // Disable fingerprinting. Proxy trust is opt-in: trusting a forwarded header
   // by default would let any direct client spoof its IP and evade the
@@ -406,7 +490,11 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   await getDb()
   logger.info('database_initialised')
 
-  // Restore persistent sessions so logins survive restarts.
+  // Rebind the sessions this process can still vouch for. SQLite holds only
+  // sha256(token), so a session minted by an earlier process cannot be resumed
+  // — the raw credential was never written to disk, and that is the deliberate
+  // trade: a restart requires signing in again. Expired rows are dropped here,
+  // and rows for vanished or deactivated accounts along with them.
   try {
     await pruneExpiredSessions()
     const stored = await loadActiveSessions()
@@ -459,7 +547,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   // Deliberately minimal and unauthenticated so container orchestrators and
   // load balancers can probe the process without credentials. Readiness is
   // reported separately by /api/health, which also exposes persistence state.
-  app.get('/healthz', (_req: Request, res: Response) => {
+  appGet('/healthz', (_req: Request, res: Response) => {
     res.json({ status: 'ok', version: APP_VERSION, uptimeSeconds: Math.floor(process.uptime()) })
   })
 
@@ -467,7 +555,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   // Operational metrics in the Prometheus text exposition format. Scrapers may
   // authenticate with a shared bearer token (`METRICS_TOKEN`); otherwise the
   // caller must hold a valid session so metrics are never exposed by default.
-  app.get('/metrics', async (req: Request, res: Response) => {
+  appGet('/metrics', async (req: Request, res: Response) => {
     const metricsToken = process.env.METRICS_TOKEN
     const authHeader = req.headers.authorization || ''
     const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
@@ -587,7 +675,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   // ----------------- AUTHENTICATION ROUTES -----------------
-  app.get('/api/auth/status', async (req: Request, res: Response) => {
+  appGet('/api/auth/status', async (req: Request, res: Response) => {
     const session = getSession(extractSessionToken(req))
     const authenticated = Boolean(session)
     const owner = await getOwnerInfo()
@@ -606,7 +694,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     })
   })
 
-  app.post('/api/auth/setup', authLimiter, async (req: Request, res: Response) => {
+  appPost('/api/auth/setup', authLimiter, async (req: Request, res: Response) => {
     // Setup is a one-time bootstrap. Without this guard an unauthenticated
     // caller could re-run it at any time and overwrite the primary OWNER's
     // credentials (a full account takeover). Legacy databases without the
@@ -616,13 +704,45 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       return
     }
 
-    const { password, email } = req.body
+    const { password, email, bootstrapPassword } = req.body || {}
+
+    // The account the setup route is allowed to replace. Its credentials are
+    // the proof of ownership below.
+    const owner = await getOwnerInfo()
+    const ownerKey = String(owner?.email || 'owner')
+      .trim()
+      .toLowerCase()
+
+    // A fresh install seeds the OWNER with a bootstrap password that is printed
+    // once at first boot (or supplied via INITIAL_OWNER_PASSWORD). Requiring it
+    // means setup can only be completed by whoever actually controls the
+    // running instance — otherwise the `owner_configured` guard is the only
+    // thing between an unauthenticated caller and a full account takeover.
+    if (typeof bootstrapPassword !== 'string' || bootstrapPassword.length === 0) {
+      res.status(401).json({ error: 'The bootstrap password is required to complete setup.' })
+      return
+    }
+    const proof = await verifyUserCredentials(bootstrapPassword, owner?.email)
+    if (!proof.valid) {
+      recordLoginFailure(ownerKey)
+      await addAuditLog('AUTH_SETUP_REJECTED', 'Initial setup rejected: invalid bootstrap password')
+      res.status(401).json({ error: 'Invalid bootstrap password.' })
+      return
+    }
+
+    // Same email rules as POST /api/users.
+    if (email !== undefined && !isValidEmail(email)) {
+      res.status(400).json({ error: 'A valid email address is required.' })
+      return
+    }
+
     const strength = validatePasswordStrength(password)
     if (!strength.valid) {
       res.status(400).json({ error: describePasswordPolicy() })
       return
     }
     await setupInitialPassword(password, email)
+    clearLoginFailures(ownerKey)
 
     // Synchronize the primary OWNER user account with the new credentials.
     const ownerUser = (await getAllUsers()).find((u) => u.role === 'OWNER')
@@ -654,7 +774,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.json({ success: true, email: sessionUser.email, role: sessionUser.role })
   })
 
-  app.post('/api/auth/login', authLimiter, async (req: Request, res: Response) => {
+  appPost('/api/auth/login', authLimiter, async (req: Request, res: Response) => {
     const { password, email, mfaCode } = req.body
     if (!password) {
       res.status(400).json({ error: 'Password is required' })
@@ -691,7 +811,13 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         res.status(401).json({ error: 'Multi-factor code required.', mfaRequired: true })
         return
       }
-      if (!mfa.mfaSecret || !verifyTotp(mfa.mfaSecret, String(mfaCode))) {
+      // The counter that matched, not just "a code verified": a code stays valid
+      // for its whole +/- window, so accepting any verifying code would let one
+      // observed code be replayed. `consumeTotpStep` atomically refuses a step
+      // that is not strictly newer than the last one this account used.
+      const step = mfa.mfaSecret ? verifyTotpStep(mfa.mfaSecret, String(mfaCode)) : null
+      const fresh = step !== null && (await consumeTotpStep(mfa.id, step))
+      if (!fresh) {
         recordLoginFailure(lockKey)
         await addAuditLog('AUTH_MFA_FAILED', `Invalid MFA code for ${user.email}`)
         res.status(401).json({ error: 'Invalid multi-factor code.', mfaRequired: true })
@@ -719,7 +845,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     })
   })
 
-  app.post('/api/auth/logout', (req: Request, res: Response) => {
+  appPost('/api/auth/logout', (req: Request, res: Response) => {
     const token = extractSessionToken(req)
     if (token) {
       activeSessions.delete(token)
@@ -731,7 +857,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   // Revokes every session for the caller (e.g. after a suspected compromise).
-  app.post('/api/auth/logout-all', requireAuth, async (req: Request, res: Response) => {
+  appPost('/api/auth/logout-all', requireAuth, async (req: Request, res: Response) => {
     const session = (req as AuthedRequest).session!
     for (const [token, entry] of activeSessions) {
       if (entry.userId === session.userId) activeSessions.delete(token)
@@ -746,7 +872,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   // Lists the caller's own active sessions/devices for review. Tokens are
   // represented by a non-reversible digest so the credential never leaves the
   // server, even to its owner.
-  app.get('/api/auth/sessions', requireAuth, (req: Request, res: Response) => {
+  appGet('/api/auth/sessions', requireAuth, (req: Request, res: Response) => {
     const session = (req as AuthedRequest).session!
     const currentToken = extractSessionToken(req)
     const sessions = []
@@ -772,7 +898,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
 
   // Revokes a single session belonging to the caller, identified by its public
   // digest. Sessions belonging to other users can never be targeted.
-  app.delete('/api/auth/sessions/:id', requireAuth, async (req: Request, res: Response) => {
+  appDelete('/api/auth/sessions/:id', requireAuth, async (req: Request, res: Response) => {
     const session = (req as AuthedRequest).session!
     const targetId = req.params.id
     const currentToken = extractSessionToken(req)
@@ -800,7 +926,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.json({ success: true, revokedCurrent: wasCurrent })
   })
 
-  app.post('/api/auth/change-password', requireAuth, async (req: Request, res: Response) => {
+  appPost('/api/auth/change-password', requireAuth, async (req: Request, res: Response) => {
     const { currentPassword, newPassword, newEmail } = req.body
     const session = (req as AuthedRequest).session!
     if (!currentPassword || !newPassword) {
@@ -846,14 +972,27 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   // ----------------- MULTI-FACTOR AUTHENTICATION (TOTP) -----------------
-  app.get('/api/auth/mfa/status', requireAuth, async (req: Request, res: Response) => {
+  appGet('/api/auth/mfa/status', requireAuth, async (req: Request, res: Response) => {
     const session = (req as AuthedRequest).session!
     const mfa = await getUserMfaById(session.userId)
     res.json({ enabled: Boolean(mfa?.mfaEnabled) })
   })
 
-  app.post('/api/auth/mfa/setup', requireAuth, async (req: Request, res: Response) => {
+  appPost('/api/auth/mfa/setup', requireAuth, async (req: Request, res: Response) => {
     const session = (req as AuthedRequest).session!
+    // Re-binding an existing enrolment replaces the secret. Requiring the
+    // current password keeps a stolen session (or an unattended device) from
+    // silently re-pointing MFA at the attacker's authenticator — the same proof
+    // the disable path asks for.
+    const existing = await getUserMfaById(session.userId)
+    if (existing?.mfaSecret) {
+      const { password } = req.body || {}
+      const { valid } = await verifyUserCredentials(String(password || ''), session.email)
+      if (!valid) {
+        res.status(403).json({ error: 'Password confirmation failed.' })
+        return
+      }
+    }
     const secret = generateTotpSecret()
     await setUserMfaSecret(session.userId, secret)
     res.json({
@@ -863,7 +1002,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     })
   })
 
-  app.post('/api/auth/mfa/enable', requireAuth, async (req: Request, res: Response) => {
+  appPost('/api/auth/mfa/enable', requireAuth, async (req: Request, res: Response) => {
     const session = (req as AuthedRequest).session!
     const { code } = req.body
     const mfa = await getUserMfaById(session.userId)
@@ -880,7 +1019,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.json({ success: true, message: 'Multi-factor authentication enabled.' })
   })
 
-  app.post('/api/auth/mfa/disable', requireAuth, async (req: Request, res: Response) => {
+  appPost('/api/auth/mfa/disable', requireAuth, async (req: Request, res: Response) => {
     const session = (req as AuthedRequest).session!
     const { password } = req.body
     const { valid } = await verifyUserCredentials(String(password || ''), session.email)
@@ -894,12 +1033,12 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   // ----------------- USER & ACCESS MANAGEMENT (OWNER ONLY) -----------------
-  app.get('/api/users', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
+  appGet('/api/users', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
     const users = await getAllUsers()
     res.json({ users })
   })
 
-  app.post('/api/users', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+  appPost('/api/users', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const { email, password, role, displayName } = req.body
 
     if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
@@ -933,7 +1072,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.json({ success: true, user: created })
   })
 
-  app.put('/api/users/:id', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+  appPut('/api/users/:id', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const { id } = req.params
     const { role, active, displayName } = req.body
     const target = await getUserById(id)
@@ -988,7 +1127,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.json({ success: true, user: updated })
   })
 
-  app.post(
+  appPost(
     '/api/users/:id/password',
     requireAuth,
     requireRole('OWNER'),
@@ -1018,7 +1157,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     },
   )
 
-  app.delete('/api/users/:id', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+  appDelete('/api/users/:id', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const { id } = req.params
     const actor = (req as AuthedRequest).session!
     if (id === actor.userId) {
@@ -1041,7 +1180,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   // ----------------- WEATHER & MONITOR DATA -----------------
-  app.get('/api/weather/current', requireAuth, async (req: Request, res: Response) => {
+  appGet('/api/weather/current', requireAuth, async (req: Request, res: Response) => {
     try {
       const locId = (req.query.locationId as string) || undefined
       const locations = await getAllLocations()
@@ -1093,7 +1232,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     }
   })
 
-  app.get('/api/weather/forecast', requireAuth, async (req: Request, res: Response) => {
+  appGet('/api/weather/forecast', requireAuth, async (req: Request, res: Response) => {
     try {
       const locId = (req.query.locationId as string) || undefined
       const locations = await getAllLocations()
@@ -1121,7 +1260,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     }
   })
 
-  app.get('/api/weather/cross-reference', requireAuth, async (req: Request, res: Response) => {
+  appGet('/api/weather/cross-reference', requireAuth, async (req: Request, res: Response) => {
     try {
       const locId = (req.query.locationId as string) || undefined
       const locations = await getAllLocations()
@@ -1151,7 +1290,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     }
   })
 
-  app.get('/api/weather/history', requireAuth, async (req: Request, res: Response) => {
+  appGet('/api/weather/history', requireAuth, async (req: Request, res: Response) => {
     try {
       const locId = req.query.locationId as string
       const range = (req.query.range as any) || 'today'
@@ -1176,7 +1315,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   // ----------------- MONITOR CONTROLS -----------------
-  app.post(
+  appPost(
     '/api/monitor/check-now',
     requireAuth,
     requireRole('MANAGER'),
@@ -1210,7 +1349,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     },
   )
 
-  app.post(
+  appPost(
     '/api/monitor/toggle',
     requireAuth,
     requireRole('MANAGER'),
@@ -1227,13 +1366,13 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   )
 
   // ----------------- ALERTS & DELIVERIES -----------------
-  app.get(['/api/alerts', '/api/alerts/history'], requireAuth, async (req: Request, res: Response) => {
+  appGet(['/api/alerts', '/api/alerts/history'], requireAuth, async (req: Request, res: Response) => {
     const alerts = await getAlertHistory(50)
     const deliveries = await getAlertDeliveries(50)
     res.json({ alerts, deliveries })
   })
 
-  app.post(
+  appPost(
     '/api/alerts/:id/dismiss',
     requireAuth,
     requireRole('MANAGER'),
@@ -1248,7 +1387,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   )
 
   // ----------------- PERFORMANCE REPORT -----------------
-  app.get('/api/reports/weekly', requireAuth, async (req: Request, res: Response) => {
+  appGet('/api/reports/weekly', requireAuth, async (req: Request, res: Response) => {
     try {
       const locId = req.query.locationId as string | undefined
       const targetLoc = locId
@@ -1285,12 +1424,12 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   // ----------------- LOCATIONS -----------------
-  app.get('/api/locations', requireAuth, async (_req: Request, res: Response) => {
+  appGet('/api/locations', requireAuth, async (_req: Request, res: Response) => {
     const locations = await getAllLocations()
     res.json({ locations })
   })
 
-  app.post('/api/locations', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
+  appPost('/api/locations', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     const { name, latitude, longitude, timezone, isDefault } = req.body
 
     // Strict input validation
@@ -1321,7 +1460,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.json({ success: true, location: created })
   })
 
-  app.post(
+  appPost(
     '/api/locations/:id/default',
     requireAuth,
     requireRole('MANAGER'),
@@ -1335,7 +1474,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     },
   )
 
-  app.delete(
+  appDelete(
     '/api/locations/:id',
     requireAuth,
     requireRole('MANAGER'),
@@ -1362,21 +1501,21 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     },
   )
 
-  app.get('/api/locations/search', requireAuth, async (req: Request, res: Response) => {
+  appGet('/api/locations/search', requireAuth, async (req: Request, res: Response) => {
     const query = ((req.query.query || req.query.q) as string) || ''
     const results = await searchGeocodingLocations(query.trim())
     res.json({ results })
   })
 
   // ----------------- SETTINGS -----------------
-  app.get('/api/settings', requireAuth, async (_req: Request, res: Response) => {
+  appGet('/api/settings', requireAuth, async (_req: Request, res: Response) => {
     const settings = await getOwnerSettings()
     const smtpConfigured = await isSmtpConfigured()
     const smtpStatus = getPublicSmtpStatus()
     res.json({ settings, smtpConfigured, smtpStatus })
   })
 
-  app.put('/api/settings', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+  appPut('/api/settings', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const updates = req.body
 
     // Validate monitor interval
@@ -1447,7 +1586,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.json({ success: true, message: 'Settings saved successfully.' })
   })
 
-  app.post(
+  appPost(
     '/api/settings/restore-defaults',
     requireAuth,
     requireRole('OWNER'),
@@ -1464,7 +1603,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     },
   )
 
-  app.post('/api/email/test', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+  appPost('/api/email/test', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const settings = await getOwnerSettings()
     const recipient = req.body?.email || settings.ownerEmail
     const result = await sendTestEmail(recipient)
@@ -1476,7 +1615,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   // ----------------- DATA RETENTION & PRIVACY -----------------
-  app.post(
+  appPost(
     '/api/data/retention/run',
     requireAuth,
     requireRole('OWNER'),
@@ -1492,7 +1631,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     },
   )
 
-  app.get(
+  appGet(
     '/api/data/retention/logs',
     requireAuth,
     requireRole('OWNER'),
@@ -1507,7 +1646,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   )
 
   // ----------------- SECRETS STATUS (MASKED) -----------------
-  app.get('/api/secrets/status', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
+  appGet('/api/secrets/status', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
     try {
       const weatherKey = process.env.WEATHER_API_KEY || ''
       const smtpInfo = getPublicSmtpStatus()
@@ -1525,7 +1664,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   // ----------------- SYSTEM HEALTH & DIAGNOSTICS -----------------
-  app.get(['/api/health', '/api/system/health'], requireAuth, async (_req: Request, res: Response) => {
+  appGet(['/api/health', '/api/system/health'], requireAuth, async (_req: Request, res: Response) => {
     const monitor = monitoringService.getStatus()
     const smtpConfigured = await isSmtpConfigured()
     const recentRuns = await getRecentMonitorRuns(10)
@@ -1559,7 +1698,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   })
 
   // ----------------- PRIVACY & DATA CONTROLS -----------------
-  app.post('/api/data/clear', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
+  appPost('/api/data/clear', requireAuth, requireRole('OWNER'), async (req: Request, res: Response) => {
     const { target } = req.body
     if (target === 'cache') {
       await clearCachedData()
@@ -1577,7 +1716,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.json({ success: true })
   })
 
-  app.get('/api/data/backup', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
+  appGet('/api/data/backup', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
     const buffer = await getDatabaseBinary()
     res.setHeader('Content-Type', 'application/x-sqlite3')
     res.setHeader(
@@ -1587,7 +1726,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.send(buffer)
   })
 
-  app.post(
+  appPost(
     '/api/data/backup/create',
     requireAuth,
     requireRole('OWNER'),
@@ -1602,7 +1741,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     },
   )
 
-  app.get(
+  appGet(
     '/api/data/backup/list',
     requireAuth,
     requireRole('OWNER'),
@@ -1616,7 +1755,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     },
   )
 
-  app.post(
+  appPost(
     '/api/data/backup/restore',
     requireAuth,
     requireRole('OWNER'),
@@ -1652,11 +1791,11 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   )
 
   // ----------------- WEB PUSH NOTIFICATIONS -----------------
-  app.get('/api/push/public-key', requireAuth, (_req: Request, res: Response) => {
+  appGet('/api/push/public-key', requireAuth, (_req: Request, res: Response) => {
     res.json({ publicKey: getVapidPublicKey(), configured: isPushConfigured() })
   })
 
-  app.get('/api/push/status', requireAuth, async (_req: Request, res: Response) => {
+  appGet('/api/push/status', requireAuth, async (_req: Request, res: Response) => {
     const count = await countPushSubscriptions()
     res.json({ configured: isPushConfigured(), subscriptions: count })
   })
@@ -1664,13 +1803,13 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
   // Per-user push notification preferences. Applies to every device the user
   // has subscribed, letting them mute, set a severity floor, or opt out of
   // recovery notifications without unsubscribing.
-  app.get('/api/push/preferences', requireAuth, async (req: Request, res: Response) => {
+  appGet('/api/push/preferences', requireAuth, async (req: Request, res: Response) => {
     const session = (req as AuthedRequest).session!
     const preferences = await getPushPreferences(session.userId)
     res.json({ preferences })
   })
 
-  app.put('/api/push/preferences', requireAuth, async (req: Request, res: Response) => {
+  appPut('/api/push/preferences', requireAuth, async (req: Request, res: Response) => {
     const session = (req as AuthedRequest).session!
     const { enabled, minSeverity, notifyRecovery } = req.body || {}
 
@@ -1693,7 +1832,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     res.json({ success: true, preferences })
   })
 
-  app.post('/api/push/subscribe', requireAuth, async (req: Request, res: Response) => {
+  appPost('/api/push/subscribe', requireAuth, async (req: Request, res: Response) => {
     try {
       const session = (req as AuthedRequest).session!
       const { endpoint, keys } = req.body || {}
@@ -1709,7 +1848,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     }
   })
 
-  app.post('/api/push/unsubscribe', requireAuth, async (req: Request, res: Response) => {
+  appPost('/api/push/unsubscribe', requireAuth, async (req: Request, res: Response) => {
     const session = (req as AuthedRequest).session!
     await unsubscribeFromPush(req.body?.endpoint, session.userId)
     res.json({ success: true })
@@ -1717,7 +1856,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
 
   // Sending a test notification broadcasts to every subscriber's device, so it
   // is an operator action, not something any signed-in viewer may trigger.
-  app.post('/api/push/test', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
+  appPost('/api/push/test', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
     if (!isPushConfigured()) {
       res.status(400).json({ error: 'Push notifications are not configured.' })
       return
@@ -1752,7 +1891,7 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       next()
     })
     app.use(express.static(distPath))
-    app.get('*', (_req: Request, res: Response) => {
+    appGet('*', (_req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'))
     })
   }

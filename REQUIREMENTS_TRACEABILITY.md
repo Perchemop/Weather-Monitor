@@ -3,10 +3,22 @@
 Maps each requirement to where it is implemented and how it is verified.
 Status: **Met** (implemented and covered), **Partial**, or **Planned**.
 
-Automated verification runs in GitHub Actions (`npm test`): 57 unit/system tests
-(`src/tests/system.test.ts`) and 29 HTTP integration tests
-(`src/tests/api.test.ts`), 86 total. A separate `ui-tests` job adds 7 Playwright
-DOM smoke tests (`tests/ui/smoke.spec.ts`).
+Automated verification runs in GitHub Actions: `npm test` emits **95 checks** —
+66 from the unit/system suite (`src/tests/system.test.ts`) and 29 from the HTTP
+integration suite (`src/tests/api.test.ts`). A separate `ui-tests` job adds 7
+Playwright DOM smoke tests (`tests/ui/smoke.spec.ts`) — **102 automated checks**
+in total.
+
+Test-count derivation (read from source, not run):
+
+- `system.test.ts` invokes its `test()` helper **58** times and runs **8**
+  additional async lifecycle blocks (backup rotation, multi-user lifecycle,
+  last-owner guardrails, persistent sessions, MFA lifecycle, push
+  subscriptions, push preferences, retention run) that each emit one
+  `[PASS]` line and increment the pass counter directly — **66 checks**.
+- `api.test.ts` invokes `await test('…')` **29** times — **29 checks**.
+- `smoke.spec.ts` defines **7** Playwright `test()` cases — **7 checks**.
+- Totals: `npm test` = 66 + 29 = **95**; with the UI smoke job = **102**.
 
 | #     | Requirement                                                     | Implementation                                                                                                         | Verification                                | Status |
 | ----- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------ |
@@ -64,10 +76,6 @@ DOM smoke tests (`tests/ui/smoke.spec.ts`).
 
 ## Gaps / planned
 
-- No browser-level (DOM) test harness (Playwright); UI behaviour is verified by
-  type-check, production build and the manual QC checklist in `docs/qc/`. Planned
-  as research slice 4 of 5.
-- Container images are now built multi-arch (`linux/amd64` + `linux/arm64`) on
-  tags; PR verification stays build-only.
 - Repository secret-scanning validity checks and non-provider patterns need
   GitHub Advanced Security and remain disabled (platform limitation).
+- See `docs/gaps.md` for the ranked audit worklist.

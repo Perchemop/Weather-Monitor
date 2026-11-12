@@ -63,42 +63,50 @@ export const ConstructionImpacts: React.FC<ConstructionImpactsProps> = ({ impact
           const Icon = badge.icon
           const isSelected = selectedActivity === act.activity
 
+          const controlId = `activity-${act.activity.replace(/\\s+/g, '-').toLowerCase()}`
           return (
             <div
               key={act.activity}
-              className={`p-3.5 rounded-lg border transition-all cursor-pointer ${
+              className={`rounded-lg border transition-all ${
                 isSelected
                   ? 'bg-slate-800 border-amber-500/50 shadow-sm'
                   : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 hover:bg-slate-800/40'
               }`}
-              onClick={() => setSelectedActivity(isSelected ? null : act.activity)}
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div
-                    className={`w-7 h-7 rounded flex items-center justify-center shrink-0 border ${badge.bg}`}
-                  >
-                    <Icon className="w-4 h-4" />
+              <button
+                type="button"
+                aria-expanded={isSelected}
+                aria-controls={controlId}
+                onClick={() => setSelectedActivity(isSelected ? null : act.activity)}
+                className="w-full text-left p-3.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className={`w-7 h-7 rounded flex items-center justify-center shrink-0 border ${badge.bg}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-200 truncate">{act.activity}</span>
                   </div>
-                  <span className="text-sm font-bold text-slate-200 truncate">{act.activity}</span>
-                </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded border uppercase ${badge.bg}`}
-                  >
-                    {badge.text}
-                  </span>
-                  <ChevronRight
-                    className={`w-4 h-4 text-slate-500 transition-transform ${
-                      isSelected ? 'rotate-90 text-amber-400' : ''
-                    }`}
-                  />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded border uppercase ${badge.bg}`}
+                    >
+                      {badge.text}
+                    </span>
+                    <ChevronRight
+                      className={`w-4 h-4 text-slate-500 transition-transform ${
+                        isSelected ? 'rotate-90 text-amber-400' : ''
+                      }`}
+                    />
+                  </div>
                 </div>
-              </div>
+              </button>
 
               {/* Rationale & Details */}
-              <div className="mt-2.5 text-xs text-slate-400 pl-9 leading-relaxed">
+              <div id={controlId} className="mt-2.5 text-xs text-slate-400 pl-9 pr-3.5 pb-3.5 leading-relaxed">
                 <p>{act.reason}</p>
                 {isSelected && (
                   <div className="mt-2 pt-2 border-t border-slate-700/60 text-[11px] font-mono text-slate-300">

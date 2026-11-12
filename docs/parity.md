@@ -31,6 +31,8 @@ Feature parity and completeness against the intended product. Status values:
 | Static browser build | Done | `src/static/*` | GitHub Pages |
 | Role-mirrored UI | Done | `Navbar.tsx`, `SettingsView.tsx`, `LocationModal.tsx` | |
 | Exportable weekly report | Done | `ReportsView.tsx`, `PerformanceView.tsx` | text/print |
-| Browser-level automated UI tests | Deferred | — | manual QC checklist covers it |
+| Browser-level automated UI tests (Playwright) | Done | `tests/ui/smoke.spec.ts`, `playwright.config.ts` | 7 smoke tests, `ui-tests` CI job |
+| In-app crash report submission | Done | `src/utils/crashReport.ts`, `SettingsView.tsx` | device flow, memory-only, opt-in |
+| Multi-architecture container images | Done | `.github/workflows/release.yml`, Docker buildx | amd64 + arm64, verified at v0.1.2 |
 
 See `../REQUIREMENTS_TRACEABILITY.md` for requirement-level mapping.

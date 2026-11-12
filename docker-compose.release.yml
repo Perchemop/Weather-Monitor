@@ -8,7 +8,7 @@
 #   docker compose -f docker-compose.release.yml up -d
 #
 # Pin IMAGE to a specific release tag for reproducibility, e.g.
-#   IMAGE=ghcr.io/perchemop/weather-monitor:v0.1.2 docker compose -f docker-compose.release.yml up -d
+#   IMAGE=ghcr.io/perchemop/weather-monitor:v0.1.3 docker compose -f docker-compose.release.yml up -d
 #
 # For building from source instead, use docker-compose.yml.
 
