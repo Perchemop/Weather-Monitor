@@ -1228,7 +1228,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         freshness,
       })
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch weather data' })
+      logger.error('weather_current_failed', { error: String(err) })
+      res.status(500).json({ error: 'Failed to fetch weather data.' })
     }
   })
 
@@ -1256,7 +1257,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         fetchedAt: forecast?.fetchedAt || null,
       })
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch forecast snapshot' })
+      logger.error('weather_forecast_failed', { error: String(err) })
+      res.status(500).json({ error: 'Failed to fetch the forecast snapshot.' })
     }
   })
 
@@ -1286,7 +1288,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
           (!LOCAL_ONLY && process.env.WEATHER_API_KEY ? 'WeatherAPI (Main Reference)' : 'Open-Meteo'),
       })
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch cross reference' })
+      logger.error('weather_cross_reference_failed', { error: String(err) })
+      res.status(500).json({ error: 'Failed to fetch the provider cross-reference.' })
     }
   })
 
@@ -1310,7 +1313,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         observations: history,
       })
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch historical observations' })
+      logger.error('weather_history_failed', { error: String(err) })
+      res.status(500).json({ error: 'Failed to fetch historical observations.' })
     }
   })
 
@@ -1349,21 +1353,16 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     },
   )
 
-  appPost(
-    '/api/monitor/toggle',
-    requireAuth,
-    requireRole('MANAGER'),
-    async (req: Request, res: Response) => {
-      const { enable } = req.body
-      await saveOwnerSettings({ monitoringEnabled: Boolean(enable) })
-      if (enable) {
-        await monitoringService.start()
-      } else {
-        monitoringService.stop()
-      }
-      res.json({ success: true, status: monitoringService.getStatus() })
-    },
-  )
+  appPost('/api/monitor/toggle', requireAuth, requireRole('MANAGER'), async (req: Request, res: Response) => {
+    const { enable } = req.body
+    await saveOwnerSettings({ monitoringEnabled: Boolean(enable) })
+    if (enable) {
+      await monitoringService.start()
+    } else {
+      monitoringService.stop()
+    }
+    res.json({ success: true, status: monitoringService.getStatus() })
+  })
 
   // ----------------- ALERTS & DELIVERIES -----------------
   appGet(['/api/alerts', '/api/alerts/history'], requireAuth, async (req: Request, res: Response) => {
@@ -1419,7 +1418,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
 
       res.json(summary)
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to build the weekly performance summary' })
+      logger.error('weekly_report_failed', { error: String(err) })
+      res.status(500).json({ error: 'Failed to build the weekly performance summary.' })
     }
   })
 
@@ -1626,7 +1626,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         const result = await enforceDataRetention(days)
         res.json({ success: true, result })
       } catch (err: any) {
-        res.status(500).json({ error: err?.message || 'Failed to enforce data retention.' })
+        logger.error('retention_run_failed', { error: String(err) })
+        res.status(500).json({ error: 'Failed to enforce data retention.' })
       }
     },
   )
@@ -1640,7 +1641,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         const logs = await getDataRetentionLogs()
         res.json({ logs })
       } catch (err: any) {
-        res.status(500).json({ error: err?.message || 'Failed to fetch retention logs.' })
+        logger.error('retention_logs_failed', { error: String(err) })
+        res.status(500).json({ error: 'Failed to fetch retention logs.' })
       }
     },
   )
@@ -1659,7 +1661,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         pushConfigured: isPushConfigured(),
       })
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to retrieve secrets status.' })
+      logger.error('secrets_status_failed', { error: String(err) })
+      res.status(500).json({ error: 'Failed to retrieve secrets status.' })
     }
   })
 
@@ -1736,24 +1739,21 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
         await addAuditLog('BACKUP_CREATED', `Database snapshot created: ${filename}`)
         res.json({ success: true, filename, message: 'Database backup snapshot created successfully.' })
       } catch (err: any) {
-        res.status(500).json({ error: err?.message || 'Failed to create database backup snapshot.' })
+        logger.error('backup_create_failed', { error: String(err) })
+        res.status(500).json({ error: 'Failed to create database backup snapshot.' })
       }
     },
   )
 
-  appGet(
-    '/api/data/backup/list',
-    requireAuth,
-    requireRole('OWNER'),
-    async (_req: Request, res: Response) => {
-      try {
-        const backups = getDatabaseBackupsList()
-        res.json({ backups })
-      } catch (err: any) {
-        res.status(500).json({ error: err?.message || 'Failed to list backups.' })
-      }
-    },
-  )
+  appGet('/api/data/backup/list', requireAuth, requireRole('OWNER'), async (_req: Request, res: Response) => {
+    try {
+      const backups = getDatabaseBackupsList()
+      res.json({ backups })
+    } catch (err: any) {
+      logger.error('backup_list_failed', { error: String(err) })
+      res.status(500).json({ error: 'Failed to list backups.' })
+    }
+  })
 
   appPost(
     '/api/data/backup/restore',
@@ -1785,7 +1785,8 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
           signedOut: true,
         })
       } catch (err: any) {
-        res.status(500).json({ error: err?.message || 'Failed to restore database backup.' })
+        logger.error('backup_restore_failed', { error: String(err) })
+        res.status(500).json({ error: 'Failed to restore database backup.' })
       }
     },
   )

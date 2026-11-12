@@ -635,7 +635,10 @@ export default function App() {
       </a>
       <main id="main" className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 sm:py-7 space-y-5">
         {!isOnline && (
-          <div role="status" className="flex items-center gap-2.5 rounded-xl border border-amber-800/50 bg-amber-950/30 p-3 text-xs text-amber-200">
+          <div
+            role="status"
+            className="flex items-center gap-2.5 rounded-xl border border-amber-800/50 bg-amber-950/30 p-3 text-xs text-amber-200"
+          >
             <WifiOff className="h-4 w-4 shrink-0 text-amber-400" />
             <span>
               Offline — showing the last cached snapshot. Live checks resume automatically when the connection

@@ -93,12 +93,15 @@ export const AlertHistoryView: React.FC<AlertHistoryViewProps> = ({ alerts, deli
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-mono" role="tablist">
+            <div
+              className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-mono"
+              role="tablist"
+            >
               <button
                 type="button"
                 role="tab"
-aria-selected={activeTab === 'alerts'}
-onClick={() => setActiveTab('alerts')}
+                aria-selected={activeTab === 'alerts'}
+                onClick={() => setActiveTab('alerts')}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
                   activeTab === 'alerts'
                     ? 'bg-slate-800 text-amber-400 font-semibold'
@@ -110,8 +113,8 @@ onClick={() => setActiveTab('alerts')}
               <button
                 type="button"
                 role="tab"
-aria-selected={activeTab === 'deliveries'}
-onClick={() => setActiveTab('deliveries')}
+                aria-selected={activeTab === 'deliveries'}
+                onClick={() => setActiveTab('deliveries')}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
                   activeTab === 'deliveries'
                     ? 'bg-slate-800 text-amber-400 font-semibold'

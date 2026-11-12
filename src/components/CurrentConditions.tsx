@@ -153,11 +153,11 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
               <div className={`mt-2 text-2xl font-semibold tabular-nums tracking-tight ${tile.valueClass}`}>
                 {tile.value}
                 {tile.unit && <span className="ml-1 text-xs font-normal text-slate-400">{tile.unit}</span>}
-                 {(tile as { chip?: string | null }).chip && (
-                   <span className="ml-2 align-middle rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-mono uppercase text-amber-300">
-                     {(tile as { chip?: string | null }).chip}
-                   </span>
-                 )}
+                {(tile as { chip?: string | null }).chip && (
+                  <span className="ml-2 align-middle rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-mono uppercase text-amber-300">
+                    {(tile as { chip?: string | null }).chip}
+                  </span>
+                )}
               </div>
               <div className="mt-1 truncate text-[11px] text-slate-400">{tile.note}</div>
             </div>

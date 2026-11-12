@@ -177,7 +177,11 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
             <h4 className="text-xs font-mono font-bold uppercase text-slate-400 mb-4">
               WIND & GUST TRENDS (KM/H)
             </h4>
-            <div className="h-60 w-full" role="img" aria-label="Historical wind, gust and temperature observations chart">
+            <div
+              className="h-60 w-full"
+              role="img"
+              aria-label="Historical wind, gust and temperature observations chart"
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />

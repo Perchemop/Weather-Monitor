@@ -94,7 +94,12 @@ function lightningColor(lpi: number): string {
   return '#6366f1'
 }
 
-export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, current, initialLayers, windUnit = 'km/h' }) => {
+export const WeatherMapView: React.FC<WeatherMapViewProps> = ({
+  location,
+  current,
+  initialLayers,
+  windUnit = 'km/h',
+}) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const radarTileRef = useRef<L.TileLayer | null>(null)
@@ -618,7 +623,7 @@ export const WeatherMapView: React.FC<WeatherMapViewProps> = ({ location, curren
                 disabled={radarFrames.length === 0}
                 className="flex-1 min-w-[130px] accent-amber-500"
                 aria-label="Radar frame"
-aria-valuetext={frameLabel}
+                aria-valuetext={frameLabel}
               />
               <span className="text-2xs font-mono text-slate-300 tabular-nums w-14 text-right">
                 {frameLabel}
@@ -660,7 +665,7 @@ aria-valuetext={frameLabel}
             <button
               type="button"
               aria-pressed={rainView === 'now'}
-onClick={() => setRainView('now')}
+              onClick={() => setRainView('now')}
               className={`px-2 py-1 rounded-lg text-2xs font-mono border transition-all cursor-pointer ${
                 rainView === 'now'
                   ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
@@ -685,7 +690,7 @@ onClick={() => setRainView('now')}
                     : 'bg-slate-800/80 text-slate-300 hover:text-slate-100'
                 }`}
                 aria-pressed={rainView === 'accum' && rainDirection === 'past'}
-title="Rain that has already fallen (last N hours)"
+                title="Rain that has already fallen (last N hours)"
               >
                 Past
               </button>
@@ -701,7 +706,7 @@ title="Rain that has already fallen (last N hours)"
                     : 'bg-slate-800/80 text-slate-300 hover:text-slate-100'
                 }`}
                 aria-pressed={rainView === 'accum' && rainDirection === 'next'}
-title="Rain forecast (next N hours)"
+                title="Rain forecast (next N hours)"
               >
                 Next
               </button>
@@ -713,7 +718,7 @@ title="Rain forecast (next N hours)"
                   key={h}
                   type="button"
                   aria-pressed={rainHours === h}
-onClick={() => setRainHours(h)}
+                  onClick={() => setRainHours(h)}
                   className={`px-2 py-1 rounded-lg text-2xs font-mono border transition-all cursor-pointer ${
                     rainHours === h
                       ? 'bg-sky-500/15 border-sky-500/40 text-sky-300'
@@ -727,7 +732,12 @@ onClick={() => setRainHours(h)}
         )}
 
         <div className="relative rounded-2xl overflow-hidden border border-slate-800/80 shadow-sm">
-          <div ref={containerRef} className="h-[52vh] min-h-[340px] w-full bg-slate-950" role="region" aria-label="Weather map" />
+          <div
+            ref={containerRef}
+            className="h-[52vh] min-h-[340px] w-full bg-slate-950"
+            role="region"
+            aria-label="Weather map"
+          />
 
           {/* Layer legend */}
           <div className="absolute bottom-2 left-2 z-[500] flex flex-col gap-1.5 bg-slate-950/90 border border-slate-800/80 rounded-xl px-2.5 py-2 text-[10px] font-mono text-slate-300 shadow-sm backdrop-blur">
@@ -773,7 +783,9 @@ onClick={() => setRainHours(h)}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
             <div className="text-2xs font-mono uppercase text-slate-400">Wind (site)</div>
-            <div className="text-lg font-bold text-slate-100">{Math.round(current.windSpeed)} {windUnit}</div>
+            <div className="text-lg font-bold text-slate-100">
+              {Math.round(current.windSpeed)} {windUnit}
+            </div>
             <div className="text-2xs font-mono text-slate-500">
               {typeof current.windDirection === 'number' ? `${Math.round(current.windDirection)}°` : '—'}
             </div>

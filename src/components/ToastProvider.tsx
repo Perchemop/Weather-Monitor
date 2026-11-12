@@ -135,17 +135,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-200 animate-toast-in ${bgColor}`}
               role="alert"
               onMouseEnter={() => setPausedIds((prev) => new Set(prev).add(toast.id))}
-              onMouseLeave={() => setPausedIds((prev) => {
-                const next = new Set(prev)
-                next.delete(toast.id)
-                return next
-              })}
+              onMouseLeave={() =>
+                setPausedIds((prev) => {
+                  const next = new Set(prev)
+                  next.delete(toast.id)
+                  return next
+                })
+              }
               onFocus={() => setPausedIds((prev) => new Set(prev).add(toast.id))}
-              onBlur={() => setPausedIds((prev) => {
-                const next = new Set(prev)
-                next.delete(toast.id)
-                return next
-              })}
+              onBlur={() =>
+                setPausedIds((prev) => {
+                  const next = new Set(prev)
+                  next.delete(toast.id)
+                  return next
+                })
+              }
             >
               {icon}
               <div className="flex-1 text-xs font-medium leading-relaxed">{toast.message}</div>

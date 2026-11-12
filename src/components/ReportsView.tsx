@@ -11,7 +11,13 @@ interface ReportsViewProps {
   activeProvider?: string
 }
 
-export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, risk, alerts, activeProvider }) => {
+export const ReportsView: React.FC<ReportsViewProps> = ({
+  location,
+  current,
+  risk,
+  alerts,
+  activeProvider,
+}) => {
   const reportId = React.useMemo(() => `REP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`, [])
   const handlePrint = () => {
     window.print()
@@ -188,14 +194,16 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, ris
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-800">
-              {risk ? risk.affectedActivities.map((act) => (
-                <tr key={act.activity}>
-                  <td className="py-2.5 font-bold">{act.activity}</td>
-                  <td className="py-2.5 font-mono font-semibold">{act.riskLevel}</td>
-                  <td className="py-2.5 text-slate-600 pr-2">{act.reason}</td>
-                  <td className="py-2.5 font-mono text-slate-500">{act.thresholdDetails}</td>
-                </tr>
-              )) : (
+              {risk ? (
+                risk.affectedActivities.map((act) => (
+                  <tr key={act.activity}>
+                    <td className="py-2.5 font-bold">{act.activity}</td>
+                    <td className="py-2.5 font-mono font-semibold">{act.riskLevel}</td>
+                    <td className="py-2.5 text-slate-600 pr-2">{act.reason}</td>
+                    <td className="py-2.5 font-mono text-slate-500">{act.thresholdDetails}</td>
+                  </tr>
+                ))
+              ) : (
                 <tr>
                   <td colSpan={4} className="py-2.5 text-slate-500 font-mono">
                     UNAVAILABLE — data could not be loaded

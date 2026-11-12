@@ -463,7 +463,7 @@ site locations unless the operator types them deliberately.
 ## Supported platforms
 
 - **Server build** — Linux, macOS and Windows via Node 20+ (`npm ci && npm run
-  build && npm start`); the CI matrix covers all three.
+build && npm start`); the CI matrix covers all three.
 - **Container** — multi-architecture images (`linux/amd64` + `linux/arm64`)
   published to GHCR.
 - **Browsers (PWA / static build)** — evergreen Chromium, Firefox, Safari and

@@ -203,7 +203,10 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
         {/* Modal Content */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
           {formError && (
-            <div role="alert" className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-mono">
+            <div
+              role="alert"
+              className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-mono"
+            >
               <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
               <span>{formError}</span>
             </div>
@@ -386,7 +389,9 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                 /* Custom Coordinates Input */
                 <div className="space-y-3 text-xs font-mono bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
                   <div>
-                    <label htmlFor="custom-site-name" className="text-slate-400 block mb-1">Site / Project Title:</label>
+                    <label htmlFor="custom-site-name" className="text-slate-400 block mb-1">
+                      Site / Project Title:
+                    </label>
                     <input
                       id="custom-site-name"
                       type="text"
@@ -398,7 +403,9 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label htmlFor="custom-site-lat" className="text-slate-400 block mb-1">Latitude (-90 to +90):</label>
+                      <label htmlFor="custom-site-lat" className="text-slate-400 block mb-1">
+                        Latitude (-90 to +90):
+                      </label>
                       <input
                         id="custom-site-lat"
                         type="number"
@@ -410,7 +417,9 @@ const LocationModalComponent: React.FC<LocationModalProps> = ({
                       />
                     </div>
                     <div>
-                      <label htmlFor="custom-site-lon" className="text-slate-400 block mb-1">Longitude (-180 to +180):</label>
+                      <label htmlFor="custom-site-lon" className="text-slate-400 block mb-1">
+                        Longitude (-180 to +180):
+                      </label>
                       <input
                         id="custom-site-lon"
                         type="number"

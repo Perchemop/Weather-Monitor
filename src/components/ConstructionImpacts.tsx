@@ -106,7 +106,10 @@ export const ConstructionImpacts: React.FC<ConstructionImpactsProps> = ({ impact
               </button>
 
               {/* Rationale & Details */}
-              <div id={controlId} className="mt-2.5 text-xs text-slate-400 pl-9 pr-3.5 pb-3.5 leading-relaxed">
+              <div
+                id={controlId}
+                className="mt-2.5 text-xs text-slate-400 pl-9 pr-3.5 pb-3.5 leading-relaxed"
+              >
                 <p>{act.reason}</p>
                 {isSelected && (
                   <div className="mt-2 pt-2 border-t border-slate-700/60 text-[11px] font-mono text-slate-300">

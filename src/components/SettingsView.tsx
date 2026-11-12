@@ -967,7 +967,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
               <div>
-                <label htmlFor="owner-name" className="text-slate-400 block mb-1">Supervisor Display Name:</label>
+                <label htmlFor="owner-name" className="text-slate-400 block mb-1">
+                  Supervisor Display Name:
+                </label>
                 <input
                   id="owner-name"
                   type="text"
@@ -978,7 +980,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               </div>
 
               <div>
-                <label htmlFor="owner-email" className="text-slate-400 block mb-1">Alert Destination Email:</label>
+                <label htmlFor="owner-email" className="text-slate-400 block mb-1">
+                  Alert Destination Email:
+                </label>
                 <input
                   id="owner-email"
                   type="email"
@@ -991,7 +995,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-800 text-xs font-mono">
               <div>
-                <label htmlFor="temperature-unit" className="text-slate-400 block mb-1">Temperature Unit:</label>
+                <label htmlFor="temperature-unit" className="text-slate-400 block mb-1">
+                  Temperature Unit:
+                </label>
                 <select
                   id="temperature-unit"
                   value={settings.temperatureUnit}
@@ -1004,7 +1010,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               </div>
 
               <div>
-                <label htmlFor="wind-unit" className="text-slate-400 block mb-1">Wind Speed & Gust Unit:</label>
+                <label htmlFor="wind-unit" className="text-slate-400 block mb-1">
+                  Wind Speed & Gust Unit:
+                </label>
                 <select
                   id="wind-unit"
                   value={settings.windUnit}
@@ -1231,7 +1239,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
               <div>
-                <label htmlFor="monitor-interval" className="text-slate-400 block mb-1">Monitoring Interval:</label>
+                <label htmlFor="monitor-interval" className="text-slate-400 block mb-1">
+                  Monitoring Interval:
+                </label>
                 <select
                   id="monitor-interval"
                   value={settings.monitorIntervalMinutes}
@@ -1249,7 +1259,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               </div>
 
               <div>
-                <label htmlFor="alert-cooldown" className="text-slate-400 block mb-1">Alert Re-notification Cooldown:</label>
+                <label htmlFor="alert-cooldown" className="text-slate-400 block mb-1">
+                  Alert Re-notification Cooldown:
+                </label>
                 <select
                   id="alert-cooldown"
                   value={settings.alertCooldownMinutes}
@@ -1344,7 +1356,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 browser-only.
               </p>
               <div>
-                <label htmlFor="relay-url" className="text-slate-400 block mb-1 text-xs font-mono">Relay Webhook URL:</label>
+                <label htmlFor="relay-url" className="text-slate-400 block mb-1 text-xs font-mono">
+                  Relay Webhook URL:
+                </label>
                 <input
                   id="relay-url"
                   type="url"
@@ -1541,7 +1555,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
             </p>
 
             <div className="flex items-center gap-3">
-              <label htmlFor="retention-days" className="text-2xs font-mono uppercase tracking-wider text-slate-400 shrink-0">
+              <label
+                htmlFor="retention-days"
+                className="text-2xs font-mono uppercase tracking-wider text-slate-400 shrink-0"
+              >
                 Observation retention (days)
               </label>
               <input
@@ -1633,7 +1650,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               </div>
 
               <div>
-                <label htmlFor="current-password" className="text-slate-400 block mb-1">Current Master Password:</label>
+                <label htmlFor="current-password" className="text-slate-400 block mb-1">
+                  Current Master Password:
+                </label>
                 <input
                   id="current-password"
                   type="password"
@@ -1647,7 +1666,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="new-password" className="text-slate-400 block mb-1">New Password:</label>
+                  <label htmlFor="new-password" className="text-slate-400 block mb-1">
+                    New Password:
+                  </label>
                   <input
                     id="new-password"
                     type="password"
@@ -1659,7 +1680,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   />
                 </div>
                 <div>
-                  <label htmlFor="confirm-password" className="text-slate-400 block mb-1">Confirm New Password:</label>
+                  <label htmlFor="confirm-password" className="text-slate-400 block mb-1">
+                    Confirm New Password:
+                  </label>
                   <input
                     id="confirm-password"
                     type="password"
@@ -1732,7 +1755,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 </div>
                 <div className="flex items-end gap-3">
                   <div>
-                    <label htmlFor="mfa-code" className="text-slate-400 block mb-1">6-digit code:</label>
+                    <label htmlFor="mfa-code" className="text-slate-400 block mb-1">
+                      6-digit code:
+                    </label>
                     <input
                       id="mfa-code"
                       type="text"
@@ -1774,7 +1799,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 </p>
                 <div className="flex items-end gap-3">
                   <div>
-                    <label htmlFor="mfa-disable-password" className="text-slate-400 block mb-1">Confirm password to disable:</label>
+                    <label htmlFor="mfa-disable-password" className="text-slate-400 block mb-1">
+                      Confirm password to disable:
+                    </label>
                     <input
                       id="mfa-disable-password"
                       type="password"
@@ -2140,88 +2167,110 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
       {/* Report preview modal */}
       {reportOpen && (
-        <Modal isOpen={reportOpen} onClose={() => setReportOpen(false)} labelledBy="report-preview-title" className="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
-          <h3 id="report-preview-title" className="text-sm font-mono font-bold text-white uppercase tracking-wider">
+        <Modal
+          isOpen={reportOpen}
+          onClose={() => setReportOpen(false)}
+          labelledBy="report-preview-title"
+          className="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4"
+        >
+          <h3
+            id="report-preview-title"
+            className="text-sm font-mono font-bold text-white uppercase tracking-wider"
+          >
             Report preview
           </h3>
-            <label htmlFor="report-notes" className="sr-only">Report notes</label>
-            <textarea
-              id="report-notes"
-              className="w-full h-24 bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs"
-              value={reportNotes}
-              onChange={(e) => setReportNotes(e.target.value)}
-              placeholder="Notes (editable)"
-            />
-            {(() => {
-              const payload = buildReportPayload(
-                {
-                  appVersion: APP_VERSION,
-                  buildMode: STATIC_MODE ? 'Static (browser build)' : 'Server build',
-                  userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
-                  notes: reportNotes,
-                },
-                'bug',
-              )
-              // mark preview shown
-              return (
-                <div className="space-y-2">
-                  <div className="text-xs text-slate-400">Title: {payload.title}</div>
-                  <pre className="text-xs text-slate-300 bg-slate-950 p-3 rounded-lg max-h-64 overflow-auto whitespace-pre-wrap">
-                    {payload.body}
-                  </pre>
-                  {reportError && <p role="alert" className="text-xs text-red-400">{reportError}</p>}
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setReportOpen(false)}
-                      className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-semibold"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void submitReport()}
-                      disabled={!reportPreviewShown || reportSubmitting}
-                      className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold disabled:opacity-50"
-                    >
-                      {reportSubmitting ? 'Submitting...' : 'Submit'}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-600">
-                    Fallback:{' '}
-                    <a href={reportIssueUrl} target="_blank" rel="noreferrer" className="underline">
-                      Open pre-filled GitHub issue
-                    </a>
+          <label htmlFor="report-notes" className="sr-only">
+            Report notes
+          </label>
+          <textarea
+            id="report-notes"
+            className="w-full h-24 bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs"
+            value={reportNotes}
+            onChange={(e) => setReportNotes(e.target.value)}
+            placeholder="Notes (editable)"
+          />
+          {(() => {
+            const payload = buildReportPayload(
+              {
+                appVersion: APP_VERSION,
+                buildMode: STATIC_MODE ? 'Static (browser build)' : 'Server build',
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+                notes: reportNotes,
+              },
+              'bug',
+            )
+            // mark preview shown
+            return (
+              <div className="space-y-2">
+                <div className="text-xs text-slate-400">Title: {payload.title}</div>
+                <pre className="text-xs text-slate-300 bg-slate-950 p-3 rounded-lg max-h-64 overflow-auto whitespace-pre-wrap">
+                  {payload.body}
+                </pre>
+                {reportError && (
+                  <p role="alert" className="text-xs text-red-400">
+                    {reportError}
                   </p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReportOpen(false)}
+                    className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submitReport()}
+                    disabled={!reportPreviewShown || reportSubmitting}
+                    className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold disabled:opacity-50"
+                  >
+                    {reportSubmitting ? 'Submitting...' : 'Submit'}
+                  </button>
                 </div>
-              )
-            })()}
+                <p className="text-[11px] text-slate-600">
+                  Fallback:{' '}
+                  <a href={reportIssueUrl} target="_blank" rel="noreferrer" className="underline">
+                    Open pre-filled GitHub issue
+                  </a>
+                </p>
+              </div>
+            )
+          })()}
         </Modal>
       )}
 
       {/* In-App Confirmation Modal (safe for iframes) */}
       {confirmModal.isOpen && (
-        <Modal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))} labelledBy="confirm-modal-title" className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 animate-modal-in duration-150">
-          <h3 id="confirm-modal-title" className="text-sm font-mono font-bold text-white uppercase tracking-wider">
+        <Modal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+          labelledBy="confirm-modal-title"
+          className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 animate-modal-in duration-150"
+        >
+          <h3
+            id="confirm-modal-title"
+            className="text-sm font-mono font-bold text-white uppercase tracking-wider"
+          >
             {confirmModal.title}
           </h3>
-            <p className="text-xs text-slate-400 font-mono leading-relaxed">{confirmModal.message}</p>
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-                className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-semibold transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmModal.onConfirm}
-                className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold transition-colors cursor-pointer"
-              >
-                Confirm
-              </button>
-            </div>
+          <p className="text-xs text-slate-400 font-mono leading-relaxed">{confirmModal.message}</p>
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-semibold transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmModal.onConfirm}
+              className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold transition-colors cursor-pointer"
+            >
+              Confirm
+            </button>
+          </div>
         </Modal>
       )}
     </div>

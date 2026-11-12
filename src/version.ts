@@ -27,5 +27,4 @@ function versionFromPackageJson(): string | undefined {
   }
 }
 
-export const APP_VERSION: string =
-  process.env.APP_VERSION ?? versionFromPackageJson() ?? '0.0.0'
+export const APP_VERSION: string = process.env.APP_VERSION ?? versionFromPackageJson() ?? '0.0.0'
