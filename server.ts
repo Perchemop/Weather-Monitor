@@ -415,6 +415,31 @@ function guardedRoute(register: (path: any, ...handlers: any[]) => unknown) {
   }
 }
 
+// The geocoding lookup is a third-party call made on behalf of a signed-in
+// user; ~9s matches the deadline the weather fetches already use.
+const GEOCODING_TIMEOUT_MS = 9000
+
+/**
+ * Races a promise against a deadline so a slow upstream cannot hold a request
+ * (and its socket) open indefinitely. The abandoned call is left to settle on
+ * its own; the caller gets a rejection here and can answer 502 immediately.
+ */
+function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Upstream request timed out.')), timeoutMs)
+    work.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      },
+    )
+  })
+}
+
 export type StaticMode = 'vite' | 'static' | 'none'
 
 export interface CreateAppOptions {
@@ -1503,8 +1528,16 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
 
   appGet('/api/locations/search', requireAuth, async (req: Request, res: Response) => {
     const query = ((req.query.query || req.query.q) as string) || ''
-    const results = await searchGeocodingLocations(query.trim())
-    res.json({ results })
+    try {
+      // The geocoder is a third party: every other upstream call in this app is
+      // bounded (see `weatherService`), and without a deadline a hung connection
+      // holds this request and its socket open indefinitely.
+      const results = await withTimeout(searchGeocodingLocations(query.trim()), GEOCODING_TIMEOUT_MS)
+      res.json({ results })
+    } catch (err) {
+      logger.error('geocoding_search_failed', { error: String(err) })
+      res.status(502).json({ error: 'Location search is temporarily unavailable. Please try again.' })
+    }
   })
 
   // ----------------- SETTINGS -----------------
@@ -1620,10 +1653,21 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
     requireAuth,
     requireRole('OWNER'),
     async (req: Request, res: Response) => {
+      // Validate exactly as PUT /api/settings does. Unbounded or negative input
+      // is destructive here rather than merely wrong: a negative window deletes
+      // every stored observation, snapshot and comparison in one call.
+      const submitted = req.body?.retentionDays
+      let days = Number(submitted)
+      if (submitted === undefined || submitted === null) {
+        days = (await getOwnerSettings()).dataRetentionDays || 30
+      }
+      if (!Number.isFinite(days) || days < 1 || days > 3650) {
+        res.status(400).json({ error: 'Data retention must be between 1 and 3650 days.' })
+        return
+      }
+
       try {
-        const settings = await getOwnerSettings()
-        const days = Number(req.body?.retentionDays) || settings.dataRetentionDays || 30
-        const result = await enforceDataRetention(days)
+        const result = await enforceDataRetention(Math.floor(days))
         res.json({ success: true, result })
       } catch (err: any) {
         logger.error('retention_run_failed', { error: String(err) })
@@ -1845,7 +1889,22 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       })
       res.json({ success: true, message: 'Device subscribed to safety alerts.' })
     } catch (err: any) {
-      res.status(400).json({ error: err?.message || 'Failed to store push subscription.' })
+      // `subscribeToPush` rejects with a few fixed validation messages that are
+      // useful to the caller. Anything else — a storage failure in particular —
+      // is logged server-side and replaced with the generic message.
+      const expected = [
+        'Invalid push subscription payload.',
+        'Invalid push subscription endpoint.',
+        'Push subscription endpoints must use HTTPS.',
+        'Push subscription endpoint host is not a recognised push service.',
+      ]
+      const message = String(err?.message || '')
+      if (expected.includes(message)) {
+        res.status(400).json({ error: message })
+        return
+      }
+      logger.error('push_subscribe_failed', { error: message })
+      res.status(400).json({ error: 'Failed to store push subscription.' })
     }
   })
 

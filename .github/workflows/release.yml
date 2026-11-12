@@ -41,9 +41,9 @@ jobs:
         run: |
           git fetch --no-tags origin main
           if git merge-base --is-ancestor HEAD origin/main; then
-            echo "tag \"${GITHUB_REF_NAME}\" (\"${GITHUB_SHA}\") is on origin/main"
+            printf 'tag "%s" ("%s") is on origin/main\n' "${GITHUB_REF_NAME}" "${GITHUB_SHA}"
           else
-            echo "refusing to release: \"${GITHUB_REF_NAME}\" is not an ancestor of origin/main" >&2
+            printf 'refusing to release: "%s" is not an ancestor of origin/main\n' "${GITHUB_REF_NAME}" >&2
             exit 1
           fi
 
@@ -114,8 +114,8 @@ jobs:
             found { print }
           ' CHANGELOG.md > release-notes.md
           if [ ! -s release-notes.md ]; then
-            echo "No CHANGELOG section for ${VERSION}; using generated notes." >&2
-            echo "Release ${GITHUB_REF_NAME} — see CHANGELOG.md for details." > release-notes.md
+            printf 'No CHANGELOG section for %s; using generated notes.\n' "${VERSION}" >&2
+            printf 'Release %s \u2014 see CHANGELOG.md for details.\n' "${GITHUB_REF_NAME}" > release-notes.md
           fi
           cat release-notes.md
 
@@ -215,11 +215,10 @@ jobs:
           IMAGE="ghcr.io/perchemop/weather-monitor"
           DIGEST="${{ steps.build.outputs.digest }}"
           {
-            echo "### Container image"
-            echo ""
-            echo "- \`${IMAGE}:${GITHUB_REF_NAME}\`"
-            echo "- \`${IMAGE}@${DIGEST}\` (linux/amd64, linux/arm64)"
-          } >> "$GITHUB_STEP_SUMMARY"
+            printf '### Container image\n\n'
+            printf '- `%s:%s`\n' "${IMAGE}" "${GITHUB_REF_NAME}"
+            printf '- `%s@%s` (linux/amd64, linux/arm64)\n' "${IMAGE}" "${DIGEST}"
+          } >> "${GITHUB_STEP_SUMMARY}"
           gh release view "${GITHUB_REF_NAME}" --json body -q .body > release-body.md
           if grep -q "${IMAGE}@sha256:" release-body.md; then
             echo "digest already recorded; leaving the release notes unchanged"
