@@ -217,7 +217,7 @@ jobs:
           {
             printf "### Container image\n\n"
             printf "- \`%s:%s\`\n" "${IMAGE}" "${GITHUB_REF_NAME}"
-            printf '- `%s@%s` (linux/amd64, linux/arm64)\n' "${IMAGE}" "${DIGEST}"
+            printf "- \`%s@%s\` (linux/amd64, linux/arm64)\n" "${IMAGE}" "${DIGEST}"
           } >> "${GITHUB_STEP_SUMMARY}"
           gh release view "${GITHUB_REF_NAME}" --json body -q .body > release-body.md
           if grep -q "${IMAGE}@sha256:" release-body.md; then
