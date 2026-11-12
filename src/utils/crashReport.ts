@@ -60,8 +60,9 @@ export function scrubText(input: string): string {
   out = out.replace(/ghp_[A-Za-z0-9]{20,}/g, '[REDACTED_TOKEN]')
   out = out.replace(/github_pat_[A-Za-z0-9_]{20,}/g, '[REDACTED_TOKEN]')
   out = out.replace(/\b[A-Za-z0-9_-]{40,}\b/g, '[REDACTED_TOKEN]')
-  // Redact 32-char hex (avoid \b boundaries which are unreliable with gi flags).
-  out = out.replace(/(^|[^a-f0-9])([a-f0-9]{32})(?![a-f0-9])/gi, '$1[REDACTED_TOKEN]')
+  // Redact 32-char hex: match non-hex prefix, 32 hex chars, non-hex suffix.
+  // Use a function to avoid lookbehind/lookahead issues with gi flags.
+  out = out.replace(/(^|[^a-f0-9])([a-f0-9]{32})([^a-f0-9]|$)/gi, (_, prefix, hex) => `${prefix}[REDACTED_TOKEN]`)
   return out
 }
 
