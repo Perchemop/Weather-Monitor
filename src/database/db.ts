@@ -986,6 +986,10 @@ export async function saveSession(session: StoredSession): Promise<void> {
       session.lastSeenAt ?? null,
     ],
   )
+  // Keep a mapping from digest -> raw token so loadActiveSessions can
+  // reconstruct the full session object. The digest is the primary key,
+  // and the raw token is only held in this in-memory map (never persisted).
+  rawSessionTokens.set(digest, session.token)
   persistDb()
 }
 
