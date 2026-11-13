@@ -24,25 +24,64 @@ const VIEWPORTS = [
   ['phone', 390, 844],
 ] as const
 
-async function settle(page) {
+async function settle(page: Page) {
   await page.waitForLoadState('networkidle')
   await page.evaluate(
     () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
   )
 }
 
-async function waitForCredentialForm(page) {
+async function waitForCredentialForm(page: Page) {
   await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 20000 })
 }
 
-async function fillCredentialForm(page, email, password) {
+async function fillCredentialForm(page: Page, email: string, password: string) {
   await page.locator('input[type="email"]').fill(email)
   const passwordInputs = page.locator('input[type="password"]')
   await passwordInputs.first().fill(password)
   if ((await passwordInputs.count()) > 1) {
     await passwordInputs.nth(1).fill(password)
   }
-  await page.locator('button[type="submit"]').click()
+  // Wait for navigation after form submission
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle' }),
+    page.locator('button[type="submit"]').click(),
+  ])
+}
+
+const OUT = 'snapshots'
+const OWNER_EMAIL = 'owner@local'
+const OWNER_PASSWORD = 'StrongPass123'
+
+const VIEWPORTS = [
+  ['desktop', 1280, 800],
+  ['tablet', 768, 1024],
+  ['phone', 390, 844],
+] as const
+
+async function settle(page: Page) {
+  await page.waitForLoadState('networkidle')
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  )
+}
+
+async function waitForCredentialForm(page: Page) {
+  await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 20000 })
+}
+
+async function fillCredentialForm(page: Page, email: string, password: string) {
+  await page.locator('input[type="email"]').fill(email)
+  const passwordInputs = page.locator('input[type="password"]')
+  await passwordInputs.first().fill(password)
+  if ((await passwordInputs.count()) > 1) {
+    await passwordInputs.nth(1).fill(password)
+  }
+  // Wait for navigation after form submission
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'networkidle' }),
+    page.locator('button[type="submit"]').click(),
+  ])
 }
 
 test('credential screen at three viewports', async ({ page }) => {
