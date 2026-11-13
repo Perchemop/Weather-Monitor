@@ -5,8 +5,10 @@ import { Request, Response, NextFunction } from 'express'
  *
  * We set these explicitly rather than depending on `helmet` to keep the
  * dependency surface minimal and auditable. The application renders a Vite /
- * React SPA that talks to same-origin `/api` endpoints and loads Google Fonts,
- * so the CSP is deliberately scoped to those origins instead of `unsafe-*`.
+ * React SPA that talks to same-origin `/api` endpoints and loads its fonts from
+ * the bundle, so the CSP allows no third-party origin at all: every external
+ * directive here would be a live data-exfiltration path for injected markup,
+ * and an origin nothing loads is pure attack surface.
  */
 
 export interface SecurityHeaderOptions {
@@ -22,7 +24,7 @@ export interface SecurityHeaderOptions {
 function buildCsp(dev: boolean): string {
   const scriptSrc = dev ? "script-src 'self' 'unsafe-inline'" : "script-src 'self'"
   const connectSrc = dev ? "connect-src 'self' ws: wss:" : "connect-src 'self'"
-  const styleSrc = "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"
+  const styleSrc = "style-src 'self' 'unsafe-inline'"
 
   return [
     "default-src 'self'",
@@ -32,7 +34,7 @@ function buildCsp(dev: boolean): string {
     "img-src 'self' data: blob: https:",
     // Vite injects inline style tags; scripts remain restricted to self.
     styleSrc,
-    "font-src 'self' https://fonts.gstatic.com data:",
+    "font-src 'self' data:",
     scriptSrc,
     connectSrc,
     // The PWA registers a same-origin service worker and manifest.

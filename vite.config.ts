@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   // The application version is owned by `package.json` (the release workflow
   // fails if a tag disagrees with it). Injecting it here — and in the esbuild
   // step of the `build` script — keeps `src/version.ts` a single-sourced read.
-  const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }
+  const packageJson = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf8'))
 
   // The static (serverless) build targets GitHub Pages and runs entirely in the
   // browser. It is emitted to a separate output directory so it never clobbers
@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
   return {
     base,
     define: {
-      'process.env.APP_VERSION': JSON.stringify(version),
+      'process.env.APP_VERSION': JSON.stringify(packageJson.version),
     },
     plugins: [react(), tailwindcss()],
     resolve: {

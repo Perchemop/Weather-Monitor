@@ -18,6 +18,14 @@ import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
 
+// The first-run bootstrap password. A fresh install generates one at boot (and
+// prints it once) unless the operator supplies one; pinning it here lets the
+// setup tests prove ownership of the seeded OWNER account exactly the way a
+// real operator does. Must be set before the server module is imported, since
+// the database is seeded from it.
+const BOOTSTRAP_PASSWORD = 'BootstrapSeed1'
+process.env.INITIAL_OWNER_PASSWORD = BOOTSTRAP_PASSWORD
+
 const { createApp } = await import('../../server.js')
 const { generateTotp } = await import('../utils/totp.js')
 
@@ -136,14 +144,48 @@ async function main(): Promise<void> {
     assert.equal(res.body.email, undefined)
   })
 
+  await test('Auth: setup requires the bootstrap password and a valid email', async () => {
+    // No proof at all: refused before any credential is touched.
+    const noProof = await new Client(base).post('/api/auth/setup', {
+      password: 'TakeoverAttempt9',
+      email: 'attacker@site.local',
+    })
+    assert.equal(noProof.status, 401)
+
+    // A wrong proof is refused too, and leaves the instance unconfigured.
+    const wrongProof = await new Client(base).post('/api/auth/setup', {
+      password: 'TakeoverAttempt9',
+      email: 'attacker@site.local',
+      bootstrapPassword: 'not-the-bootstrap-password',
+    })
+    assert.equal(wrongProof.status, 401)
+    assert.equal((await new Client(base).get('/api/auth/status')).body.isFirstRun, true)
+
+    // Correct proof, malformed email: still refused.
+    const badEmail = await new Client(base).post('/api/auth/setup', {
+      password: OWNER_PASSWORD,
+      email: 'not-an-email',
+      bootstrapPassword: BOOTSTRAP_PASSWORD,
+    })
+    assert.equal(badEmail.status, 400)
+  })
+
   await test('Auth: setup rejects a weak password with the policy message', async () => {
-    const res = await anon.post('/api/auth/setup', { password: 'short', email: 'owner@site.local' })
+    const res = await anon.post('/api/auth/setup', {
+      password: 'short',
+      email: 'owner@site.local',
+      bootstrapPassword: BOOTSTRAP_PASSWORD,
+    })
     assert.equal(res.status, 400)
     assert.match(String(res.body.error), /at least/i)
   })
 
   await test('Auth: setup with a strong password sets HttpOnly session + CSRF cookies', async () => {
-    const res = await anon.post('/api/auth/setup', { password: OWNER_PASSWORD, email: 'owner@site.local' })
+    const res = await anon.post('/api/auth/setup', {
+      password: OWNER_PASSWORD,
+      email: 'owner@site.local',
+      bootstrapPassword: BOOTSTRAP_PASSWORD,
+    })
     assert.equal(res.status, 200)
     assert.equal(res.body.success, true)
     // No token in the body: browser credential is the HttpOnly cookie only.
@@ -238,6 +280,11 @@ async function main(): Promise<void> {
     const badEnable = await anon.postCsrf('/api/auth/mfa/enable', { code: '000000' })
     assert.equal(badEnable.status, 400)
 
+    // Re-binding an existing enrolment requires the current password, so a
+    // stolen session cannot silently re-point MFA at another device.
+    assert.equal((await anon.postCsrf('/api/auth/mfa/setup')).status, 403)
+    assert.equal((await anon.postCsrf('/api/auth/mfa/setup', { password: 'not-the-password' })).status, 403)
+
     // Correct code enables MFA.
     const goodEnable = await anon.postCsrf('/api/auth/mfa/enable', { code: generateTotp(secret) })
     assert.equal(goodEnable.status, 200)
@@ -250,13 +297,22 @@ async function main(): Promise<void> {
     assert.equal(noCode.status, 401)
     assert.equal(noCode.body.mfaRequired, true)
 
-    // Login with a valid code succeeds.
+    // Login with a valid code succeeds, and the same code cannot be replayed:
+    // its step counter is consumed on first use.
+    const loginCode = generateTotp(secret)
     const withCode = await new Client(base).post('/api/auth/login', {
       password: OWNER_PASSWORD,
       email: 'owner@site.local',
-      mfaCode: generateTotp(secret),
+      mfaCode: loginCode,
     })
     assert.equal(withCode.status, 200)
+
+    const replay = await new Client(base).post('/api/auth/login', {
+      password: OWNER_PASSWORD,
+      email: 'owner@site.local',
+      mfaCode: loginCode,
+    })
+    assert.equal(replay.status, 401, 'a consumed TOTP code must not be replayable')
 
     // Disable again to leave the account usable.
     const disable = await anon.postCsrf('/api/auth/mfa/disable', { password: OWNER_PASSWORD })
@@ -355,6 +411,18 @@ async function main(): Promise<void> {
     assert.ok(current)
   })
 
+  await test('Sessions: bearer tokens are persisted only as sha256 digests', async () => {
+    const { getDb, hashSessionToken } = await import('../database/db.js')
+    const token = anon.cookie('cwm_session')
+    assert.ok(token, 'expected a live session cookie')
+    const db = await getDb()
+    const rows = db.exec('SELECT token FROM sessions')
+    const stored = (rows[0]?.values || []).map((v) => String(v[0]))
+    assert.ok(stored.length > 0, 'expected the running session to be persisted')
+    assert.ok(stored.includes(hashSessionToken(token)), 'the stored key must be the token digest')
+    assert.ok(!stored.includes(token), 'the raw bearer token must never be written to disk')
+  })
+
   await test('RBAC: role changes take effect on the live session immediately', async () => {
     // A VIEWER is stopped by the server-side role gate.
     assert.equal((await viewerClient.postCsrf('/api/locations', {})).status, 403)
@@ -390,6 +458,28 @@ async function main(): Promise<void> {
     assert.equal(good.status, 200)
     const read = await anon.get('/api/settings')
     assert.equal(read.body.settings.dataRetentionDays, 45)
+  })
+
+  await test('Validation: settings reject unknown temperature and wind units', async () => {
+    assert.equal((await anon.putCsrf('/api/settings', { temperatureUnit: 'K' })).status, 400)
+    assert.equal((await anon.putCsrf('/api/settings', { windUnit: 'knots' })).status, 400)
+
+    const good = await anon.putCsrf('/api/settings', { temperatureUnit: 'F', windUnit: 'mph' })
+    assert.equal(good.status, 200)
+    const read = await anon.get('/api/settings')
+    assert.equal(read.body.settings.temperatureUnit, 'F')
+    assert.equal(read.body.settings.windUnit, 'mph')
+
+    // Leave the shared settings as the rest of the suite expects to find them.
+    const restored = await anon.putCsrf('/api/settings', { temperatureUnit: 'C', windUnit: 'km/h' })
+    assert.equal(restored.status, 200)
+  })
+
+  await test('Validation: retention run rejects an out-of-range window', async () => {
+    // A negative or unbounded window would delete everything in one call.
+    assert.equal((await anon.postCsrf('/api/data/retention/run', { retentionDays: 0 })).status, 400)
+    assert.equal((await anon.postCsrf('/api/data/retention/run', { retentionDays: -7 })).status, 400)
+    assert.equal((await anon.postCsrf('/api/data/retention/run', { retentionDays: 5000 })).status, 400)
   })
 
   await test('Integrity: alert, location and data-clear operations report real outcomes', async () => {
@@ -486,6 +576,15 @@ async function main(): Promise<void> {
     assert.equal(reread.body.preferences.enabled, false)
     assert.equal(reread.body.preferences.notifyRecovery, false)
     assert.equal(reread.body.preferences.minSeverity, 'HIGH')
+  })
+
+  await test('Relay: plain-HTTP relay endpoints are refused off loopback', async () => {
+    const { emailRelayConfigured } = await import('../static/emailRelay.js')
+    assert.equal(emailRelayConfigured('https://relay.example.com/hook'), true)
+    assert.equal(emailRelayConfigured('http://localhost:8787/hook'), true)
+    assert.equal(emailRelayConfigured('http://127.0.0.1:8787/hook'), true)
+    assert.equal(emailRelayConfigured('http://relay.example.com/hook'), false)
+    assert.equal(emailRelayConfigured('ftp://relay.example.com/hook'), false)
   })
 
   await test('Backup: create, list, reject traversal, and restore a valid snapshot', async () => {

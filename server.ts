@@ -424,20 +424,16 @@ const GEOCODING_TIMEOUT_MS = 9000
  * (and its socket) open indefinitely. The abandoned call is left to settle on
  * its own; the caller gets a rejection here and can answer 502 immediately.
  */
-function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Upstream request timed out.')), timeoutMs)
-    work.then(
-      (value) => {
-        clearTimeout(timer)
-        resolve(value)
-      },
-      (err) => {
-        clearTimeout(timer)
-        reject(err)
-      },
-    )
+async function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('Upstream request timed out.')), timeoutMs)
   })
+  try {
+    return await Promise.race([work, deadline])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export type StaticMode = 'vite' | 'static' | 'none'
@@ -1571,6 +1567,18 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       updates.dataRetentionDays = Math.floor(days)
     }
 
+    // Display units are persisted verbatim and echoed back to every client, so
+    // an unrecognised value would silently render temperatures and wind speeds
+    // in the wrong unit. Whitelist them like every other enum in this surface.
+    if (updates.temperatureUnit !== undefined && !['C', 'F'].includes(updates.temperatureUnit)) {
+      res.status(400).json({ error: "Temperature unit must be 'C' or 'F'." })
+      return
+    }
+    if (updates.windUnit !== undefined && !['km/h', 'mph', 'm/s'].includes(updates.windUnit)) {
+      res.status(400).json({ error: "Wind unit must be 'km/h', 'mph', or 'm/s'." })
+      return
+    }
+
     // Safety thresholds drive every risk decision. The settings form sends
     // `null` for a cleared numeric field, and a non-finite threshold silently
     // disables the comparison it feeds: risk stays LOW and no severe-weather
@@ -1955,6 +1963,26 @@ async function createApp(options: CreateAppOptions = {}): Promise<express.Expres
       res.sendFile(path.join(distPath, 'index.html'))
     })
   }
+
+  // ----------------- TERMINAL ERROR HANDLER -----------------
+  // Must be registered after every route and middleware. Express recognises it
+  // by its four-parameter signature and hands it anything passed to `next`,
+  // including the rejections `wrap` forwards from async handlers. The detail is
+  // logged server-side only: an internal message can leak file paths, SQL,
+  // upstream responses or secret material to any caller.
+  app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+    logger.error('unhandled_request_error', {
+      method: req.method,
+      path: req.path,
+      error: err instanceof Error ? err.stack || err.message : String(err),
+    })
+    if (res.headersSent) {
+      // The response is already on the wire; only the connection can be closed.
+      next(err)
+      return
+    }
+    res.status(500).json({ error: 'Internal server error.' })
+  })
 
   return app
 }
