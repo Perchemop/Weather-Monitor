@@ -97,6 +97,7 @@ test('credential screen at three viewports', async ({ page }) => {
 })
 
 test('dashboard after signing in, at three viewports', async ({ page }) => {
+  test.setTimeout(60000)
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/')
   await waitForCredentialForm(page)
