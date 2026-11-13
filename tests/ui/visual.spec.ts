@@ -42,10 +42,10 @@ async function fillCredentialForm(page: Page, email: string, password: string) {
   if ((await passwordInputs.count()) > 1) {
     await passwordInputs.nth(1).fill(password)
   }
-  // Wait for navigation after form submission
+  // Submit form and wait for dashboard to load (no full page navigation in SPA)
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'networkidle' }),
     page.locator('button[type="submit"]').click(),
+    page.waitForSelector('#nav-tab-settings', { timeout: 30000 }),
   ])
 }
 
