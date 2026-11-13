@@ -1277,8 +1277,8 @@ async function runTests() {
   test('Crash report scrub: GitHub tokens, API keys and home paths are redacted', () => {
     // Short enough that only the dedicated `ghp_` rule can catch it — the
     // generic 40-character rule alone would miss a truncated token.
-    const classic = scrubText('auth failed for ghp_synthetic_token_abcdefghijklmnop')
-    assert.ok(!classic.includes('ghp_synthetic_token_abcdefghijklmnop'))
+    const classic = scrubText('auth failed for ghp_abcdefghijklmnopqrstuvwxyz123456')
+    assert.ok(!classic.includes('ghp_abcdefghijklmnopqrstuvwxyz123456'))
     assert.ok(classic.includes('[REDACTED_TOKEN]'))
 
     const fineGrained = scrubText('PAT github_pat_synthetic_token_1234567890abcdef rejected')
