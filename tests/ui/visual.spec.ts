@@ -74,6 +74,11 @@ test('dashboard after signing in, at three viewports', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/')
   await waitForCredentialForm(page)
+
+  // Check if this is the first run (setup screen) or returning user (login screen)
+  const passwordInputs = page.locator('input[type="password"]')
+  const isFirstRun = (await passwordInputs.count()) > 1
+
   await fillCredentialForm(page, OWNER_EMAIL, OWNER_PASSWORD)
 
   // Wait for the dashboard shell to load (same assumption as tests/ui/smoke.spec.ts).
