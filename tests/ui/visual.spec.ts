@@ -72,12 +72,11 @@ test('dashboard after signing in, at three viewports', async ({ page }) => {
   await waitForCredentialForm(page)
   await fillCredentialForm(page, OWNER_EMAIL, OWNER_PASSWORD)
 
-  // Wait for the dashboard to load (same assumption as tests/ui/smoke.spec.ts).
-  // The hero risk card might be below the fold at 800px height, so scroll to it first.
-  const heroCard = page.locator('#hero-risk-card')
-  await expect(heroCard).toBeAttached({ timeout: 30000 })
-  await heroCard.scrollIntoViewIfNeeded()
-  await expect(heroCard).toBeVisible({ timeout: 30000 })
+  // Wait for the dashboard shell to load (same assumption as tests/ui/smoke.spec.ts).
+  // The hero risk card is data-dependent; assert the always-present shell instead.
+  await expect(page.locator('#nav-tab-settings')).toBeVisible({ timeout: 30000 })
+  await expect(page.locator('#active-alerts-panel')).toBeVisible({ timeout: 30000 })
+  await expect(page.locator('#manual-check-btn')).toBeVisible({ timeout: 30000 })
 
   for (const [name, width, height] of VIEWPORTS) {
     await page.setViewportSize({ width, height })
