@@ -401,7 +401,7 @@ async function runTests() {
 
   // 2. Secret Redaction & Protection Tests
   test('Secret Protection: Weather API key is masked safely', () => {
-    const masked = maskSecret('cdd94d05a2524ab9a04120657261505')
+    const masked = maskSecret('cdd94d05a2524ab9a04120657261505f')
     assert.ok(masked.startsWith('cdd9'))
     assert.ok(masked.endsWith('1505'))
     assert.ok(!masked.includes('4ab9a0412065726'))
@@ -409,9 +409,9 @@ async function runTests() {
 
   test('Secret Protection: Error logs redact raw credentials', () => {
     const rawError =
-      'Connection failed with key=cdd94d05a2524ab9a04120657261505 and token 0123456789abcdef0123456789abcdef'
+      'Connection failed with key=cdd94d05a2524ab9a04120657261505f and token 0123456789abcdef0123456789abcdef'
     const redacted = redactSecretsInError(rawError)
-    assert.ok(!redacted.includes('cdd94d05a2524ab9a04120657261505'), 'API key must be redacted')
+    assert.ok(!redacted.includes('cdd94d05a2524ab9a04120657261505f'), 'API key must be redacted')
     assert.ok(redacted.includes('[REDACTED_API_KEY]'), 'Should contain redaction tag')
   })
 
@@ -1286,8 +1286,8 @@ async function runTests() {
     assert.ok(fineGrained.includes('[REDACTED_TOKEN]'))
 
     // 32-character hex — the shape of the Weather API key.
-    const apiKey = scrubText('key cdd94d05a2524ab9a04120657261505 rejected')
-    assert.ok(!apiKey.includes('cdd94d05a2524ab9a04120657261505'))
+    const apiKey = scrubText('key cdd94d05a2524ab9a04120657261505f rejected')
+    assert.ok(!apiKey.includes('cdd94d05a2524ab9a04120657261505f'))
     assert.ok(apiKey.includes('[REDACTED_TOKEN]'))
 
     const home = scrubText('wrote /home/jane.doe/.weather-monitor/crash.log')
