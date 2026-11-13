@@ -1277,12 +1277,12 @@ async function runTests() {
   test('Crash report scrub: GitHub tokens, API keys and home paths are redacted', () => {
     // Short enough that only the dedicated `ghp_` rule can catch it — the
     // generic 40-character rule alone would miss a truncated token.
-    const classic = scrubText('auth failed for ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234')
-    assert.ok(!classic.includes('ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234'))
+    const classic = scrubText('auth failed for ghp_synthetic_token_abcdefghijklmnop')
+    assert.ok(!classic.includes('ghp_synthetic_token_abcdefghijklmnop'))
     assert.ok(classic.includes('[REDACTED_TOKEN]'))
 
-    const fineGrained = scrubText('PAT github_pat_11ABCDEF0ghijklmnopqrst rejected')
-    assert.ok(!fineGrained.includes('github_pat_11ABCDEF0ghijklmnopqrst'))
+    const fineGrained = scrubText('PAT github_pat_synthetic_token_1234567890abcdef rejected')
+    assert.ok(!fineGrained.includes('github_pat_synthetic_token_1234567890abcdef'))
     assert.ok(fineGrained.includes('[REDACTED_TOKEN]'))
 
     // 32-character hex — the shape of the Weather API key.
@@ -1290,8 +1290,8 @@ async function runTests() {
     assert.ok(!apiKey.includes('cdd94d05a2524ab9a04120657261505f'))
     assert.ok(apiKey.includes('[REDACTED_TOKEN]'))
 
-    const home = scrubText('wrote /home/jane.doe/.weather-monitor/crash.log')
-    assert.ok(!home.includes('/home/jane.doe/.weather-monitor/crash.log'))
+    const home = scrubText('wrote /home/synthetic_user/.weather-monitor/crash.log')
+    assert.ok(!home.includes('/home/synthetic_user/.weather-monitor/crash.log'))
     assert.ok(home.includes('[REDACTED_PATH]'))
 
     const plain = 'Request timed out while fetching the forecast for the site.'
