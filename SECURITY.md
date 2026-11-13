@@ -75,3 +75,11 @@ something counts as a vulnerability here.
 - **Triage:** the project owner (this file's "enforcement" contact).
 - **Dependency updates:** Dependabot; reviewed under the normal PR flow.
 - **Patching:** whoever opens the fix PR; every patch passes the CI gates.
+
+## Residual Risk: Personal Data in PR Refs
+
+The Git history (specifically pull request refs under `refs/pull/*`) contains historical test fixtures with values that resemble personal data (OS home paths, synthetic GitHub tokens, API keys). These values were in test fixtures that have since been replaced with obviously synthetic values, but the original commits remain reachable via GitHub's pull request refs (`refs/pull/*`).
+
+Per guide §II.29.4, these values have been removed from HEAD and the main branch history. However, GitHub's pull request refs cannot be rewritten or deleted via the standard history purge workflow. The Personal Data Scan (§II.29) will report these as findings until GitHub Support purges the PR refs or the refs are otherwise cleaned.
+
+**Residual risk:** Low. The values are synthetic test fixtures (not real personal data), but they resemble real PII patterns. No actual personal data was ever committed.
