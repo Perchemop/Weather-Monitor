@@ -24,18 +24,49 @@ const VIEWPORTS = [
   ['phone', 390, 844],
 ] as const
 
-async function settle(page: Page) {
+async function settle(page) {
   await page.waitForLoadState('networkidle')
   await page.evaluate(
     () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
   )
 }
 
-async function waitForCredentialForm(page: Page) {
+async function waitForCredentialForm(page) {
   await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 20000 })
 }
 
-async function fillCredentialForm(page: Page, email: string, password: string) {
+async function fillCredentialForm(page, email, password) {
+  await page.locator('input[type="email"]').fill(email)
+  const passwordInputs = page.locator('input[type="password"]')
+  await passwordInputs.first().fill(password)
+  if ((await passwordInputs.count()) > 1) {
+    await passwordInputs.nth(1).fill(password)
+  }
+  await page.locator('button[type="submit"]').click()
+}
+
+const OUT = 'snapshots'
+const OWNER_EMAIL = 'owner@local'
+const OWNER_PASSWORD = 'StrongPass123'
+
+const VIEWPORTS = [
+  ['desktop', 1280, 800],
+  ['tablet', 768, 1024],
+  ['phone', 390, 844],
+] as const
+
+async function settle(page) {
+  await page.waitForLoadState('networkidle')
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  )
+}
+
+async function waitForCredentialForm(page) {
+  await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 20000 })
+}
+
+async function fillCredentialForm(page, email, password) {
   await page.locator('input[type="email"]').fill(email)
   const passwordInputs = page.locator('input[type="password"]')
   await passwordInputs.first().fill(password)
@@ -77,6 +108,8 @@ test('dashboard after signing in, at three viewports', async ({ page }) => {
   await expect(heroCard).toBeAttached({ timeout: 30000 })
   await heroCard.scrollIntoViewIfNeeded()
   await expect(heroCard).toBeVisible({ timeout: 30000 })
+
+  for (const [name, width, height] of VIEWPORTS) {
     await page.setViewportSize({ width, height })
     await settle(page)
     const shot = `${OUT}/dashboard-${name}.png`
