@@ -71,9 +71,8 @@ test('dashboard after signing in, at three viewports', async ({ page }) => {
   await waitForCredentialForm(page)
   await fillCredentialForm(page, OWNER_EMAIL, OWNER_PASSWORD)
 
-  // The shell renders whether or not a weather provider answers, so this is
-  // data-independent (same assumption as tests/ui/smoke.spec.ts).
-  await expect(page.locator('nav, [role="navigation"]').first()).toBeVisible({ timeout: 30000 })
+  // Wait for the dashboard to load (same assumption as tests/ui/smoke.spec.ts).
+  await expect(page.locator('#hero-risk-card')).toBeVisible({ timeout: 30000 })
 
   for (const [name, width, height] of VIEWPORTS) {
     await page.setViewportSize({ width, height })
