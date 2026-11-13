@@ -403,7 +403,7 @@ async function runTests() {
   test('Secret Protection: Weather API key is masked safely', () => {
     const masked = maskSecret('cdd94d05a2524ab9a04120657261505f')
     assert.ok(masked.startsWith('cdd9'))
-    assert.ok(masked.endsWith('1505'))
+    assert.ok(masked.endsWith('505f'))
     assert.ok(!masked.includes('4ab9a0412065726'))
   })
 
