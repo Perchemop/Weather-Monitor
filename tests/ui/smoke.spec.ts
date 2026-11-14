@@ -37,20 +37,6 @@ async function fillCredentialForm(page: Page, email: string, password: string) {
  * Intercepts the setup request to inject the bootstrap password (required by
  * the backend but not exposed in the UI). This is a test-only workaround.
  */
-async function injectBootstrapPassword(page: Page) {
-  await page.route('**/api/auth/setup', async (route) => {
-    const request = route.request()
-    const body = request.postDataJSON()
-    if (body && !body.bootstrapPassword) {
-      await route.continue({
-        postData: JSON.stringify({ ...body, bootstrapPassword: BOOTSTRAP_PASSWORD }),
-      })
-      return
-    }
-    await route.continue()
-  })
-}
-
 /**
  * Asserts the authenticated shell renders. Deliberately data-independent: a
  * fresh server has no location, so weather endpoints 404 and the risk /
@@ -67,10 +53,6 @@ async function expectDashboardShell(page: Page) {
 async function ensureAuthenticated(page: Page) {
   await page.goto('/')
   await waitForCredentialForm(page)
-
-  // Intercept setup request to inject bootstrap password (test-only).
-  await injectBootstrapPassword(page)
-
   await fillCredentialForm(page, OWNER_EMAIL, OWNER_PASSWORD)
   await expectDashboardShell(page)
 }
@@ -109,6 +91,20 @@ test.describe('UI Smoke Suite', () => {
         body: JSON.stringify({ current: { temp_c: 22 } }),
       }),
     )
+
+    // Intercept setup request to inject bootstrap password (test-only).
+    // Required because the backend demands it but the UI doesn't expose it.
+    await page.route('**/api/auth/setup', async (route) => {
+      const request = route.request()
+      const body = request.postDataJSON()
+      if (body && !body.bootstrapPassword) {
+        await route.continue({
+          postData: JSON.stringify({ ...body, bootstrapPassword: BOOTSTRAP_PASSWORD }),
+        })
+        return
+      }
+      await route.continue()
+    })
   })
 
   test('first-run setup creates owner', async ({ page }) => {
