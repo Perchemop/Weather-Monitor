@@ -68,6 +68,7 @@ export const ForecastView: React.FC<ForecastViewProps> = ({ hourly, daily, locat
           <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-xs font-mono">
             <button
               onClick={() => setChartMode('wind')}
+              aria-pressed={chartMode === 'wind'}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors ${
                 chartMode === 'wind'
                   ? 'bg-slate-800 text-orange-400 font-bold'
@@ -79,6 +80,7 @@ export const ForecastView: React.FC<ForecastViewProps> = ({ hourly, daily, locat
             </button>
             <button
               onClick={() => setChartMode('rain')}
+              aria-pressed={chartMode === 'rain'}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors ${
                 chartMode === 'rain'
                   ? 'bg-slate-800 text-sky-400 font-bold'
@@ -90,6 +92,7 @@ export const ForecastView: React.FC<ForecastViewProps> = ({ hourly, daily, locat
             </button>
             <button
               onClick={() => setChartMode('temp')}
+              aria-pressed={chartMode === 'temp'}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded transition-colors ${
                 chartMode === 'temp'
                   ? 'bg-slate-800 text-amber-400 font-bold'
@@ -103,7 +106,11 @@ export const ForecastView: React.FC<ForecastViewProps> = ({ hourly, daily, locat
         </div>
 
         {/* Chart Container */}
-        <div className="h-64 sm:h-80 w-full pt-2">
+        <div
+          className="h-64 sm:h-80 w-full pt-2"
+          role="img"
+          aria-label={`36-hour ${chartMode === 'wind' ? 'wind and gusts' : chartMode === 'rain' ? 'precipitation' : 'temperature'} forecast for ${locationName}`}
+        >
           <ResponsiveContainer width="100%" height="100%">
             {chartMode === 'wind' ? (
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>

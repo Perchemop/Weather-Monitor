@@ -120,8 +120,8 @@ LOG_LEVEL=info
 LOG_FORMAT=json
 
 # Optional shared token for scraping Prometheus metrics. When set, GET /metrics
-# accepts `Authorization: Bearer <token>` (or `?token=<token>`) for scrapers;
-# otherwise the endpoint requires an authenticated session.
+# accepts `Authorization: Bearer <token>` for scrapers; otherwise the endpoint
+# requires an authenticated session.
 METRICS_TOKEN=
 
 # Privacy mode: skip the third-party WeatherAPI and use Open-Meteo only
@@ -371,12 +371,14 @@ The server will start on port 3000 (`http://localhost:3000`).
 ### Running the Test Suites
 
 ```bash
-npm test              # both suites
-npm run test:unit     # deterministic engine + utilities (57 checks)
+npm test              # both Node suites (95 checks)
+npm run test:unit     # deterministic engine + utilities (66 checks)
 npm run test:api      # HTTP integration surface (29 checks)
 ```
 
-The suite is now an **86-point** verification run split across two layers:
+The suite is a **95-check** verification run split across two layers, plus a
+separate `ui-tests` job of **7 Playwright DOM smoke tests** (**102 automated
+checks** in total):
 
 - **Unit suite** — deterministic risk calculation (including UV level handling
   and next-6-hour forecast windowing), WeatherAPI→WMO condition mapping,
@@ -434,7 +436,7 @@ docker compose -f docker-compose.release.yml up -d
 Pin a specific version for reproducibility:
 
 ```bash
-IMAGE=ghcr.io/perchemop/weather-monitor:v0.1.2 \
+IMAGE=ghcr.io/perchemop/weather-monitor:v0.1.3 \
   docker compose -f docker-compose.release.yml up -d
 ```
 
@@ -457,6 +459,24 @@ held in memory only for the tab session; reloading clears it. Reports include
 app version, build mode, browser user-agent, redacted error details, and
 operator notes. They never include session cookies, CSRF tokens, passwords, or
 site locations unless the operator types them deliberately.
+
+## Supported platforms
+
+- **Server build** — Linux, macOS and Windows via Node 20+ (`npm ci && npm run
+build && npm start`); the CI matrix covers all three.
+- **Container** — multi-architecture images (`linux/amd64` + `linux/arm64`)
+  published to GHCR.
+- **Browsers (PWA / static build)** — evergreen Chromium, Firefox, Safari and
+  Edge; Web Push requires a push-capable browser.
+- **Serverless static build** — any static host (GitHub Pages workflow
+  included); no backend required.
+
+## Screenshots
+
+Reviewed screenshots are planned to land in this README with the **v1.0**
+release, captured from the built application (dashboard, map, alerts, report).
+Until then, the written walkthroughs above describe the current UI; no
+placeholder or mocked imagery is committed.
 
 ## Community & policies
 

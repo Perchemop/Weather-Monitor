@@ -8,9 +8,17 @@ interface ReportsViewProps {
   current: CurrentWeather | null
   risk: RiskAssessment | null
   alerts: AlertItem[]
+  activeProvider?: string
 }
 
-export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, risk, alerts }) => {
+export const ReportsView: React.FC<ReportsViewProps> = ({
+  location,
+  current,
+  risk,
+  alerts,
+  activeProvider,
+}) => {
+  const reportId = React.useMemo(() => `REP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`, [])
   const handlePrint = () => {
     window.print()
   }
@@ -69,7 +77,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, ris
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-200 border border-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+            disabled={!risk}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-200 border border-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
@@ -77,7 +86,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, ris
 
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-xs font-bold text-slate-950 transition-colors shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+            disabled={!risk}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-xs font-bold text-slate-950 transition-colors shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Print Report</span>
@@ -118,10 +128,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, ris
           </div>
           <div className="flex items-center gap-4 mt-2">
             <div className="text-3xl font-black text-slate-900 tracking-tight">
-              {risk ? risk.level : 'LOW'} WEATHER RISK
+              {risk ? `${risk.level} WEATHER RISK` : 'UNAVAILABLE — data could not be loaded'}
             </div>
             <span className="text-xs font-mono px-2.5 py-1 rounded bg-slate-200 font-bold">
-              Score: {risk?.score || 0} / 100
+              Score: {risk ? `${risk.score} / 100` : '—'}
             </span>
           </div>
           <p className="text-sm text-slate-700 mt-2 font-medium">
@@ -184,14 +194,22 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, ris
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-800">
-              {risk?.affectedActivities.map((act) => (
-                <tr key={act.activity}>
-                  <td className="py-2.5 font-bold">{act.activity}</td>
-                  <td className="py-2.5 font-mono font-semibold">{act.riskLevel}</td>
-                  <td className="py-2.5 text-slate-600 pr-2">{act.reason}</td>
-                  <td className="py-2.5 font-mono text-slate-500">{act.thresholdDetails}</td>
+              {risk ? (
+                risk.affectedActivities.map((act) => (
+                  <tr key={act.activity}>
+                    <td className="py-2.5 font-bold">{act.activity}</td>
+                    <td className="py-2.5 font-mono font-semibold">{act.riskLevel}</td>
+                    <td className="py-2.5 text-slate-600 pr-2">{act.reason}</td>
+                    <td className="py-2.5 font-mono text-slate-500">{act.thresholdDetails}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4} className="py-2.5 text-slate-500 font-mono">
+                    UNAVAILABLE — data could not be loaded
+                  </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -234,8 +252,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ location, current, ris
               <div className="pt-6 text-[11px] text-slate-400">Signature & Date</div>
             </div>
             <div className="text-right">
-              <div>Data Provider: Open-Meteo Operational Meteorological Service</div>
-              <div>Report ID: REP-{Math.random().toString(36).substr(2, 9).toUpperCase()}</div>
+              <div>{activeProvider ? `Data Provider: ${activeProvider}` : 'Provider: see Settings'}</div>
+              <div>Report ID: {reportId}</div>
             </div>
           </div>
         </div>

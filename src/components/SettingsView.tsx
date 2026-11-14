@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { OwnerSettings, RiskThresholds, SecretsStatus, SessionInfo, UserRole } from '../types'
 import { useToast } from './ToastProvider'
+import Modal from './Modal'
 import { apiFetch } from '../utils/api'
 import { STATIC_MODE } from '../static/mode'
 import { requestNotificationPermission } from '../static/notifications'
@@ -162,6 +163,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
   const [reportOpen, setReportOpen] = useState(false)
   const [reportNotes, setReportNotes] = useState('')
   const [reportPreviewShown, setReportPreviewShown] = useState(false)
+  useEffect(() => {
+    if (reportOpen) setReportPreviewShown(true)
+    else setReportPreviewShown(false)
+  }, [reportOpen])
   const [reportSubmitting, setReportSubmitting] = useState(false)
   const [reportError, setReportError] = useState<string | null>(null)
 
@@ -937,6 +942,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
             <button
               type="button"
               key={tab.id}
+              aria-pressed={isActive}
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-mono font-medium transition-all whitespace-nowrap cursor-pointer ${
                 isActive
@@ -961,8 +967,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
               <div>
-                <label className="text-slate-400 block mb-1">Supervisor Display Name:</label>
+                <label htmlFor="owner-name" className="text-slate-400 block mb-1">
+                  Supervisor Display Name:
+                </label>
                 <input
+                  id="owner-name"
                   type="text"
                   value={settings.ownerName}
                   onChange={(e) => setSettings({ ...settings, ownerName: e.target.value })}
@@ -971,8 +980,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Alert Destination Email:</label>
+                <label htmlFor="owner-email" className="text-slate-400 block mb-1">
+                  Alert Destination Email:
+                </label>
                 <input
+                  id="owner-email"
                   type="email"
                   value={settings.ownerEmail}
                   onChange={(e) => setSettings({ ...settings, ownerEmail: e.target.value })}
@@ -983,8 +995,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-800 text-xs font-mono">
               <div>
-                <label className="text-slate-400 block mb-1">Temperature Unit:</label>
+                <label htmlFor="temperature-unit" className="text-slate-400 block mb-1">
+                  Temperature Unit:
+                </label>
                 <select
+                  id="temperature-unit"
                   value={settings.temperatureUnit}
                   onChange={(e) => setSettings({ ...settings, temperatureUnit: e.target.value as 'C' | 'F' })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
@@ -995,8 +1010,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Wind Speed & Gust Unit:</label>
+                <label htmlFor="wind-unit" className="text-slate-400 block mb-1">
+                  Wind Speed & Gust Unit:
+                </label>
                 <select
+                  id="wind-unit"
                   value={settings.windUnit}
                   onChange={(e) =>
                     setSettings({ ...settings, windUnit: e.target.value as 'km/h' | 'mph' | 'm/s' })
@@ -1040,6 +1058,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                   <input
                     type="range"
+                    aria-label="Safety threshold"
                     min="20"
                     max="80"
                     value={settings.thresholds.windWarning}
@@ -1055,6 +1074,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                   <input
                     type="range"
+                    aria-label="Safety threshold"
                     min="30"
                     max="90"
                     value={settings.thresholds.windHigh}
@@ -1070,6 +1090,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                   <input
                     type="range"
+                    aria-label="Safety threshold"
                     min="40"
                     max="110"
                     value={settings.thresholds.windCritical}
@@ -1094,6 +1115,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                   <input
                     type="range"
+                    aria-label="Safety threshold"
                     min="25"
                     max="90"
                     value={settings.thresholds.gustWarning}
@@ -1109,6 +1131,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                   <input
                     type="range"
+                    aria-label="Safety threshold"
                     min="35"
                     max="100"
                     value={settings.thresholds.gustHigh}
@@ -1124,6 +1147,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                   <input
                     type="range"
+                    aria-label="Safety threshold"
                     min="50"
                     max="130"
                     value={settings.thresholds.gustCritical}
@@ -1143,6 +1167,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                   <input
                     type="range"
+                    aria-label="Safety threshold"
                     min="20"
                     max="90"
                     value={settings.thresholds.rainProbWarning}
@@ -1156,6 +1181,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                   <input
                     type="range"
+                    aria-label="Safety threshold"
                     min="1"
                     max="20"
                     value={settings.thresholds.rainAmountWarning}
@@ -1175,6 +1201,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                   <input
                     type="range"
+                    aria-label="Safety threshold"
                     min="28"
                     max="45"
                     value={settings.thresholds.heatWarning}
@@ -1188,6 +1215,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                   <input
                     type="range"
+                    aria-label="Safety threshold"
                     min="32"
                     max="50"
                     value={settings.thresholds.heatCritical}
@@ -1211,8 +1239,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
               <div>
-                <label className="text-slate-400 block mb-1">Monitoring Interval:</label>
+                <label htmlFor="monitor-interval" className="text-slate-400 block mb-1">
+                  Monitoring Interval:
+                </label>
                 <select
+                  id="monitor-interval"
                   value={settings.monitorIntervalMinutes}
                   onChange={(e) =>
                     setSettings({ ...settings, monitorIntervalMinutes: Number(e.target.value) })
@@ -1228,8 +1259,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Alert Re-notification Cooldown:</label>
+                <label htmlFor="alert-cooldown" className="text-slate-400 block mb-1">
+                  Alert Re-notification Cooldown:
+                </label>
                 <select
+                  id="alert-cooldown"
                   value={settings.alertCooldownMinutes}
                   onChange={(e) => setSettings({ ...settings, alertCooldownMinutes: Number(e.target.value) })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
@@ -1249,7 +1283,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                     type="checkbox"
                     checked={settings.emailAlertsEnabled}
                     onChange={(e) => setSettings({ ...settings, emailAlertsEnabled: e.target.checked })}
-                    className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-amber-500"
+                    className="w-4 h-4 rounded bg-slate-950 border-slate-700 accent-amber-500 focus:ring-amber-500"
                   />
                   <span className="text-xs font-mono text-slate-200">
                     Enable Automated Email Dispatches when Thresholds are Breached
@@ -1264,7 +1298,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   onChange={(e) =>
                     setSettings({ ...settings, recoveryNotificationsEnabled: e.target.checked })
                   }
-                  className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-amber-500"
+                  className="w-4 h-4 rounded bg-slate-950 border-slate-700 accent-amber-500 focus:ring-amber-500"
                 />
                 <span className="text-xs font-mono text-slate-200">
                   Send All-Clear Recovery Notifications when Weather Returns to Safe Limits
@@ -1322,8 +1356,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 browser-only.
               </p>
               <div>
-                <label className="text-slate-400 block mb-1 text-xs font-mono">Relay Webhook URL:</label>
+                <label htmlFor="relay-url" className="text-slate-400 block mb-1 text-xs font-mono">
+                  Relay Webhook URL:
+                </label>
                 <input
+                  id="relay-url"
                   type="url"
                   placeholder="https://your-relay.workers.dev/alert"
                   value={settings.alertWebhookUrl || ''}
@@ -1518,10 +1555,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
             </p>
 
             <div className="flex items-center gap-3">
-              <label className="text-2xs font-mono uppercase tracking-wider text-slate-400 shrink-0">
+              <label
+                htmlFor="retention-days"
+                className="text-2xs font-mono uppercase tracking-wider text-slate-400 shrink-0"
+              >
                 Observation retention (days)
               </label>
               <input
+                id="retention-days"
                 type="number"
                 min={1}
                 max={3650}
@@ -1609,8 +1650,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
               </div>
 
               <div>
-                <label className="text-slate-400 block mb-1">Current Master Password:</label>
+                <label htmlFor="current-password" className="text-slate-400 block mb-1">
+                  Current Master Password:
+                </label>
                 <input
+                  id="current-password"
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
@@ -1622,8 +1666,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 block mb-1">New Password:</label>
+                  <label htmlFor="new-password" className="text-slate-400 block mb-1">
+                    New Password:
+                  </label>
                   <input
+                    id="new-password"
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -1633,8 +1680,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 block mb-1">Confirm New Password:</label>
+                  <label htmlFor="confirm-password" className="text-slate-400 block mb-1">
+                    Confirm New Password:
+                  </label>
                   <input
+                    id="confirm-password"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -1705,8 +1755,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 </div>
                 <div className="flex items-end gap-3">
                   <div>
-                    <label className="text-slate-400 block mb-1">6-digit code:</label>
+                    <label htmlFor="mfa-code" className="text-slate-400 block mb-1">
+                      6-digit code:
+                    </label>
                     <input
+                      id="mfa-code"
                       type="text"
                       inputMode="numeric"
                       maxLength={6}
@@ -1746,8 +1799,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                 </p>
                 <div className="flex items-end gap-3">
                   <div>
-                    <label className="text-slate-400 block mb-1">Confirm password to disable:</label>
+                    <label htmlFor="mfa-disable-password" className="text-slate-400 block mb-1">
+                      Confirm password to disable:
+                    </label>
                     <input
+                      id="mfa-disable-password"
                       type="password"
                       value={mfaDisablePassword}
                       onChange={(e) => setMfaDisablePassword(e.target.value)}
@@ -2085,7 +2141,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
                   </div>
                 )}
                 {ghPollMsg && <p className="text-xs text-red-400">{ghPollMsg}</p>}
-                <p className="text-xs text-slate-500">State: {ghPollState}</p>
+                <p className="text-xs text-slate-500">
+                  Status: {ghPollState === 'pending' ? 'Waiting for authorisation…' : ghPollState}
+                </p>
               </div>
             )}
 
@@ -2109,92 +2167,111 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsSaved, use
 
       {/* Report preview modal */}
       {reportOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-          <div className="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
-            <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
-              Report preview
-            </h3>
-            <textarea
-              className="w-full h-24 bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs"
-              value={reportNotes}
-              onChange={(e) => setReportNotes(e.target.value)}
-              placeholder="Notes (editable)"
-            />
-            {(() => {
-              const payload = buildReportPayload(
-                {
-                  appVersion: APP_VERSION,
-                  buildMode: STATIC_MODE ? 'Static (browser build)' : 'Server build',
-                  userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
-                  notes: reportNotes,
-                },
-                'bug',
-              )
-              // mark preview shown
-              setTimeout(() => setReportPreviewShown(true), 0)
-              return (
-                <div className="space-y-2">
-                  <div className="text-xs text-slate-400">Title: {payload.title}</div>
-                  <pre className="text-xs text-slate-300 bg-slate-950 p-3 rounded-lg max-h-64 overflow-auto whitespace-pre-wrap">
-                    {payload.body}
-                  </pre>
-                  {reportError && <p className="text-xs text-red-400">{reportError}</p>}
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setReportOpen(false)}
-                      className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-semibold"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void submitReport()}
-                      disabled={!reportPreviewShown || reportSubmitting}
-                      className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold disabled:opacity-50"
-                    >
-                      {reportSubmitting ? 'Submitting...' : 'Submit'}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-600">
-                    Fallback:{' '}
-                    <a href={reportIssueUrl} target="_blank" rel="noreferrer" className="underline">
-                      Open pre-filled GitHub issue
-                    </a>
+        <Modal
+          isOpen={reportOpen}
+          onClose={() => setReportOpen(false)}
+          labelledBy="report-preview-title"
+          className="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4"
+        >
+          <h3
+            id="report-preview-title"
+            className="text-sm font-mono font-bold text-white uppercase tracking-wider"
+          >
+            Report preview
+          </h3>
+          <label htmlFor="report-notes" className="sr-only">
+            Report notes
+          </label>
+          <textarea
+            id="report-notes"
+            className="w-full h-24 bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 text-xs"
+            value={reportNotes}
+            onChange={(e) => setReportNotes(e.target.value)}
+            placeholder="Notes (editable)"
+          />
+          {(() => {
+            const payload = buildReportPayload(
+              {
+                appVersion: APP_VERSION,
+                buildMode: STATIC_MODE ? 'Static (browser build)' : 'Server build',
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+                notes: reportNotes,
+              },
+              'bug',
+            )
+            // mark preview shown
+            return (
+              <div className="space-y-2">
+                <div className="text-xs text-slate-400">Title: {payload.title}</div>
+                <pre className="text-xs text-slate-300 bg-slate-950 p-3 rounded-lg max-h-64 overflow-auto whitespace-pre-wrap">
+                  {payload.body}
+                </pre>
+                {reportError && (
+                  <p role="alert" className="text-xs text-red-400">
+                    {reportError}
                   </p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReportOpen(false)}
+                    className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submitReport()}
+                    disabled={!reportPreviewShown || reportSubmitting}
+                    className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold disabled:opacity-50"
+                  >
+                    {reportSubmitting ? 'Submitting...' : 'Submit'}
+                  </button>
                 </div>
-              )
-            })()}
-          </div>
-        </div>
+                <p className="text-[11px] text-slate-600">
+                  Fallback:{' '}
+                  <a href={reportIssueUrl} target="_blank" rel="noreferrer" className="underline">
+                    Open pre-filled GitHub issue
+                  </a>
+                </p>
+              </div>
+            )
+          })()}
+        </Modal>
       )}
 
       {/* In-App Confirmation Modal (safe for iframes) */}
       {confirmModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs">
-          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 animate-modal-in duration-150">
-            <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
-              {confirmModal.title}
-            </h3>
-            <p className="text-xs text-slate-400 font-mono leading-relaxed">{confirmModal.message}</p>
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-                className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-semibold transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmModal.onConfirm}
-                className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold transition-colors cursor-pointer"
-              >
-                Confirm
-              </button>
-            </div>
+        <Modal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+          labelledBy="confirm-modal-title"
+          className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 animate-modal-in duration-150"
+        >
+          <h3
+            id="confirm-modal-title"
+            className="text-sm font-mono font-bold text-white uppercase tracking-wider"
+          >
+            {confirmModal.title}
+          </h3>
+          <p className="text-xs text-slate-400 font-mono leading-relaxed">{confirmModal.message}</p>
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono font-semibold transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmModal.onConfirm}
+              className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-mono font-bold transition-colors cursor-pointer"
+            >
+              Confirm
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

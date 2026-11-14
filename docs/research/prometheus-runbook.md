@@ -1,6 +1,8 @@
 # Research: Prometheus Alert Examples + Operations Runbook
 
-Status: **ready for work** (docs + validated example rules). Target milestone:
+Status: **approved (human gate 2026-10-24) and implemented** — `docs/runbook.md`
++ `deploy/prometheus/alerts.example.yml` shipped in 0.1.3. Note kept as the
+original design record. Target milestone:
 0.2.x.
 
 ## Behaviour (original summary)

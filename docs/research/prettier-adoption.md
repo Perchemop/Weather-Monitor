@@ -1,6 +1,7 @@
 # Research: Opinionated Formatter (Prettier) Adoption
 
-Status: **ready for work** (its own release slice; no behavioural change).
+Status: **approved (human gate 2026-10-24) and implemented** — Prettier is the
+style authority since 0.1.1 (PR #6). Note kept as the original design record.
 Target milestone: 0.2.x.
 
 ## Behaviour (original summary)
@@ -33,7 +34,7 @@ minimal:
 1. One dedicated PR: add devDependency + config + `format`/`format:fix`
    scripts; the whole-repo reformat is that PR's only change.
 2. The reformat commit produces **no behavioural change**: type-check, both
-   test suites (88 checks) and builds pass without test edits.
+   test suites (95 checks: 66 system + 29 integration) and builds pass without test edits.
 3. CI gains a Prettier check (either replacing `format-check`'s style duties
    or running alongside it — hygiene checks stay either way).
 4. `docs/development.md` formatting rules updated to describe the two layers

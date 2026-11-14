@@ -5,8 +5,10 @@ requirements.
 
 ## Assumptions
 
-- **A-01 Licence.** The project is assumed to be released under MIT. A `LICENSE`
-  file has been added on that basis; confirm or replace.
+- **A-01 Licence — RESOLVED (2026-10-24).** Released under the MIT licence,
+  confirmed as a deliberate MIT-only choice (not "MIT OR Apache-2.0") and
+  recorded in `DECISIONS.md` D-28 (§26.6) and `ATTRIBUTION.md`. No longer an
+  open assumption.
 - **A-02 Deployment.** The default target is a private, potentially
   plain-HTTP local enclave, so Secure cookies and HSTS are opt-in
   (`SECURE_COOKIES`, `ENABLE_HSTS`). HTTPS deployments must enable both.
@@ -43,10 +45,10 @@ requirements.
 
 ## Questions for the owner
 
-- **Q-01** Confirm the licence (MIT assumed) and the copyright holder for the
-  `LICENSE` file.
-- **Q-02** Should the container build target multiple architectures
-  (`linux/amd64` + `linux/arm64`) in CI?
+- **Q-01 — RESOLVED (2026-10-24).** Licence confirmed: MIT-only, with the
+  copyright holder recorded in `LICENSE`. See `DECISIONS.md` D-28.
+- **Q-02 — RESOLVED (2026-10-24).** Yes — the container build targets
+  `linux/amd64` + `linux/arm64` in CI; verified at v0.1.2.
 - **Q-03** Is an SMS or other delivery channel required in addition to Web Push
   and SMTP?
 - **Q-04** Should historical data be exportable as CSV beyond the current

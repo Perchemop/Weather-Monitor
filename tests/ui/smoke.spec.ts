@@ -1,7 +1,9 @@
 import { test, expect, type Page } from '@playwright/test'
 
 const OWNER_PASSWORD = 'StrongPass123'
-const OWNER_EMAIL = 'owner@local'
+// Email must have dotted domain per server validation (/api/auth/setup).
+const OWNER_EMAIL = 'owner@local.host'
+const BOOTSTRAP_PASSWORD = 'StrongPass123' // Matches INITIAL_OWNER_PASSWORD in playwright.config.ts
 // The user-creation API requires a dotted domain (`/api/users` email policy).
 const VIEWER_EMAIL = 'viewer@local.host'
 const VIEWER_PASSWORD = 'ViewerPass123'
@@ -31,6 +33,10 @@ async function fillCredentialForm(page: Page, email: string, password: string) {
   await page.locator('button[type="submit"]').click()
 }
 
+/**
+ * Intercepts the setup request to inject the bootstrap password (required by
+ * the backend but not exposed in the UI). This is a test-only workaround.
+ */
 /**
  * Asserts the authenticated shell renders. Deliberately data-independent: a
  * fresh server has no location, so weather endpoints 404 and the risk /
@@ -85,6 +91,20 @@ test.describe('UI Smoke Suite', () => {
         body: JSON.stringify({ current: { temp_c: 22 } }),
       }),
     )
+
+    // Intercept setup request to inject bootstrap password (test-only).
+    // Required because the backend demands it but the UI doesn't expose it.
+    await page.route('**/api/auth/setup', async (route) => {
+      const request = route.request()
+      const body = request.postDataJSON()
+      if (body && !body.bootstrapPassword) {
+        await route.continue({
+          postData: JSON.stringify({ ...body, bootstrapPassword: BOOTSTRAP_PASSWORD }),
+        })
+        return
+      }
+      await route.continue()
+    })
   })
 
   test('first-run setup creates owner', async ({ page }) => {
@@ -148,7 +168,9 @@ test.describe('UI Smoke Suite', () => {
     await ensureAuthenticated(page)
     await page.locator('#nav-tab-settings').click()
     await page.getByRole('button', { name: 'About', exact: true }).click()
-    await expect(page.getByText(/v0\.1\.0/).first()).toBeVisible()
+    // Keep in step with `package.json`'s version (the release workflow fails if
+    // the tag and `package.json` disagree).
+    await expect(page.getByText(/v0\.1\.3/).first()).toBeVisible()
   })
 
   test('role gating Viewer lacks owner-only tabs', async ({ page }) => {

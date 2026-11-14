@@ -37,7 +37,10 @@ jobs:
         shell: bash
         run: |
           BASE_REF="${{ github.base_ref || 'main' }}"
-          git fetch --no-tags origin "$BASE_REF" --depth=50 || true
+          # No `|| true`: a failed fetch means the base ref is missing and the
+          # changed-file check would silently degrade to a whole-tree scan.
+          git fetch --no-tags origin "$BASE_REF" --depth=50
+          git rev-parse --verify "origin/$BASE_REF"
           node scripts/check-format.mjs --changed-from "origin/$BASE_REF"
 
       - name: Style check (Prettier)
@@ -180,6 +183,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Browser downloads dominate this job; the cache key tracks the lockfile
+      # so a Playwright upgrade refetches and a code-only change does not.
+      - name: Cache Playwright browsers
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -213,3 +226,55 @@ jobs:
 
       - name: Build container image
         run: docker build -t construction-weather-monitor:ci .
+
+  # Workflow hygiene (guide §4): lint every workflow file so an unpinned action,
+  # a bad expression or an unsafe `run:` block cannot reach the default branch.
+  # actionlint runs shellcheck over `run:` blocks automatically (shellcheck is
+  # preinstalled on ubuntu runners).
+  workflow-lint:
+    name: workflow-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install actionlint (pinned release, checksum-verified)
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          # sha256 of actionlint_1.7.12_linux_amd64.tar.gz
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          curl -sSfL -o actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint
+          ./actionlint --version
+
+      - name: Lint workflows (actionlint + shellcheck)
+        run: ./actionlint -color
+
+  # A lockfile that changes on its own is unreviewable: the diff is generated
+  # and hides dependency swaps. Require it to travel with package.json.
+  lockfile-integrity:
+    name: lockfile-integrity
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history so the merge base resolves)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: package-lock.json must change together with package.json
+        shell: bash
+        run: |
+          BASE_REF="${{ github.base_ref }}"
+          base="$(git merge-base "origin/$BASE_REF" HEAD)"
+          changed="$(git diff --name-only "$base" HEAD)"
+          echo "changed files:"; echo "$changed"
+          if grep -qx 'package-lock.json' <<< "$changed" && ! grep -qx 'package.json' <<< "$changed"; then
+            echo "::error::package-lock.json changed without package.json — regenerate it together with the manifest."
+            exit 1
+          fi
+          echo "lockfile/manifest pairing is consistent."

@@ -60,7 +60,9 @@ export function scrubText(input: string): string {
   out = out.replace(/ghp_[A-Za-z0-9]{20,}/g, '[REDACTED_TOKEN]')
   out = out.replace(/github_pat_[A-Za-z0-9_]{20,}/g, '[REDACTED_TOKEN]')
   out = out.replace(/\b[A-Za-z0-9_-]{40,}\b/g, '[REDACTED_TOKEN]')
-  // Redact 32-char hex.
+  // Redact 32-char hex: word-boundary aware regex.
+  // \b matches at word boundaries (transition between word/non-word chars).
+  // Works for hex surrounded by spaces/punctuation/string boundaries.
   out = out.replace(/\b[a-f0-9]{32}\b/gi, '[REDACTED_TOKEN]')
   return out
 }

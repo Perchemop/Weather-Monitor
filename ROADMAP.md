@@ -10,7 +10,7 @@ research note (where applicable), owner of the next step, and readiness.
 
 First tagged release; every claim below is backed by the CI workflow
 (format-check, build-test matrix on Windows/macOS/Linux, docker, Pages deploy)
-and the 88-check automated suite.
+and the automated suite (66 system + 29 integration + 7 UI smoke = 102 checks).
 
 | Capability                                                                       | State | Evidence                                                 |
 | -------------------------------------------------------------------------------- | ----- | -------------------------------------------------------- |
@@ -36,10 +36,10 @@ and the 88-check automated suite.
 
 ## Stage 0.2.x — hardening & shared-capability deepening
 
-Every item now carries its research note (`docs/research/<capability>.md`).
-**All notes await the human gate** (guide §2.3/§8.4): nothing below is
-implemented until the human approves the note it depends on. Approval
-criteria: original wording, URLs present, no copyrighted paste, no UI cloning.
+Every item carried its research note (`docs/research/<capability>.md`). **The
+human gate passed 2026-10-24** (guide §2.3/§8.4) — all five notes are approved
+and every item below is implemented and verified (see `CHANGELOG.md` 0.1.3 and
+the stage table).
 
 | #   | Item                                                                 | Research note                                                                    | Next step                                | Ready-for-work                                          |
 | --- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------- |

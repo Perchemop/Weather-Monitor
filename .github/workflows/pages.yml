@@ -5,7 +5,12 @@ name: Deploy Static App to GitHub Pages
 # persists everything in the browser (IndexedDB) — no backend required.
 
 on:
-  push:
+  # Gate on CI: a bare `push` trigger raced the CI workflow, so a commit whose
+  # checks later failed could still be published to Pages. Only a completed,
+  # successful CI run on main (or an explicit manual dispatch) deploys.
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -22,7 +27,9 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -58,6 +65,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

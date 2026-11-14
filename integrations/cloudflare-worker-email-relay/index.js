@@ -9,14 +9,19 @@
  * Request body (from the app):
  *   { to?, subject, text, severity, alertId, locationName }
  *
+ *   `to` is accepted for compatibility and deliberately ignored: every relayed
+ *   alert goes to the configured ALERT_TO, so a caller can never use this worker
+ *   as an open relay or a spam amplifier pointing at third parties.
+ *
  * Configuration (wrangler secrets / vars):
  *   EMAIL_FROM       required  verified sender, e.g. "alerts@yourdomain.com"
- *   ALERT_TO         optional  default recipient if the request omits `to`
+ *   ALERT_TO         required  recipient of every relayed alert
+ *   RELAY_SECRET     required  shared secret; callers must send it in the
+ *                              `X-Relay-Secret` header. A query-string secret is
+ *                              not accepted: URLs leak into proxy, browser and
+ *                              referrer logs.
  *   RESEND_API_KEY   optional* Resend API key (https://resend.com — free tier)
  *   BREVO_API_KEY    optional* Brevo API key  (https://brevo.com  — free tier)
- *   RELAY_SECRET     optional  shared secret; when set, callers must send it as
- *                              the `X-Relay-Secret` header or a `?secret=` query
- *                              parameter
  *   ALLOWED_ORIGIN   optional  CORS origin (defaults to "*")
  *
  *   * set exactly one provider key.
@@ -40,6 +45,32 @@ async function safeText(res) {
   }
 }
 
+/**
+ * Constant-time shared-secret comparison.
+ *
+ * `===` on a secret leaks it one character at a time to anyone who can measure
+ * response timing; hashing both sides first makes the comparison's work
+ * independent of where the first difference lies.
+ */
+async function secretsMatch(provided, expected) {
+  if (typeof provided !== 'string' || typeof expected !== 'string') return false
+  if (provided.length === 0 || expected.length === 0) return false
+
+  const encoder = new TextEncoder()
+  const [digestA, digestB] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(provided)),
+    crypto.subtle.digest('SHA-256', encoder.encode(expected)),
+  ])
+  const bytesA = new Uint8Array(digestA)
+  const bytesB = new Uint8Array(digestB)
+
+  let difference = 0
+  for (let i = 0; i < bytesA.length; i++) {
+    difference |= bytesA[i] ^ bytesB[i]
+  }
+  return difference === 0
+}
+
 export default {
   async fetch(request, env) {
     const cors = {
@@ -52,11 +83,16 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
     if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405, cors)
 
-    // Optional shared-secret gate.
-    if (env.RELAY_SECRET) {
-      const provided =
-        request.headers.get('X-Relay-Secret') || new URL(request.url).searchParams.get('secret')
-      if (provided !== env.RELAY_SECRET) return json({ error: 'Unauthorized' }, 401, cors)
+    // Fail closed. Without a configured secret this endpoint is an open relay:
+    // anyone who learns the URL could send mail through the operator's provider
+    // account, on the operator's quota and reputation.
+    if (!env.RELAY_SECRET) {
+      return json({ error: 'Relay is not configured: RELAY_SECRET is required' }, 503, cors)
+    }
+    const provided = request.headers.get('X-Relay-Secret') || ''
+    const authorized = await secretsMatch(provided, env.RELAY_SECRET)
+    if (!authorized) {
+      return json({ error: 'Unauthorized' }, 401, cors)
     }
 
     let body
@@ -66,12 +102,17 @@ export default {
       return json({ error: 'Invalid JSON body' }, 400, cors)
     }
 
-    const to = body.to || env.ALERT_TO
+    // The recipient is never taken from the request (see the header comment).
+    const to = env.ALERT_TO
     const subject = String(body.subject || 'Weather alert').slice(0, MAX_SUBJECT)
     const text = String(body.text || '').slice(0, MAX_BODY)
 
-    if (!to) return json({ error: 'No recipient (set ALERT_TO or include `to`)' }, 400, cors)
-    if (!env.EMAIL_FROM) return json({ error: 'EMAIL_FROM is not configured' }, 500, cors)
+    if (!to) {
+      return json({ error: 'No recipient configured: ALERT_TO is required' }, 500, cors)
+    }
+    if (!env.EMAIL_FROM) {
+      return json({ error: 'EMAIL_FROM is not configured' }, 500, cors)
+    }
 
     try {
       if (env.RESEND_API_KEY) {

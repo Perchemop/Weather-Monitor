@@ -12,7 +12,7 @@ Complete before tagging or merging a release-worthy branch.
 - [ ] `.ci-required.txt` lists the authoritative checks for this commit.
 - [ ] `docker` job is green.
 - [ ] Type-check passes (`npm run lint` in CI).
-- [ ] Both suites pass: 57 system + 29 integration tests.
+- [ ] Both suites pass: 66 system + 29 integration checks.
 - [ ] Production build artefacts exist (`dist/server.cjs`, `dist/index.html`,
       `dist/sw.js`).
 - [ ] Static build artefacts exist (`dist-static/index.html`,

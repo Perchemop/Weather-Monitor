@@ -164,5 +164,5 @@ via logs `auth_lockout` events.
 ## Related
 
 * Prometheus alerting rules: `deploy/prometheus/alerts.example.yml`
-* Metrics endpoint implementation: `server.ts` (line ~466)
-* Data persistence design: `docs/design/db.md` (if present)
+* Metrics endpoint implementation: `server.ts` (metrics handler)
+* Data persistence design: see `docs/architecture.md` and `src/database/db.ts` (no separate `docs/design/db.md`).

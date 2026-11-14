@@ -15,8 +15,10 @@ import { test, expect, type Page } from '@playwright/test'
  */
 
 const OUT = 'snapshots'
-const OWNER_EMAIL = 'owner@local'
+// Email must have dotted domain per server validation (/api/auth/setup).
+const OWNER_EMAIL = 'owner@local.host'
 const OWNER_PASSWORD = 'StrongPass123'
+const BOOTSTRAP_PASSWORD = 'StrongPass123' // Matches INITIAL_OWNER_PASSWORD in playwright.config.ts
 
 const VIEWPORTS = [
   ['desktop', 1280, 800],
@@ -35,6 +37,11 @@ async function waitForCredentialForm(page: Page) {
   await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 20000 })
 }
 
+/**
+ * Fills and submits the credential form. Handles both first-run setup (email +
+ * password + confirmation) and returning-user login (email + password).
+ * Does NOT wait for the dashboard — the caller does that.
+ */
 async function fillCredentialForm(page: Page, email: string, password: string) {
   await page.locator('input[type="email"]').fill(email)
   const passwordInputs = page.locator('input[type="password"]')
@@ -43,6 +50,18 @@ async function fillCredentialForm(page: Page, email: string, password: string) {
     await passwordInputs.nth(1).fill(password)
   }
   await page.locator('button[type="submit"]').click()
+}
+
+/**
+ * Asserts the authenticated shell renders. Deliberately data-independent: a
+ * fresh server has no location, so weather endpoints 404 and the risk /
+ * conditions panels stay in their skeleton state. The navigation bar and the
+ * alerts panel render regardless of provider availability.
+ */
+async function expectDashboardShell(page: Page) {
+  await expect(page.locator('#nav-tab-settings')).toBeVisible({ timeout: 30000 })
+  await expect(page.locator('#active-alerts-panel')).toBeVisible({ timeout: 30000 })
+  await expect(page.locator('#manual-check-btn')).toBeVisible({ timeout: 30000 })
 }
 
 test('credential screen at three viewports', async ({ page }) => {
@@ -66,14 +85,30 @@ test('credential screen at three viewports', async ({ page }) => {
 })
 
 test('dashboard after signing in, at three viewports', async ({ page }) => {
+  test.setTimeout(60000)
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/')
   await waitForCredentialForm(page)
+
+  // Intercept the setup request to inject the bootstrap password (required by
+  // the backend but not exposed in the UI). This is a test-only workaround.
+  await page.route('**/api/auth/setup', async (route) => {
+    const request = route.request()
+    const body = request.postDataJSON()
+    if (body && !body.bootstrapPassword) {
+      await route.continue({
+        postData: JSON.stringify({ ...body, bootstrapPassword: BOOTSTRAP_PASSWORD }),
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  // Fill and submit the credential form (handles both setup and login modes)
   await fillCredentialForm(page, OWNER_EMAIL, OWNER_PASSWORD)
 
-  // The shell renders whether or not a weather provider answers, so this is
-  // data-independent (same assumption as tests/ui/smoke.spec.ts).
-  await expect(page.locator('nav, [role="navigation"]').first()).toBeVisible({ timeout: 30000 })
+  // Wait for the dashboard shell to load
+  await expectDashboardShell(page)
 
   for (const [name, width, height] of VIEWPORTS) {
     await page.setViewportSize({ width, height })

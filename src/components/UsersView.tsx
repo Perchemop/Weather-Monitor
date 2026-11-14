@@ -421,6 +421,7 @@ export function UsersView() {
                       onClick={() => handleToggleActive(user)}
                       disabled={isBusy}
                       title={user.active ? 'Deactivate account' : 'Reactivate account'}
+                      aria-label={user.active ? 'Deactivate account' : 'Reactivate account'}
                       className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       {user.active ? (
@@ -437,6 +438,7 @@ export function UsersView() {
                         setResetPassword('')
                       }}
                       title="Reset password"
+                      aria-label="Reset password"
                       className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       <KeyRound className="w-3.5 h-3.5" />
@@ -447,6 +449,7 @@ export function UsersView() {
                       onClick={() => handleDelete(user)}
                       disabled={isBusy}
                       title="Delete account"
+                      aria-label="Delete account"
                       className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950/60 border border-slate-700 hover:border-red-800 text-slate-400 hover:text-red-300 transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

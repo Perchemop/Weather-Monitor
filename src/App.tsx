@@ -627,9 +627,18 @@ export default function App() {
       />
 
       {/* Main View Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 sm:py-7 space-y-5">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-1.5 focus:bg-amber-500 focus:text-slate-950 focus:rounded"
+      >
+        Skip to content
+      </a>
+      <main id="main" className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 sm:py-7 space-y-5">
         {!isOnline && (
-          <div className="flex items-center gap-2.5 rounded-xl border border-amber-800/50 bg-amber-950/30 p-3 text-xs text-amber-200">
+          <div
+            role="status"
+            className="flex items-center gap-2.5 rounded-xl border border-amber-800/50 bg-amber-950/30 p-3 text-xs text-amber-200"
+          >
             <WifiOff className="h-4 w-4 shrink-0 text-amber-400" />
             <span>
               Offline — showing the last cached snapshot. Live checks resume automatically when the connection
@@ -640,6 +649,7 @@ export default function App() {
         {!isDashboardLoading && isSiteUnconfigured(currentLocation) && (
           <div
             id="unconfigured-site-banner"
+            role="status"
             className="flex flex-wrap items-center gap-2.5 rounded-xl border border-sky-800/50 bg-sky-950/30 p-3 text-xs text-sky-200"
           >
             <MapPin className="h-4 w-4 shrink-0 text-sky-400" />
@@ -812,12 +822,12 @@ export default function App() {
 
       {/* Mandatory Section 93 Privacy Footer */}
       <footer className="mt-auto border-t border-slate-900 bg-slate-950 py-6 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-600">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-400">
           <div className="flex items-center gap-1.5 text-slate-500">
             <ShieldCheck className="h-3.5 w-3.5 text-amber-500/80" />
             <span>Private local system — no advertising, analytics or tracking.</span>
           </div>
-          <p className="text-slate-600 text-center sm:text-right">
+          <p className="text-slate-400 text-center sm:text-right">
             {STATIC_MODE ? (
               <>
                 Weather data by{' '}

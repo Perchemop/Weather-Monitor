@@ -1,9 +1,15 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'node:fs'
 import path from 'path'
 import { defineConfig } from 'vite'
 
 export default defineConfig(({ mode }) => {
+  // The application version is owned by `package.json` (the release workflow
+  // fails if a tag disagrees with it). Injecting it here — and in the esbuild
+  // step of the `build` script — keeps `src/version.ts` a single-sourced read.
+  const packageJson = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf8'))
+
   // The static (serverless) build targets GitHub Pages and runs entirely in the
   // browser. It is emitted to a separate output directory so it never clobbers
   // the server-hosted `dist/` bundle, and it honours a configurable base path
@@ -16,6 +22,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     base,
+    define: {
+      'process.env.APP_VERSION': JSON.stringify(packageJson.version),
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

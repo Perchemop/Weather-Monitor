@@ -7,6 +7,52 @@ questions live in `docs/project-brief.md` and
 
 ---
 
+## D-30 — DOM smoke tests assert the shell, not provider data (2026-10-27)
+
+The Playwright suite (`tests/ui/smoke.spec.ts`) verifies navigation, forms,
+in-flight control states and role gating — never values that depend on a
+weather provider or a configured location. The CI server starts with an empty
+temporary `DATA_DIR`, so `/api/weather/*` answers 404 and `HeroRiskCard` /
+`CurrentConditions` stay in their skeleton state; the tests therefore key on
+elements that always render (`#nav-tab-settings`, `#active-alerts-panel`).
+
+**Why:** smoke tests must be deterministic and independent of live network and
+of seeded data, otherwise they fail for reasons unrelated to the UI. Weather-dependent
+rendering stays covered by the system/api suites.
+
+The Playwright `webServer` raises `AUTH_RATE_LIMIT_MAX` / `API_RATE_LIMIT_MAX`
+for the test server only.
+
+**Why:** each test re-authenticates in a fresh browser context; the default
+limit of 10 auth attempts per 15 minutes otherwise turns retries into 429s.
+The limits stay at their hardened production defaults everywhere else.
+
+## D-29 — No personal or maintainer-identifying data ships in the app or repo (2026-10-27)
+
+Owner directive (2026-10-27): nothing about the maintainer — location, name,
+username, or machine layout — may be revealed by this repository or by any
+deployment built from it.
+
+- The bundled default location is a neutral **Unconfigured Site** placeholder
+  (0, 0, UTC) with an in-app prompt to configure a real site. A safety tool must
+  not present invented or borrowed readings as if they were the operator's site,
+  and it must not carry a maintainer's home town as its shipped default.
+- `CONTRIBUTORS.md` credits the public GitHub handle only; the owner's legal name
+  is not published.
+- Tracked agent configs use `~/…` for the local `ci.sh` path; absolute
+  home-directory paths are never committed.
+- Test fixtures avoid the maintainer's locale; the half-hour-offset DST case is
+  covered with a neutral zone.
+
+**Why:** the repository is public and its Pages build is publicly reachable, so
+any value compiled into the bundle or committed to the tree is world-readable.
+Personal data in the tree is information disclosure, and by the operating
+guide's own severity scale (II.20.2) it is fixed before the next release.
+
+**Note:** this decision changes the working tree only. Removing the same data
+from already-published history is a separate, destructive operation and needs
+explicit owner approval (recorded when decided).
+
 ## D-28 — Part II §26 open questions resolved (2026-10-24)
 
 The operating guide's Part II records six conflicts and leaves them to the human.
@@ -292,49 +338,3 @@ repository's GitHub Actions workflow.
 
 **Why:** the development host is memory-constrained, and CI gives an
 authoritative, reproducible signal before a slice is considered done.
-
-## D-19 — No personal or maintainer-identifying data ships in the app or repo
-
-Owner directive (2026-10-27): nothing about the maintainer — location, name,
-username, or machine layout — may be revealed by this repository or by any
-deployment built from it.
-
-- The bundled default location is a neutral **Unconfigured Site** placeholder
-  (0, 0, UTC) with an in-app prompt to configure a real site. A safety tool must
-  not present invented or borrowed readings as if they were the operator's site,
-  and it must not carry a maintainer's home town as its shipped default.
-- `CONTRIBUTORS.md` credits the public GitHub handle only; the owner's legal name
-  is not published.
-- Tracked agent configs use `~/…` for the local `ci.sh` path; absolute
-  home-directory paths are never committed.
-- Test fixtures avoid the maintainer's locale; the half-hour-offset DST case is
-  covered with a neutral zone.
-
-**Why:** the repository is public and its Pages build is publicly reachable, so
-any value compiled into the bundle or committed to the tree is world-readable.
-Personal data in the tree is information disclosure, and by the operating
-guide's own severity scale (II.20.2) it is fixed before the next release.
-
-**Note:** this decision changes the working tree only. Removing the same data
-from already-published history is a separate, destructive operation and needs
-explicit owner approval (recorded when decided).
-
-## D-18 — DOM smoke tests assert the shell, not provider data
-
-The Playwright suite (`tests/ui/smoke.spec.ts`) verifies navigation, forms,
-in-flight control states and role gating — never values that depend on a
-weather provider or a configured location. The CI server starts with an empty
-temporary `DATA_DIR`, so `/api/weather/*` answers 404 and `HeroRiskCard` /
-`CurrentConditions` stay in their skeleton state; the tests therefore key on
-elements that always render (`#nav-tab-settings`, `#active-alerts-panel`).
-
-**Why:** smoke tests must be deterministic and independent of live network and
-of seeded data, otherwise they fail for reasons unrelated to the UI. Weather-dependent
-rendering stays covered by the system/api suites.
-
-The Playwright `webServer` raises `AUTH_RATE_LIMIT_MAX` / `API_RATE_LIMIT_MAX`
-for the test server only.
-
-**Why:** each test re-authenticates in a fresh browser context; the default
-limit of 10 auth attempts per 15 minutes otherwise turns retries into 429s.
-The limits stay at their hardened production defaults everywhere else.

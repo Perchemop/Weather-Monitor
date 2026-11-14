@@ -81,6 +81,7 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
       unit: windSuffix,
       note: 'Peak instantaneous',
       valueClass: gustElevated ? 'text-orange-300' : gustApproaching ? 'text-amber-300' : 'text-slate-100',
+      chip: gustElevated ? 'Crane limit' : gustApproaching ? 'Approaching' : null,
     },
     {
       label: 'Sustained wind',
@@ -132,7 +133,7 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-slate-800/70 pb-3.5">
         <h3 className="text-sm font-semibold tracking-tight text-slate-200">Current conditions</h3>
         <span className="flex items-center gap-1.5 text-xs text-slate-400">
-          <WeatherIcon className="h-3.5 w-3.5 text-slate-500" />
+          <WeatherIcon className="h-3.5 w-3.5 text-slate-400" />
           {weather.weatherDescription}
         </span>
       </div>
@@ -145,15 +146,20 @@ const CurrentConditionsComponent: React.FC<CurrentConditionsProps> = ({
               key={tile.label}
               className="rounded-xl border border-slate-800/60 bg-slate-950/50 p-3.5 transition-colors hover:border-slate-700/70"
             >
-              <div className="flex items-center gap-1.5 text-slate-500">
+              <div className="flex items-center gap-1.5 text-slate-400">
                 <Icon className="h-3.5 w-3.5 shrink-0" />
                 <span className="text-[11px] font-medium leading-none">{tile.label}</span>
               </div>
               <div className={`mt-2 text-2xl font-semibold tabular-nums tracking-tight ${tile.valueClass}`}>
                 {tile.value}
-                {tile.unit && <span className="ml-1 text-xs font-normal text-slate-500">{tile.unit}</span>}
+                {tile.unit && <span className="ml-1 text-xs font-normal text-slate-400">{tile.unit}</span>}
+                {(tile as { chip?: string | null }).chip && (
+                  <span className="ml-2 align-middle rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-mono uppercase text-amber-300">
+                    {(tile as { chip?: string | null }).chip}
+                  </span>
+                )}
               </div>
-              <div className="mt-1 truncate text-[11px] text-slate-500">{tile.note}</div>
+              <div className="mt-1 truncate text-[11px] text-slate-400">{tile.note}</div>
             </div>
           )
         })}

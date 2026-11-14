@@ -30,11 +30,19 @@ what is deferred.
 
 ## Deferred / possible future work
 
-- Multi-architecture container images and a release pipeline.
-- DOM/browser-level automated UI tests (current UI checks are type-check, build
-  and a manual checklist).
 - Alert delivery channels beyond Web Push and SMTP (e.g. SMS).
 - Historical data export beyond the on-screen weekly report and text export.
+
+## Implemented (formerly deferred/research-gated)
+
+The following items were research-gated and are now **approved and implemented**
+(human gate passed 2026-10-24):
+
+- **Multi-architecture container images** (amd64 + arm64) — verified at v0.1.2.
+- **Browser-level (DOM) smoke tests** (Playwright) — `ui-tests` CI job, 7 tests.
+- **In-app crash report submission** (device flow, memory-only, opt-in).
+- **Release pipeline hardening items in progress** are tracked in `docs/gaps.md`;
+  the baseline `release.yml` path exists.
 
 ## Constraints
 

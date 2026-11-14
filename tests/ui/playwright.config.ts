@@ -26,6 +26,8 @@ export default defineConfig({
     env: {
       NODE_ENV: 'production',
       DATA_DIR: dataDir,
+      // Fixed bootstrap password so tests can complete first-run setup.
+      INITIAL_OWNER_PASSWORD: 'StrongPass123',
       // Smoke tests re-authenticate per test; keep the brute-force limiters from
       // turning legitimate retries into 429 responses.
       AUTH_RATE_LIMIT_MAX: '200',

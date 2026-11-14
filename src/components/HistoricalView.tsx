@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Clock, Database, Download } from 'lucide-react'
+import { Clock, Database, Download, AlertTriangle } from 'lucide-react'
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { CurrentWeather, LocationItem } from '../types'
 import { EmptyState } from './EmptyState'
@@ -13,6 +13,7 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
   const [range, setRange] = useState<'today' | 'yesterday' | '7days' | '30days'>('today')
   const [observations, setObservations] = useState<CurrentWeather[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!location) return
@@ -22,14 +23,18 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
   const fetchHistory = async (selectedRange: string) => {
     if (!location) return
     setIsLoading(true)
+    setError(null)
     try {
       const res = await fetch(`/api/weather/history?locationId=${location.id}&range=${selectedRange}`)
       if (res.ok) {
         const data = await res.json()
         setObservations(data.observations || [])
+      } else {
+        setError('Failed to load historical observations.')
       }
     } catch (err) {
       console.error('Failed to fetch historical observations:', err)
+      setError('Failed to load historical observations.')
     } finally {
       setIsLoading(false)
     }
@@ -108,6 +113,7 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
                 <button
                   key={r}
                   onClick={() => setRange(r)}
+                  aria-pressed={range === r}
                   className={`px-3 py-1.5 rounded-lg transition-all capitalize cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500 outline-none ${
                     range === r
                       ? 'bg-slate-800 text-amber-400 font-semibold'
@@ -146,6 +152,18 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
         <div className="p-12 text-center bg-slate-900/80 border border-slate-800/80 rounded-2xl shadow-md text-slate-400 font-mono text-sm">
           Loading historical database records...
         </div>
+      ) : error ? (
+        <div className="animate-fadeIn bg-slate-900/80 border border-red-900/50 rounded-2xl p-8 text-center space-y-3">
+          <AlertTriangle className="w-8 h-8 text-red-400 mx-auto" />
+          <p className="text-sm text-slate-300">{error}</p>
+          <button
+            type="button"
+            onClick={() => fetchHistory(range)}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-medium border border-slate-700 focus-visible:ring-2 focus-visible:ring-amber-500 outline-none cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
       ) : observations.length === 0 ? (
         <EmptyState
           icon={Database}
@@ -159,7 +177,11 @@ export const HistoricalView: React.FC<HistoricalViewProps> = ({ location }) => {
             <h4 className="text-xs font-mono font-bold uppercase text-slate-400 mb-4">
               WIND & GUST TRENDS (KM/H)
             </h4>
-            <div className="h-60 w-full">
+            <div
+              className="h-60 w-full"
+              role="img"
+              aria-label="Historical wind, gust and temperature observations chart"
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />

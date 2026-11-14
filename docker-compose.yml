@@ -12,6 +12,11 @@ services:
         required: false
     environment:
       NODE_ENV: production
+    # The image runs as the unprivileged `node` user (uid/gid 1000), never root,
+    # so the state directory below must be writable by that uid. Create it once
+    # before the first start:
+    #   mkdir -p data && sudo chown 1000:1000 data
+    user: '1000:1000'
     volumes:
       # Persist the SQLite database, backups, and generated secrets.
       - ./data:/app/data
