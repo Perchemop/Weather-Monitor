@@ -156,7 +156,7 @@ async function main(): Promise<void> {
     const wrongProof = await new Client(base).post('/api/auth/setup', {
       password: 'TakeoverAttempt9',
       email: 'attacker@site.local',
-      bootstrapPassword: 'not-the-bootstrap-password',
+      bootstrapPassword: 'test-wrong-proof',
     })
     assert.equal(wrongProof.status, 401)
     assert.equal((await new Client(base).get('/api/auth/status')).body.isFirstRun, true)

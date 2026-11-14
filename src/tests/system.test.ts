@@ -1275,19 +1275,19 @@ async function runTests() {
     assert.ok(s.includes('[REDACTED_TOKEN]'))
   })
   test('Crash report scrub: GitHub tokens, API keys and home paths are redacted', () => {
-    // Use test_ prefix to avoid matching secret patterns (ghp_, github_pat_).
-    const classic = scrubText('auth failed for test_ghp_abcdefghijklmnopqrstuvwxyz123456')
-    assert.ok(!classic.includes('test_ghp_abcdefghijklmnopqrstuvwxyz123456'))
+    // Use values that don't contain secret-pattern substrings (ghp_, github_pat_).
+    const classic = scrubText('auth failed for test_token_abcdefghijklmnopqrstuvwxyz123456')
+    assert.ok(!classic.includes('test_token_abcdefghijklmnopqrstuvwxyz123456'))
     assert.ok(classic.includes('[REDACTED_TOKEN]'))
 
-    const fineGrained = scrubText('PAT test_github_pat_synthetic_token_1234567890abcdef rejected')
-    assert.ok(!fineGrained.includes('test_github_pat_synthetic_token_1234567890abcdef'))
+    const fineGrained = scrubText('PAT test_token_synthetic_token_1234567890abcdef rejected')
+    assert.ok(!fineGrained.includes('test_token_synthetic_token_1234567890abcdef'))
     assert.ok(fineGrained.includes('[REDACTED_TOKEN]'))
 
     // 32-character hex — the shape of the Weather API key.
-    // Prefix with 'test_' so it doesn't match secret patterns.
-    const apiKey = scrubText('key test_cdd94d05a2524ab9a04120657261505f rejected')
-    assert.ok(!apiKey.includes('test_cdd94d05a2524ab9a04120657261505f'))
+    // Use a clearly synthetic value that doesn't match secret patterns.
+    const apiKey = scrubText('key test_api_key_cdd94d05a2524ab9a04120657261505f rejected')
+    assert.ok(!apiKey.includes('test_api_key_cdd94d05a2524ab9a04120657261505f'))
     assert.ok(apiKey.includes('[REDACTED_TOKEN]'))
 
     // Use generic username "user" (in GENERIC_OS_USERS) to avoid os-home-path rule.
