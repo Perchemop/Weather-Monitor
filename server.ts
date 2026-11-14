@@ -182,8 +182,21 @@ function extractClientMeta(req: Request): { userAgent?: string; ip?: string } {
 }
 
 /** Minimal email shape check, shared by the setup and user-management routes. */
+// Avoid ReDoS: split validation instead of a single regex with repeated [^\s@]+
+// which can cause catastrophic backtracking on adversarial input.
 function isValidEmail(value: unknown): boolean {
-  return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+  if (typeof value !== 'string') return false
+  const trimmed = value.trim()
+  // Must contain exactly one @ and at least one . after the @
+  const atIndex = trimmed.indexOf('@')
+  if (atIndex <= 0 || atIndex === trimmed.length - 1) return false
+  if (trimmed.indexOf('@', atIndex + 1) !== -1) return false // no second @
+  const domain = trimmed.slice(atIndex + 1)
+  if (!domain.includes('.')) return false
+  if (domain.startsWith('.') || domain.endsWith('.')) return false
+  // No whitespace anywhere
+  if (/\s/.test(trimmed)) return false
+  return true
 }
 
 function extractSessionToken(req: Request): string | undefined {
