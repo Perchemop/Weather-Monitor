@@ -35,6 +35,11 @@ async function waitForCredentialForm(page: Page) {
   await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 20000 })
 }
 
+/**
+ * Fills and submits the credential form. Handles both first-run setup (email +
+ * password + confirmation) and returning-user login (email + password).
+ * Does NOT wait for the dashboard — the caller does that.
+ */
 async function fillCredentialForm(page: Page, email: string, password: string) {
   await page.locator('input[type="email"]').fill(email)
   const passwordInputs = page.locator('input[type="password"]')
@@ -42,11 +47,19 @@ async function fillCredentialForm(page: Page, email: string, password: string) {
   if ((await passwordInputs.count()) > 1) {
     await passwordInputs.nth(1).fill(password)
   }
-  // Submit form and wait for dashboard to load (no full page navigation in SPA)
-  await Promise.all([
-    page.locator('button[type="submit"]').click(),
-    page.waitForSelector('#nav-tab-settings', { timeout: 30000 }),
-  ])
+  await page.locator('button[type="submit"]').click()
+}
+
+/**
+ * Asserts the authenticated shell renders. Deliberately data-independent: a
+ * fresh server has no location, so weather endpoints 404 and the risk /
+ * conditions panels stay in their skeleton state. The navigation bar and the
+ * alerts panel render regardless of provider availability.
+ */
+async function expectDashboardShell(page: Page) {
+  await expect(page.locator('#nav-tab-settings')).toBeVisible({ timeout: 30000 })
+  await expect(page.locator('#active-alerts-panel')).toBeVisible({ timeout: 30000 })
+  await expect(page.locator('#manual-check-btn')).toBeVisible({ timeout: 30000 })
 }
 
 test('credential screen at three viewports', async ({ page }) => {
@@ -75,17 +88,11 @@ test('dashboard after signing in, at three viewports', async ({ page }) => {
   await page.goto('/')
   await waitForCredentialForm(page)
 
-  // Check if this is the first run (setup screen) or returning user (login screen)
-  const passwordInputs = page.locator('input[type="password"]')
-  const isFirstRun = (await passwordInputs.count()) > 1
-
+  // Fill and submit the credential form (handles both setup and login modes)
   await fillCredentialForm(page, OWNER_EMAIL, OWNER_PASSWORD)
 
-  // Wait for the dashboard shell to load (same assumption as tests/ui/smoke.spec.ts).
-  // The hero risk card is data-dependent; assert the always-present shell instead.
-  await expect(page.locator('#nav-tab-settings')).toBeVisible({ timeout: 30000 })
-  await expect(page.locator('#active-alerts-panel')).toBeVisible({ timeout: 30000 })
-  await expect(page.locator('#manual-check-btn')).toBeVisible({ timeout: 30000 })
+  // Wait for the dashboard shell to load
+  await expectDashboardShell(page)
 
   for (const [name, width, height] of VIEWPORTS) {
     await page.setViewportSize({ width, height })
