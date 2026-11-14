@@ -1,7 +1,9 @@
 import { test, expect, type Page } from '@playwright/test'
 
 const OWNER_PASSWORD = 'StrongPass123'
-const OWNER_EMAIL = 'owner@local'
+// Email must have dotted domain per server validation (/api/auth/setup).
+const OWNER_EMAIL = 'owner@local.host'
+const BOOTSTRAP_PASSWORD = 'StrongPass123' // Matches INITIAL_OWNER_PASSWORD in playwright.config.ts
 // The user-creation API requires a dotted domain (`/api/users` email policy).
 const VIEWER_EMAIL = 'viewer@local.host'
 const VIEWER_PASSWORD = 'ViewerPass123'
@@ -32,6 +34,24 @@ async function fillCredentialForm(page: Page, email: string, password: string) {
 }
 
 /**
+ * Intercepts the setup request to inject the bootstrap password (required by
+ * the backend but not exposed in the UI). This is a test-only workaround.
+ */
+async function injectBootstrapPassword(page: Page) {
+  await page.route('**/api/auth/setup', async (route) => {
+    const request = route.request()
+    const body = request.postDataJSON()
+    if (body && !body.bootstrapPassword) {
+      await route.continue({
+        postData: JSON.stringify({ ...body, bootstrapPassword: BOOTSTRAP_PASSWORD }),
+      })
+      return
+    }
+    await route.continue()
+  })
+}
+
+/**
  * Asserts the authenticated shell renders. Deliberately data-independent: a
  * fresh server has no location, so weather endpoints 404 and the risk /
  * conditions panels stay in their skeleton state. The navigation bar and the
@@ -47,6 +67,10 @@ async function expectDashboardShell(page: Page) {
 async function ensureAuthenticated(page: Page) {
   await page.goto('/')
   await waitForCredentialForm(page)
+
+  // Intercept setup request to inject bootstrap password (test-only).
+  await injectBootstrapPassword(page)
+
   await fillCredentialForm(page, OWNER_EMAIL, OWNER_PASSWORD)
   await expectDashboardShell(page)
 }
