@@ -15,7 +15,8 @@ import { test, expect, type Page } from '@playwright/test'
  */
 
 const OUT = 'snapshots'
-const OWNER_EMAIL = 'owner@local'
+// Email must have dotted domain per server validation (/api/auth/setup).
+const OWNER_EMAIL = 'owner@local.host'
 const OWNER_PASSWORD = 'StrongPass123'
 const BOOTSTRAP_PASSWORD = 'StrongPass123' // Matches INITIAL_OWNER_PASSWORD in playwright.config.ts
 
