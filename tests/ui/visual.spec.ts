@@ -17,6 +17,7 @@ import { test, expect, type Page } from '@playwright/test'
 const OUT = 'snapshots'
 const OWNER_EMAIL = 'owner@local'
 const OWNER_PASSWORD = 'StrongPass123'
+const BOOTSTRAP_PASSWORD = 'StrongPass123' // Matches INITIAL_OWNER_PASSWORD in playwright.config.ts
 
 const VIEWPORTS = [
   ['desktop', 1280, 800],
@@ -87,6 +88,20 @@ test('dashboard after signing in, at three viewports', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('/')
   await waitForCredentialForm(page)
+
+  // Intercept the setup request to inject the bootstrap password (required by
+  // the backend but not exposed in the UI). This is a test-only workaround.
+  await page.route('**/api/auth/setup', async (route) => {
+    const request = route.request()
+    const body = request.postDataJSON()
+    if (body && !body.bootstrapPassword) {
+      await route.continue({
+        postData: JSON.stringify({ ...body, bootstrapPassword: BOOTSTRAP_PASSWORD }),
+      })
+      return
+    }
+    await route.continue()
+  })
 
   // Fill and submit the credential form (handles both setup and login modes)
   await fillCredentialForm(page, OWNER_EMAIL, OWNER_PASSWORD)
